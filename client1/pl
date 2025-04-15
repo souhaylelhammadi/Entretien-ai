@@ -1,0 +1,63 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor Candidat
+actor Recruteur
+actor "IA Recrutement" as IA
+
+rectangle Plateforme {
+  usecase "S'inscrire et créer un profil" as UC1
+  usecase "Téléverser son CV" as UC2
+  usecase "Consulter les offres d'emploi" as UC3
+  usecase "Postuler à une offre" as UC4
+  usecase "Consulter le tableau de bord des candidatures" as UC5
+  usecase "Passer un entretien avec l'IA" as UC6
+  usecase "Consulter le rapport d'évaluation" as UC7
+  
+  usecase "Créer/Modifier/Supprimer une offre" as UC8
+  usecase "Consulter les candidatures" as UC9
+  usecase "Accepter/Refuser une candidature" as UC10
+  usecase "Consulter les rapports d'entretien IA" as UC11
+  
+  usecase "Générer des questions personnalisées" as UC12
+  usecase "Analyser les réponses" as UC13
+  usecase "Générer un rapport d'évaluation" as UC14
+}
+
+Candidat --> UC1
+Candidat --> UC2
+Candidat --> UC3
+Candidat --> UC4
+Candidat --> UC5
+Candidat --> UC6
+Candidat --> UC7
+
+Recruteur --> UC8
+Recruteur --> UC9
+Recruteur --> UC10
+Recruteur --> UC11
+
+IA --> UC12
+IA --> UC13
+IA --> UC14
+
+' Relations entre use cases
+UC1 .> UC2 : include
+UC3 .> UC4 : extend
+UC5 .> UC4 : include
+UC6 .> UC12 : include
+UC6 .> UC13 : include
+UC6 .> UC14 : include
+UC10 .> UC6 : extend
+UC11 .> UC14 : include
+
+' Relations entre acteurs et use cases
+UC6 --> IA
+UC12 --> IA
+UC13 --> IA
+UC14 --> IA
+UC10 --> Candidat
+UC11 --> IA
+@enduml

@@ -1,0 +1,66 @@
+# Fonction pour récupérer un utilisateur par ID
+def fetch_user(user_id):
+    try:
+        collection = db["users"]
+        user = collection.find_one({"_id": ObjectId(user_id)})
+        return user if user else "Erreur : Utilisateur non trouvé"
+    except PyMongoError as e:
+        return f"Erreur lors de la récupération de l'utilisateur : {str(e)}"
+
+# Fonction pour insérer une leçon
+def insert_lesson(lesson_obj):
+    try:
+        collection = db["lessons"]
+        if collection.find_one({'id': lesson_obj["id"]}):
+            return "Erreur : La leçon existe déjà"
+        result = collection.insert_one(lesson_obj)
+        return result.inserted_id
+    except PyMongoError as e:
+        return f"Erreur lors de l'insertion de la leçon : {str(e)}"
+
+# Fonction pour récupérer toutes les leçons
+def fetch_lessons():
+    try:
+        collection = db["lessons"]
+        lessons = list(collection.find())
+        return lessons
+    except PyMongoError as e:
+        return f"Erreur lors de la récupération des leçons : {str(e)}"
+
+# Fonction pour insérer un quiz
+def insert_quiz(quiz_data):
+    try:
+        collection = db["quizzes"]
+        result = collection.insert_one(quiz_data)
+        return result.inserted_id
+    except PyMongoError as e:
+        return f"Erreur lors de l'insertion du quiz : {str(e)}"
+
+# Fonction pour récupérer un quiz par ID
+def fetch_quiz(quiz_id):
+    try:
+        collection = db["quizzes"]
+        quiz = collection.find_one({"_id": ObjectId(quiz_id)})
+        return quiz if quiz else "Erreur : Quiz non trouvé"
+    except PyMongoError as e:
+        return f"Erreur lors de la récupération du quiz : {str(e)}"
+
+# Fonction pour insérer un résultat de quiz
+def insert_quiz_result(quiz_res):
+    try:
+        collection = db["quizzResult"]
+        if collection.find_one({'username': quiz_res["username"]}):
+            return "Erreur : Le résultat du quiz existe déjà"
+        result = collection.insert_one(quiz_res)
+        return result.inserted_id
+    except PyMongoError as e:
+        return f"Erreur lors de l'insertion du résultat du quiz : {str(e)}"
+
+# Fonction pour récupérer un résultat de quiz par ID
+def fetch_quiz_result(quiz_res_id):
+    try:
+        collection = db["quizzResult"]
+        quiz_res = collection.find_one({"_id": ObjectId(quiz_res_id)})
+        return quiz_res if quiz_res else "Erreur : Résultat du quiz non trouvé"
+    except PyMongoError as e:
+        return f"Erreur lors de la récupération du résultat du quiz : {str(e)}"

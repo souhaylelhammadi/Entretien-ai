@@ -1,0 +1,66 @@
+Palette de couleurs bleues
+
+blue-50 : Fond très clair pour les conteneurs (comme le fond de la section caméra)
+
+Utilisé pour bg-blue-50 dans les conteneurs principaux
+Couleur légère, presque blanche avec une teinte bleue
+
+
+blue-100 : Bleu très pâle pour les bordures et fonds secondaires
+
+Utilisé pour border-blue-100, bg-blue-100 (boutons inactifs)
+Utilisé aussi dans la progression bar avec bg-blue-100
+
+
+blue-200 : Bleu pâle pour les bordures des zones de saisie
+
+Utilisé pour border-blue-200 autour des zones de texte
+
+
+blue-400 : Bleu moyen pour les boutons secondaires
+
+Utilisé pour bg-blue-400 (bouton de transcription inactif)
+
+
+blue-500 : Bleu vif pour les éléments principaux et l'accent
+
+Utilisé pour bg-blue-500 pour le conteneur de questions
+Utilisé pour la barre de progression active
+Utilisé pour les indicateurs de question actuelle
+
+
+blue-600 : Bleu plus soutenu pour les titres et boutons principaux
+
+Utilisé pour text-blue-600 dans les titres
+Utilisé pour bg-blue-600 dans les boutons principaux
+Utilisé pour le texte des étiquettes d'interface
+
+
+blue-700 : Bleu foncé pour les effets de survol
+
+Utilisé pour hover:bg-blue-700 sur les boutons principaux
+Utilisé pour text-blue-700 dans certains textes d'accent
+
+
+blue-900 : Bleu très foncé pour les arrière-plans contrastés
+
+Utilisé pour bg-blue-900 comme fond de la fenêtre vidéo
+
+
+
+Autres couleurs
+
+white : Blanc pour le fond principal et le texte sur fond foncé
+
+Utilisé pour bg-white et text-white
+
+
+gray-200 à gray-700 : Nuances de gris pour les éléments neutres
+
+Utilisé pour les états désactivés et textes secondaires
+
+
+red-600 et red-700 : Rouge pour le bouton de fin d'entretien
+
+bg-red-600 pour le bouton normal
+hover:bg-red-700 pour l'effet de survol
