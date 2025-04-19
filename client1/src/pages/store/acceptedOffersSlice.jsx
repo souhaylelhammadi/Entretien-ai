@@ -1,23 +1,35 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
 export const fetchAcceptedOffers = createAsyncThunk(
   "acceptedOffers/fetchAcceptedOffers",
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
     try {
+      const { auth } = getState();
+      const token = auth.token;
+      if (!token) {
+        throw new Error(
+          "Vous devez être connecté pour accéder aux candidatures acceptées"
+        );
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/accepted-offers`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch accepted offers");
+        throw new Error(
+          data.error || "Échec de la récupération des candidatures acceptées"
+        );
       }
-      return data.offers; // Return the array of offers
+      return data.data; // Return the array of candidatures
     } catch (error) {
+      console.error("fetchAcceptedOffers error:", error.message);
       return rejectWithValue(error.message);
     }
   }
@@ -25,27 +37,36 @@ export const fetchAcceptedOffers = createAsyncThunk(
 
 export const updateOfferStatus = createAsyncThunk(
   "acceptedOffers/updateOfferStatus",
-  async ({ offerId, status }, { rejectWithValue }) => {
+  async ({ applicationId, status }, { getState, rejectWithValue }) => {
     try {
-      // Note: In a real app, you'd need a token here for PUT requests
+      const { auth } = getState();
+      const token = auth.token;
+      if (!token) {
+        throw new Error(
+          "Vous devez être connecté pour mettre à jour une candidature"
+        );
+      }
+
       const response = await fetch(
-        `${API_BASE_URL}/api/accepted-offers/${offerId}`,
+        `${API_BASE_URL}/api/accepted-offers/${applicationId}`,
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            // Uncomment and add token if authentication is re-added
-            // "Authorization": `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ status }),
         }
       );
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Failed to update offer status");
+        throw new Error(
+          data.error || "Échec de la mise à jour du statut de la candidature"
+        );
       }
-      return data.offer; // Return the updated offer
+      return data.data; // Return the updated candidature
     } catch (error) {
+      console.error("updateOfferStatus error:", error.message);
       return rejectWithValue(error.message);
     }
   }
@@ -54,7 +75,7 @@ export const updateOfferStatus = createAsyncThunk(
 const acceptedOffersSlice = createSlice({
   name: "acceptedOffers",
   initialState: {
-    offers: [],
+    candidatures: [],
     loading: false,
     error: null,
   },
@@ -71,7 +92,7 @@ const acceptedOffersSlice = createSlice({
       })
       .addCase(fetchAcceptedOffers.fulfilled, (state, action) => {
         state.loading = false;
-        state.offers = action.payload;
+        state.candidatures = action.payload;
       })
       .addCase(fetchAcceptedOffers.rejected, (state, action) => {
         state.loading = false;
@@ -83,12 +104,12 @@ const acceptedOffersSlice = createSlice({
       })
       .addCase(updateOfferStatus.fulfilled, (state, action) => {
         state.loading = false;
-        const updatedOffer = action.payload;
-        const index = state.offers.findIndex(
-          (offer) => offer._id === updatedOffer._id
+        const updatedCandidature = action.payload;
+        const index = state.candidatures.findIndex(
+          (candidature) => candidature._id === updatedCandidature._id
         );
         if (index !== -1) {
-          state.offers[index] = updatedOffer;
+          state.candidatures[index] = updatedCandidature;
         }
       })
       .addCase(updateOfferStatus.rejected, (state, action) => {
