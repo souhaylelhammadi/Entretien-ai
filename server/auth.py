@@ -50,10 +50,10 @@ def register():
             return jsonify({"message": "Vous devez accepter les conditions d'utilisation"}), 400
 
         role = data["role"]
-        if role not in ["user", "recruiter"]:
-            return jsonify({"message": "Rôle invalide. Doit être 'user' ou 'recruiter'"}), 400
+        if role not in ["candidat", "recruteur"]:
+            return jsonify({"message": "Rôle invalide. Doit être 'candidat' ou 'recruteur'"}), 400
 
-        if role == "recruiter" and "companyName" not in data:
+        if role == "recruteur" and "companyName" not in data:
             return jsonify({"message": "Nom de l'entreprise requis pour les recruteurs"}), 400
 
         # Validate password strength
@@ -74,8 +74,19 @@ def register():
             "role": role,
             "createdAt": datetime.utcnow()
         }
-        if role == "recruiter":
-            user_data["companyName"] = data["companyName"]
+        if role == "recruteur":
+            # Create or link to an existing entreprise
+            entreprise = current_app.mongo.db.entreprises.find_one({"nom": data["companyName"]})
+            if not entreprise:
+                entreprise_result = current_app.mongo.db.entreprises.insert_one({
+                    "nom": data["companyName"],
+                    "secteur": data.get("secteur", "N/A"),
+                    "created_at": datetime.utcnow()
+                })
+                entreprise_id = entreprise_result.inserted_id
+            else:
+                entreprise_id = entreprise["_id"]
+            user_data["entreprise_id"] = entreprise_id
 
         result = current_app.mongo.db.users.insert_one(user_data)
         token = generate_token(result.inserted_id, role)
@@ -87,7 +98,7 @@ def register():
             "email": data["email"],
             "role": role
         }
-        if role == "recruiter":
+        if role == "recruteur":
             response_data["companyName"] = data["companyName"]
 
         return jsonify({
@@ -120,7 +131,7 @@ def login():
             "email": user["email"],
             "role": user["role"]
         }
-        if user["role"] == "recruiter":
+        if user["role"] == "recruteur":
             user_data["companyName"] = user.get("companyName", "")
 
         return jsonify({
@@ -154,8 +165,9 @@ def get_profile():
             "role": user["role"],
             "createdAt": user["createdAt"].isoformat()
         }
-        if user["role"] == "recruiter":
+        if user["role"] == "recruteur":
             user_data["companyName"] = user.get("companyName", "")
+            user_data["entreprise_id"] = str(user.get("entreprise_id", ""))
 
         return jsonify({"user": user_data}), 200
 

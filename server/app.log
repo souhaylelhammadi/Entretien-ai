@@ -1,0 +1,278 @@
+2025-04-18 16:27:48,814 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:27:48,844 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:27:48,923 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:27:48,924 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:27:49,037 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 16:27:49,054 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 16:27:52,969 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:27:52] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:27:53,624 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:27:53] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:27:55,987 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:27:55] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:27:56,252 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:27:56] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:27:59,817 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:27:59] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:00,143 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:00] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:00,705 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:00] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:01,049 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:01] "GET /api/interviews HTTP/1.1" 200 -
+2025-04-18 16:28:01,052 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:01] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:01,443 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:01] "GET /api/candidates HTTP/1.1" 200 -
+2025-04-18 16:28:01,446 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:01] "GET /api/interviews HTTP/1.1" 200 -
+2025-04-18 16:28:01,890 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:01] "GET /api/candidates HTTP/1.1" 200 -
+2025-04-18 16:28:04,134 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:04] "GET /api/candidates HTTP/1.1" 200 -
+2025-04-18 16:28:04,321 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:04] "GET /api/candidates HTTP/1.1" 200 -
+2025-04-18 16:28:04,911 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:04] "GET /api/candidates HTTP/1.1" 200 -
+2025-04-18 16:28:05,392 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:05] "GET /api/candidates HTTP/1.1" 200 -
+2025-04-18 16:28:07,944 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:07] "[36mGET /api/candidates/cv/6800ea3f9d790ff0260b4605 HTTP/1.1[0m" 304 -
+2025-04-18 16:28:13,881 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:13] "[36mGET /api/candidates/cv/67fd39ad158193679194a24d HTTP/1.1[0m" 304 -
+2025-04-18 16:28:17,958 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:17] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:18,221 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:18] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:20,828 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:20] "OPTIONS /api/auth/login HTTP/1.1" 200 -
+2025-04-18 16:28:21,898 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:21] "POST /api/auth/login HTTP/1.1" 200 -
+2025-04-18 16:28:23,985 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:23] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:24,293 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:24] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:25,178 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:25] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:26,062 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:26] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:27,863 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:27] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:28:28,771 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:28:28] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:31:28,359 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:31:28] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:31:29,028 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:31:29] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:31:31,170 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:31:31] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:31:31,487 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:31:31] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:31:49,291 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:31:49] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:32:51,204 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:32:51] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:34:36,079 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\app.py', reloading
+2025-04-18 16:36:13,008 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:36:13,020 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:36:13,274 [INFO] __main__: Created collection: offres
+2025-04-18 16:36:13,308 [INFO] __main__: Created collection: candidates
+2025-04-18 16:36:13,335 [INFO] __main__: Created collection: candidatures
+2025-04-18 16:36:13,360 [INFO] __main__: Created collection: users
+2025-04-18 16:36:13,388 [INFO] __main__: Created collection: entreprises
+2025-04-18 16:36:13,441 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:36:13,443 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:36:13,563 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 16:36:13,579 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 16:36:18,058 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\app.py', reloading
+2025-04-18 16:36:21,121 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:36:21,133 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:36:21,420 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:36:21,426 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:36:21,618 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 16:36:21,643 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 16:36:32,701 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:36:32,710 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:36:32,762 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:36:32,764 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:36:32,860 [INFO] werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.137.159:5000
+2025-04-18 16:36:32,862 [INFO] werkzeug: [33mPress CTRL+C to quit[0m
+2025-04-18 16:36:32,866 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 16:36:34,268 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:36:34,285 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:36:34,345 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:36:34,347 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:36:34,464 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 16:36:34,479 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 16:36:40,788 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:36:40] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:36:41,371 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:36:41] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:36:44,199 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:36:44] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:36:44,459 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:36:44] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:42:03,337 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:42:03,343 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:42:03,399 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:42:03,400 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:42:03,554 [INFO] werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.137.159:5000
+2025-04-18 16:42:03,574 [INFO] werkzeug: [33mPress CTRL+C to quit[0m
+2025-04-18 16:42:03,602 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 16:42:04,884 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:42:04,893 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:42:04,956 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:42:04,957 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:42:05,101 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 16:42:05,113 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 16:42:09,468 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:42:09] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:42:10,204 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:42:10] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:42:37,424 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:42:37] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:42:39,179 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:42:39] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:43:30,358 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 16:43:30] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 16:51:39,262 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\routes\\offres_emploi.py', reloading
+2025-04-18 16:51:40,522 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 16:51:43,020 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:51:43,031 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:51:43,126 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:51:43,128 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:51:43,242 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 16:51:43,255 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 16:51:45,508 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\routes\\offres_emploi.py', reloading
+2025-04-18 16:51:45,758 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 16:51:47,330 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:51:47,337 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:51:47,411 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:51:47,413 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:51:47,500 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 16:51:47,512 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 16:51:50,932 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\routes\\offres_emploi.py', reloading
+2025-04-18 16:51:51,601 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 16:51:55,388 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:51:55,434 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:51:55,555 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:51:55,557 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:51:55,768 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 16:51:55,787 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 16:51:58,312 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\routes\\offres_emploi.py', reloading
+2025-04-18 16:51:59,371 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 16:52:03,121 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 16:52:03,132 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 16:52:03,263 [INFO] __main__: All blueprints registered successfully
+2025-04-18 16:52:03,267 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 16:52:03,624 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 16:52:03,637 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 21:54:39,155 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 21:54:39,165 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 21:54:39,273 [INFO] __main__: All blueprints registered successfully
+2025-04-18 21:54:39,274 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 21:54:39,559 [INFO] werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.137.137:5000
+2025-04-18 21:54:39,562 [INFO] werkzeug: [33mPress CTRL+C to quit[0m
+2025-04-18 21:54:39,566 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 21:54:40,540 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 21:54:40,550 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 21:54:40,611 [INFO] __main__: All blueprints registered successfully
+2025-04-18 21:54:40,631 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 21:54:40,788 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 21:54:40,800 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:24:45,271 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:24:45,282 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:24:45,368 [INFO] __main__: Created collection: blacklist
+2025-04-18 23:24:45,452 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:24:45,453 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:24:45,559 [INFO] werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.11.105:5000
+2025-04-18 23:24:45,566 [INFO] werkzeug: [33mPress CTRL+C to quit[0m
+2025-04-18 23:24:45,573 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:24:46,580 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:24:46,587 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:24:46,689 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:24:46,690 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:24:46,880 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:24:46,945 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:24:57,794 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:24:57] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:25:01,593 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:25:01] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:25:01,851 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:25:01] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:25:14,215 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:25:14] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:25:26,778 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\app.py', reloading
+2025-04-18 23:25:27,837 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:25:30,064 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:25:30,070 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:25:30,162 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:25:30,163 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:25:30,233 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:25:30,243 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:25:33,554 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\app.py', reloading
+2025-04-18 23:25:33,765 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:25:35,025 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:25:35,032 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:25:35,110 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:25:35,114 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:25:35,189 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:25:35,198 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:25:37,709 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:25:37] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:25:41,897 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:25:41] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:26:09,884 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\app.py', reloading
+2025-04-18 23:26:10,438 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:26:12,189 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:26:12,195 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:26:12,266 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:26:12,267 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:26:12,331 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:26:12,341 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:26:16,911 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:26:16] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:27:29,103 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:27:29] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:27:34,773 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:27:34] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:27:50,617 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:27:50] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:28:56,680 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:28:56] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:29:05,089 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:29:05] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:29:35,899 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\app.py', reloading
+2025-04-18 23:29:36,456 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:29:38,054 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:29:38,062 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:29:38,141 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:29:38,142 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:29:38,243 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:29:38,265 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:29:44,585 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:29:44] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:29:48,968 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:29:48] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:30:56,246 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:30:56] "OPTIONS /api/auth/login HTTP/1.1" 200 -
+2025-04-18 23:30:56,530 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:30:56] "[31m[1mPOST /api/auth/login HTTP/1.1[0m" 401 -
+2025-04-18 23:38:07,187 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\app.py', reloading
+2025-04-18 23:38:08,152 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:38:11,929 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:38:11,988 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:38:12,157 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:38:12,159 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:38:12,309 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:38:12,354 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:38:28,415 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:38:28] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:38:28,671 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:38:28] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:38:32,191 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:38:32] "OPTIONS /api/auth/login HTTP/1.1" 200 -
+2025-04-18 23:38:32,463 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:38:32] "[31m[1mPOST /api/auth/login HTTP/1.1[0m" 401 -
+2025-04-18 23:39:00,109 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:39:00] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:39:35,967 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\routeso\\offres_emploi.py', reloading
+2025-04-18 23:39:36,336 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:39:37,315 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:39:37,321 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:39:37,417 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:39:37,418 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:39:37,486 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:39:37,501 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:39:42,518 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:39:42] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:39:57,906 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:39:57] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:40:16,633 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:40:16] "GET /api/offres-emploi HTTP/1.1" 200 -
+2025-04-18 23:42:22,505 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\routeso\\offres_emploi.py', reloading
+2025-04-18 23:42:23,401 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:42:24,936 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:42:24,942 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:42:25,077 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:42:25,078 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:42:25,149 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:42:25,158 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:45:32,626 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\app\\auth\\auth.py', reloading
+2025-04-18 23:45:33,298 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:45:37,369 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:45:37,444 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:45:37,549 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:45:37,551 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:45:37,941 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:45:37,959 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:45:40,239 [INFO] werkzeug:  * Detected change in 'c:\\Users\\souhayl\\OneDrive\\Bureau\\interview-ai\\server\\app\\routes\\offres.py', reloading
+2025-04-18 23:45:40,684 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:45:41,879 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:45:41,887 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:45:41,961 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:45:41,962 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:45:42,034 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:45:42,044 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:45:51,509 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:45:51,514 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:45:51,592 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:45:51,593 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:45:51,682 [INFO] werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.11.105:5000
+2025-04-18 23:45:51,683 [INFO] werkzeug: [33mPress CTRL+C to quit[0m
+2025-04-18 23:45:51,686 [INFO] werkzeug:  * Restarting with stat
+2025-04-18 23:45:52,726 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-18 23:45:52,737 [INFO] __main__: MongoDB connection established successfully
+2025-04-18 23:45:53,227 [INFO] __main__: All blueprints registered successfully
+2025-04-18 23:45:53,228 [INFO] __main__: Starting Flask application on port 5000
+2025-04-18 23:45:53,366 [WARNING] werkzeug:  * Debugger is active!
+2025-04-18 23:45:53,381 [INFO] werkzeug:  * Debugger PIN: 163-036-072
+2025-04-18 23:45:56,826 [INFO] werkzeug: 127.0.0.1 - - [18/Apr/2025 23:45:56] "GET /api/offres-emploi HTTP/1.1" 200 -

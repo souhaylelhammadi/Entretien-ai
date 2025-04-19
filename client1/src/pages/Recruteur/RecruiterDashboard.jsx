@@ -20,6 +20,7 @@ import JobsSection from "./components/JobsSection";
 import CandidatesSection from "./components/CandidatesSection";
 import InterviewsSection from "./components/InterviewsSection";
 import ProfileSection from "./components/ProfileSection";
+import { Navigate } from "react-router-dom";
 
 const DashboardRecrutement = () => {
   const dispatch = useDispatch();
@@ -36,6 +37,7 @@ const DashboardRecrutement = () => {
   useEffect(() => {
     dispatch(fetchInitialData());
   }, [dispatch]);
+
 
   const menuItems = [
     {
@@ -155,7 +157,7 @@ const DashboardRecrutement = () => {
                 }`}
             >
               <span className="flex-shrink-0 mr-3">{icon}</span>
-              <span className="truncate transition-all duration-300 md:group-hover:opacity-100 md:opacity-0">
+              <span className="truncate transition-all duration-300 md:group-hover:opacity-100 ">
                 {label}
               </span>
             </button>

@@ -20,6 +20,8 @@ import {
   closeDocumentView,
 } from "../../store/recruteur/dashcandidatesSlice";
 
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
 const CandidatesSection = () => {
   const dispatch = useDispatch();
   const { candidates, jobs, pagination, viewDocument } = useSelector(
@@ -48,9 +50,14 @@ const CandidatesSection = () => {
     dispatch(updateCandidateStatus({ candidateId, status }));
   };
 
-  const handleViewDocument = (type, content, candidateName) => {
-    if (content) {
-      dispatch(setViewDocument({ isOpen: true, type, content, candidateName }));
+  const handleViewDocument = (type, cv_path, content, candidateName) => {
+    console.log("Viewing document:", { type, cv_path, content, candidateName });
+    if (cv_path || content) {
+      dispatch(
+        setViewDocument({ isOpen: true, type, cv_path, content, candidateName })
+      );
+    } else {
+      console.warn("No cv_path or content provided for document view");
     }
   };
 
@@ -185,7 +192,7 @@ const CandidatesSection = () => {
       </div>
 
       {viewDocument.isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-10 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-screen overflow-hidden">
             <div className="flex justify-between items-center p-4 border-b">
               <h3 className="text-lg font-semibold text-gray-800">
@@ -199,17 +206,21 @@ const CandidatesSection = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(100vh-120px)]">
-              {viewDocument.type === "cv" ? (
-                <span>
-                  <iframe
-                    src={viewDocument.content}
-                    className="w-full h-[60vh]"
-                    title="CV"
-                  />
-                  
-                </span>
-              ) : (
+            <div className="p-6 overflow-y-auto max-h-[calc(100vh-140px)]">
+              {viewDocument.type === "cv" && viewDocument.cv_path ? (
+                <iframe
+                  src={`${BASE_URL}${viewDocument.cv_path}#toolbar=0&navpanes=0&scrollbar=0`}
+                  className="w-full h-[60vh] border-0"
+                  title="CV"
+                  onError={(e) => {
+                    console.error("Error loading PDF:", e);
+                  }}
+                />
+              ) : viewDocument.type === "cv" ? (
+                <p className="text-red-500">
+                  Impossible de charger le CV. Veuillez réessayer.
+                </p>
+              ) : viewDocument.type === "lettre" && viewDocument.content ? (
                 <div className="prose max-w-none">
                   {viewDocument.content.split("\n").map((p, idx) => (
                     <p key={idx} className="mb-4 text-gray-700">
@@ -217,6 +228,10 @@ const CandidatesSection = () => {
                     </p>
                   ))}
                 </div>
+              ) : (
+                <p className="text-gray-500">
+                  Aucun document disponible pour l'affichage.
+                </p>
               )}
             </div>
           </div>
@@ -325,12 +340,13 @@ const CandidatesSection = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex space-x-3">
-                              {candidate.candidat?.cv && (
+                              {candidate.candidat?.cv ? (
                                 <button
                                   onClick={() =>
                                     handleViewDocument(
                                       "cv",
                                       candidate.candidat.cv,
+                                      null,
                                       candidate.candidat.nom || "Inconnu"
                                     )
                                   }
@@ -338,12 +354,17 @@ const CandidatesSection = () => {
                                 >
                                   <Eye className="h-4 w-4 mr-1" /> CV
                                 </button>
+                              ) : (
+                                <span className="text-sm text-gray-500">
+                                  CV non disponible
+                                </span>
                               )}
                               {candidate.candidat?.lettre_motivation && (
                                 <button
                                   onClick={() =>
                                     handleViewDocument(
                                       "lettre",
+                                      null,
                                       candidate.candidat.lettre_motivation,
                                       candidate.candidat.nom || "Inconnu"
                                     )

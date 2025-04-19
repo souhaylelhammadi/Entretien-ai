@@ -1,3 +1,4 @@
+# routes/offres_emploi.py
 from flask import Blueprint, jsonify, request, current_app
 from bson import ObjectId
 from datetime import datetime, timezone
@@ -35,6 +36,21 @@ def validate_required_fields(data, required_fields):
 def handle_mongo_error(e, operation):
     print(f"Erreur lors de {operation} : {e}")
     return jsonify({"error": f"Échec de {operation} l'offre d'emploi"}), 500
+
+# Reusing verify_token from auth.py (assuming it's available)
+def verify_token(token):
+    """Verify JWT token"""
+    from jwt import decode, ExpiredSignatureError, InvalidTokenError
+    if not token or not token.startswith("Bearer "):
+        return None
+    token = token.split(" ")[1]
+    secret = current_app.config["JWT_SECRET"]
+    if current_app.mongo.db.blacklist.find_one({"token": token}):
+        return None
+    try:
+        return decode(token, secret, algorithms=["HS256"])
+    except (ExpiredSignatureError, InvalidTokenError):
+        return None
 
 @offres_emploi_bp.route("/offres-emploi", methods=["GET"])
 def get_offres_emploi():
@@ -180,23 +196,39 @@ def delete_offre_emploi(offre_id):
 def create_candidature():
     try:
         db = current_app.mongo.db
+
+        # Verify authentication
+        token = request.headers.get("Authorization")
+        decoded = verify_token(token)
+        if not decoded:
+            return jsonify({"error": "Authentification requise"}), 401
+
+        # Fetch user details
+        user = db.users.find_one({"_id": ObjectId(decoded["id"])})
+        if not user:
+            return jsonify({"error": "Utilisateur non trouvé"}), 404
+
+        # Check if CV file is provided
         if 'cv' not in request.files:
             return jsonify({"error": "Aucun fichier CV fourni"}), 400
         cv_file = request.files['cv']
         if cv_file.filename == '':
             return jsonify({"error": "Aucun fichier CV sélectionné"}), 400
 
+        # Validate file extension
         allowed_extensions = {'.pdf', '.doc', '.docx'}
         file_ext = os.path.splitext(cv_file.filename)[1].lower()
         if file_ext not in allowed_extensions:
             return jsonify({"error": "Type de fichier non autorisé. Utilisez PDF, DOC ou DOCX."}), 400
 
+        # Validate file size
         cv_file.seek(0, os.SEEK_END)
         file_size = cv_file.tell()
         cv_file.seek(0)
         if file_size > 5 * 1024 * 1024:
             return jsonify({"error": "Le fichier CV ne doit pas dépasser 5 Mo."}), 400
 
+        # Save CV file
         filename = secure_filename(f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{cv_file.filename}")
         cv_path = os.path.join(UPLOAD_FOLDER, filename)
         cv_file.save(cv_path)
@@ -204,12 +236,13 @@ def create_candidature():
 
         # Get form data
         form_data = request.form
-        required_fields = ["offre_id", "lettre_motivation"] # "nom", "email", "telephone"
+        required_fields = ["offre_id", "lettre_motivation"]
         is_valid, error_message = validate_required_fields(form_data, required_fields)
         if not is_valid:
             os.remove(cv_path)  # Clean up uploaded file
             return jsonify({"error": error_message}), 400
 
+        # Validate offre_id
         offre_id = form_data["offre_id"]
         if not ObjectId.is_valid(offre_id):
             os.remove(cv_path)
@@ -219,14 +252,17 @@ def create_candidature():
             os.remove(cv_path)
             return jsonify({"error": "Offre non trouvée"}), 404
 
+        # Construct nom from firstName and lastName
+        nom = f"{user['firstName']} {user['lastName']}"
+
         # Save candidate details
         candidate_data = {
-            #"nom": form_data["nom"],
-            #"email": form_data["email"],
-           # "telephone": form_data["telephone"],
+            "nom": nom,
+            "email": user["email"],
             "cv": cv_path,
             "lettre_motivation": form_data["lettre_motivation"],
             "created_at": datetime.now(timezone.utc),
+            "user_id": ObjectId(decoded["id"])  # Link to user account
         }
         candidate_result = db.candidates.insert_one(candidate_data)
         candidate_id = candidate_result.inserted_id
@@ -239,6 +275,7 @@ def create_candidature():
             "date_postulation": datetime.now(timezone.utc),
             "cv_path": cv_path,
             "lettre_motivation": form_data["lettre_motivation"],
+            "user_id": ObjectId(decoded["id"])  # Link to user account
         }
         candidature_result = db.candidatures.insert_one(candidature_data)
         candidature_id = candidature_result.inserted_id

@@ -26,15 +26,17 @@ export const fetchInitialData = createAsyncThunk(
       }
 
       const data = await Promise.all(responses.map((res) => res.json()));
-      console.log("Fetched dashboard data:", data); // Debug
+      console.log("Fetched dashboard data:", data);
       return {
-        jobs: (Array.isArray(data[0]) ? data[0] : []).map((job) => ({
-          ...job,
-          id: job.id,
-          title: job.title || job.titre,
-          requirements: job.requirements || job.competences_requises,
-          status: job.status || "open",
-        })),
+        jobs: (Array.isArray(data[0].offres) ? data[0].offres : []).map(
+          (job) => ({
+            ...job,
+            id: job._id, // Fixed: Use _id instead of id
+            title: job.titre || job.title,
+            requirements: job.competences_requises || job.requirements,
+            status: job.status || "open",
+          })
+        ),
         candidates: (Array.isArray(data[1]) ? data[1] : []).map(
           (candidate) => ({
             ...candidate,
@@ -45,9 +47,9 @@ export const fetchInitialData = createAsyncThunk(
             },
             offreEmploi: {
               ...candidate.offreEmploi,
-              id: candidate.offreEmploi?.id,
+              id: candidate.offreEmploi?._id,
               titre:
-                candidate.offreEmploi?.title || candidate.offreEmploi?.titre,
+                candidate.offreEmploi?.titre || candidate.offreEmploi?.title,
             },
           })
         ),
@@ -108,7 +110,7 @@ const dashboardSlice = createSlice({
         state.interviews = action.payload.interviews;
         state.lastFetch = new Date().toISOString();
         state.error = null;
-        console.log("Updated dashboard state:", action.payload); // Debug
+        console.log("Updated dashboard state:", action.payload);
       })
       .addCase(fetchInitialData.rejected, (state, action) => {
         state.loading = false;

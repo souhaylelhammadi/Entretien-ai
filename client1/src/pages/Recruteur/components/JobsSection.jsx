@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Plus,
@@ -24,22 +24,61 @@ import {
   updateRequirement,
   setSort,
   showAlert,
+  clearAlert,
 } from "../../store/recruteur/addjobsSlice";
 import { fetchInitialData } from "../../store/recruteur/dashboardSlice";
 
 const JobsSection = () => {
   const dispatch = useDispatch();
   const { jobs } = useSelector((state) => state.dashboard);
-  const { isAddingJob, isEditingJob, alert, sortField, sortDirection, newJob } =
-    useSelector((state) => state.addjob);
+  const {
+    isAddingJob,
+    isEditingJob,
+    alert,
+    sortField,
+    sortDirection,
+    newJob,
+    loading,
+  } = useSelector((state) => state.addjob);
+  const { user, token } = useSelector((state) => state.auth);
+
+  // Auto-dismiss alerts after 5 seconds
+  useEffect(() => {
+    if (alert.show) {
+      const timer = setTimeout(() => {
+        dispatch(clearAlert());
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert.show, dispatch]);
+
+  const prepareJobData = () => {
+    return {
+      titre: newJob.title,
+      departement: newJob.department,
+      localisation: newJob.location,
+      description: newJob.description,
+      competences_requises: newJob.requirements,
+      salaire_min: newJob.salaryMin,
+      status: newJob.status,
+      recruteur_id: user?._id,
+      entreprise_id: user?.entreprise_id,
+    };
+  };
 
   const validateJob = () => {
-    if (!newJob.title || !newJob.department || !newJob.location) {
+    if (
+      !newJob.title ||
+      !newJob.department ||
+      !newJob.location ||
+      !newJob.description ||
+      newJob.requirements.length === 0
+    ) {
       dispatch(
         showAlert({
           type: "error",
           message:
-            "Please fill in all required fields (Title, Department, Location)",
+            "Please fill in all required fields (Title, Department, Location, Description, Skills)",
         })
       );
       return false;
@@ -50,8 +89,9 @@ const JobsSection = () => {
   const handleAddJob = async () => {
     if (!validateJob()) return;
     try {
-      await dispatch(addJob(newJob)).unwrap();
-      dispatch(fetchInitialData());
+      const jobData = prepareJobData();
+      await dispatch(addJob({ jobData, token })).unwrap();
+      dispatch(fetchInitialData(token));
       dispatch(
         showAlert({
           type: "success",
@@ -71,8 +111,9 @@ const JobsSection = () => {
   const handleEditJob = async (jobId) => {
     if (!validateJob()) return;
     try {
-      await dispatch(editJob({ jobId, jobData: newJob })).unwrap();
-      dispatch(fetchInitialData());
+      const jobData = prepareJobData();
+      await dispatch(editJob({ jobId, jobData, token })).unwrap();
+      dispatch(fetchInitialData(token));
       dispatch(
         showAlert({
           type: "success",
@@ -92,8 +133,8 @@ const JobsSection = () => {
   const handleDeleteJob = async (jobId) => {
     if (!window.confirm("Are you sure you want to delete this job?")) return;
     try {
-      await dispatch(deleteJob(jobId)).unwrap();
-      dispatch(fetchInitialData());
+      await dispatch(deleteJob({ jobId, token })).unwrap();
+      dispatch(fetchInitialData(token));
       dispatch(
         showAlert({
           type: "success",
@@ -109,27 +150,40 @@ const JobsSection = () => {
       );
     }
   };
-const sortedJobs = [...(jobs || [])]
-  .map((job) => ({
-    ...job,
-    id: String(job._id || job.id),
-  }))
-  .sort((a, b) => {
-    const aValue = a[sortField] || "";
-    const bValue = b[sortField] || "";
-    const direction = sortDirection === "asc" ? 1 : -1;
-    if (typeof aValue === "string") {
-      return direction * aValue.localeCompare(bValue);
-    }
-    return direction * (aValue - bValue);
-  });
+
+  const normalizeJobs = (jobs) => {
+    return jobs.map((job) => ({
+      _id: job._id,
+      title: job.titre || "",
+      department: job.departement || "",
+      location: job.localisation || "",
+      description: job.description || "",
+      requirements: job.competences_requises || [],
+      salaryMin: job.salaire_min || 0,
+      status: job.status || "open",
+    }));
+  };
+
+  const sortedJobs = useMemo(() => {
+    return [...normalizeJobs(jobs || [])].sort((a, b) => {
+      const aValue = a[sortField] || "";
+      const bValue = b[sortField] || "";
+      const direction = sortDirection === "asc" ? 1 : -1;
+      if (typeof aValue === "string") {
+        return (
+          direction *
+          aValue.localeCompare(bValue, undefined, { sensitivity: "base" })
+        );
+      }
+      return direction * (aValue - bValue);
+    });
+  }, [jobs, sortField, sortDirection]);
+
   const handleSort = (field) => {
     const newDirection =
       sortField === field && sortDirection === "asc" ? "desc" : "asc";
     dispatch(setSort({ field, direction: newDirection }));
   };
-
- 
 
   return (
     <div className="space-y-6">
@@ -159,6 +213,7 @@ const sortedJobs = [...(jobs || [])]
         <button
           onClick={() => dispatch(setIsAddingJob(true))}
           className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          disabled={loading}
         >
           <Plus className="w-5 h-5 mr-2" />
           New Job
@@ -173,7 +228,7 @@ const sortedJobs = [...(jobs || [])]
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <InputField
               label="Job Title *"
-              value={newJob.titre}
+              value={newJob.title}
               onChange={(e) => dispatch(setNewJob({ title: e.target.value }))}
             />
             <InputField
@@ -190,9 +245,17 @@ const sortedJobs = [...(jobs || [])]
                 dispatch(setNewJob({ location: e.target.value }))
               }
             />
+            <InputField
+              label="Minimum Salary"
+              type="number"
+              value={newJob.salaryMin}
+              onChange={(e) =>
+                dispatch(setNewJob({ salaryMin: Number(e.target.value) }))
+              }
+            />
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
+                Description *
               </label>
               <textarea
                 value={newJob.description}
@@ -206,7 +269,7 @@ const sortedJobs = [...(jobs || [])]
             <div className="col-span-2">
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-sm font-medium text-gray-700">
-                  Required Skills
+                  Required Skills *
                 </label>
                 <button
                   onClick={() => dispatch(addRequirement())}
@@ -233,7 +296,7 @@ const sortedJobs = [...(jobs || [])]
                       onClick={() => dispatch(removeRequirement(index))}
                       className="text-red-600 hover:text-red-800"
                     >
-                      <XCircle className="w-5 h-5" />
+                      <XCircle className="w-5 " />
                     </button>
                   </div>
                 ))}
@@ -252,11 +315,13 @@ const sortedJobs = [...(jobs || [])]
                     location: "",
                     description: "",
                     requirements: [],
+                    salaryMin: 0,
                     status: "open",
                   })
                 );
               }}
               className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              disabled={loading}
             >
               Cancel
             </button>
@@ -264,7 +329,10 @@ const sortedJobs = [...(jobs || [])]
               onClick={() =>
                 isEditingJob ? handleEditJob(isEditingJob) : handleAddJob()
               }
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ${
+                loading ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+              disabled={loading}
             >
               {isEditingJob ? "Update" : "Add"}
             </button>
@@ -353,12 +421,14 @@ const sortedJobs = [...(jobs || [])]
                         )
                       }
                       className="text-blue-600 hover:text-blue-800"
+                      disabled={loading}
                     >
                       <Edit className="h-5 w-5" />
                     </button>
                     <button
                       onClick={() => handleDeleteJob(job._id)}
                       className="text-red-600 hover:text-red-800"
+                      disabled={loading}
                     >
                       <Trash2 className="h-5 w-5" />
                     </button>
@@ -373,13 +443,13 @@ const sortedJobs = [...(jobs || [])]
   );
 };
 
-const InputField = ({ label, value, onChange }) => (
+const InputField = ({ label, value, onChange, type = "text" }) => (
   <div>
     <label className="block text-sm font-medium text-gray-700 mb-2">
       {label}
     </label>
     <input
-      type="text"
+      type={type}
       value={value}
       onChange={onChange}
       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"

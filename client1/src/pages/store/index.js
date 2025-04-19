@@ -1,24 +1,35 @@
 import { configureStore } from "@reduxjs/toolkit";
-import offresEmploiSlice from "./offresEmploiSlice"
+import authReducer from "./auth/authSlice";
+import offresEmploiReducer from "./offresEmploiSlice";
 import interviewReducer from "./interviewsSlice";
 import acceptedOffersReducer from "./acceptedOffersSlice";
 import dashboardReducer from "./recruteur/dashboardSlice";
 import candidatesReducer from "./recruteur/dashcandidatesSlice";
 import interviewsReducer from "./recruteur/candidatesinterviewsSlice";
-import profieleReducer from "./recruteur/profileSlice";
-import addjobsSlice from "./recruteur/addjobsSlice";
-import authReducer from "./auth/authSlice";
-export const store = configureStore({
-  reducer: {
-    offresEmploi: offresEmploiSlice,
-    interview: interviewReducer,
-    acceptedOffers: acceptedOffersReducer,
+import profileReducer from "./recruteur/profileSlice";
+import addjobsReducer from "./recruteur/addjobsSlice";
+import { validateActionMiddleware } from "./auth/authSlice";
 
-    dashboard: dashboardReducer,
-    candidates: candidatesReducer,
-    interviews: interviewsReducer,
-    addjob: addjobsSlice,
-    profile: profieleReducer,
-    auth: authReducer,
-  },
+const reducer = {
+  auth: authReducer,
+  offresEmploi: offresEmploiReducer,
+  interview: interviewReducer,
+  acceptedOffers: acceptedOffersReducer,
+  dashboard: dashboardReducer,
+  candidates: candidatesReducer,
+  interviews: interviewsReducer,
+  profile: profileReducer,
+  addjob: addjobsReducer,
+};
+
+export const store = configureStore({
+  reducer,
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: ["offresEmploi/submitCandidature"],
+        ignoredPaths: ["offresEmploi.cv", "offresEmploi.lettreMotivation"],
+      },
+    }).concat(validateActionMiddleware),
+  devTools: process.env.NODE_ENV !== "production",
 });

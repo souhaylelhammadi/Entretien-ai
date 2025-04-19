@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { logout, logoutUser } from "../../store/auth/authSlice"; // Import both logout actions
+import logoutUser, { logout  } from "../../store/auth/authSlice"; // Import both logout actions
 import { updateProfileAsync } from "../../store/recruteur/profileSlice";
 
 const ProfileSection = () => {

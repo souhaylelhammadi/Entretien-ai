@@ -10,7 +10,7 @@ import {
   Loader2,
   Frown,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   fetchOffresEmploi,
@@ -19,9 +19,11 @@ import {
   setSecteurFilter,
   toggleFilterOpen,
 } from "./store/offresEmploiSlice";
+import { toast } from "react-toastify";
 
 function OffresEmploi() {
   const dispatch = useDispatch();
+  const location = useLocation();
   const offresEmploiState = useSelector((state) => state.offresEmploi) || {};
   const {
     filteredOffres = [],
@@ -35,7 +37,15 @@ function OffresEmploi() {
 
   useEffect(() => {
     dispatch(fetchOffresEmploi());
-  }, [dispatch]);
+    if (location.state?.message) {
+      toast.success(location.state.message);
+      window.history.replaceState({}, document.title);
+    }
+  }, [dispatch, location.state]);
+
+  useEffect(() => {
+    console.log("filteredOffres:", filteredOffres);
+  }, [filteredOffres]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);

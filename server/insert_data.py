@@ -1,111 +1,153 @@
+# server/insert_sample_data.py
 from pymongo import MongoClient
 from bson import ObjectId
-from datetime import datetime, timezone
-import random
+from datetime import datetime
+from werkzeug.security import generate_password_hash
 
-# MongoDB connection
-client = MongoClient("mongodb://localhost:27017/recruitment_platform_ia")
-db = client.recruitment_platform_ia
+# Connect to MongoDB
+client = MongoClient("mongodb+srv://user1:souhayl2005@cluster0.e1muy.mongodb.net/recruitment_platform_ia")
+db = client["recruitment_db_ai"]
 
-# Clear collections
-db.offres.drop()
+# Clear existing collections (optional, comment out if you want to keep existing data)
+db.users.drop()
 db.candidates.drop()
-db.candidatures.drop()
+db.recruiters.drop()
+db.offers.drop()
+db.applications.drop()
+db.interviews.drop()
 
-# Sample data
-entreprises = [
-    {"_id": ObjectId(), "nom": "TechCorp", "secteur": "Technologie"},
-    {"_id": ObjectId(), "nom": "HealthInc", "secteur": "Santé"},
-]
-recruteurs = [
-    {"_id": ObjectId(), "nom": "Alice Martin"},
-    {"_id": ObjectId(), "nom": "Bob Dupont"},
-]
-offres = [
-    {
-        "_id": ObjectId(),
-        "titre": "Développeur Full Stack",
-        "description": "Développeur JS/React/Node",
-        "localisation": "Paris",
-        "salaire_min": 50000,
-        "competences_requises": ["JavaScript", "React", "Node.js"],
-        "entreprise": {"_id": entreprises[0]["_id"], "nom": "TechCorp", "secteur": "Technologie"},
-        "recruteur": {"_id": recruteurs[0]["_id"], "nom": "Alice Martin"},
-        "candidature_ids": [],
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
-    },
-    {
-        "_id": ObjectId(),
-        "titre": "Data Scientist",
-        "description": "Analyse de données",
-        "localisation": "Lyon",
-        "salaire_min": 60000,
-        "competences_requises": ["Python", "Pandas", "Machine Learning"],
-        "entreprise": {"_id": entreprises[1]["_id"], "nom": "HealthInc", "secteur": "Santé"},
-        "recruteur": {"_id": recruteurs[1]["_id"], "nom": "Bob Dupont"},
-        "candidature_ids": [],
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
-    },
-    # Add 13 more offers
-    *[
-        {
-            "_id": ObjectId(),
-            "titre": f"Poste {i}",
-            "description": f"Description du poste {i}",
-            "localisation": random.choice(["Paris", "Lyon", "Marseille"]),
-            "salaire_min": random.randint(40000, 80000),
-            "competences_requises": random.sample(
-                ["Python", "Java", "SQL", "React", "Docker"], 3
-            ),
-            "entreprise": random.choice(entreprises),
-            "recruteur": random.choice(recruteurs),
-            "candidature_ids": [],
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
-        }
-        for i in range(3, 16)
+# 1. Insert a recruiter user
+recruiter_user = {
+    "_id": ObjectId(),
+    "name": "Alice Martin",
+    "email": "alice@techcorp.com",
+    "password": generate_password_hash("password123"),
+    "role": "recruiter"
+}
+recruiter_user_id = db.users.insert_one(recruiter_user).inserted_id
+
+# 2. Insert recruiter profile
+recruiter_profile = {
+    "userId": recruiter_user_id,
+    "offers": []
+}
+recruiter_profile_id = db.recruiters.insert_one(recruiter_profile).inserted_id
+
+# 3. Insert a candidate user
+candidate_user = {
+    "_id": ObjectId(),
+    "name": "Bob Dupont",
+    "email": "bob@example.com",
+    "password": generate_password_hash("password123"),
+    "role": "candidate"
+}
+candidate_user_id = db.users.insert_one(candidate_user).inserted_id
+
+# 4. Insert candidate profile
+candidate_profile = {
+    "userId": candidate_user_id,
+    "cvPath": "",
+    "applications": []
+}
+candidate_profile_id = db.candidates.insert_one(candidate_profile).inserted_id
+
+# 5. Insert two job offers
+offer_1 = {
+    "_id": ObjectId(),
+    "title": "Développeur Full Stack",
+    "company": "Tech Corp",
+    "location": "Paris",
+    "description": "Développer des applications web avec React et Flask.",
+    "requiredSkills": ["React", "Flask", "MongoDB"],
+    "salaryMin": 50000,
+    "status": "open",
+    "createdAt": datetime.utcnow(),
+    "recruiterId": recruiter_user_id,
+    "questions": [
+        {"id": "1", "text": "Comment implémenter une API REST ?", "type": "technical"},
+        {"id": "2", "text": "Décrivez un projet récent.", "type": "general"}
     ],
-]
+    "applications": []
+}
+offer_2 = {
+    "_id": ObjectId(),
+    "title": "Data Scientist",
+    "company": "Data Inc",
+    "location": "Lyon",
+    "description": "Analyser des données avec Python et TensorFlow.",
+    "requiredSkills": ["Python", "TensorFlow", "SQL"],
+    "salaryMin": 60000,
+    "status": "open",
+    "createdAt": datetime.utcnow(),
+    "recruiterId": recruiter_user_id,
+    "questions": [
+        {"id": "3", "text": "Expliquez le fonctionnement d'un modèle ML.", "type": "technical"}
+    ],
+    "applications": []
+}
+offer_1_id = db.offers.insert_one(offer_1).inserted_id
+offer_2_id = db.offers.insert_one(offer_2).inserted_id
 
-candidates = [
-    {
-        "_id": ObjectId(),
-        "nom": f"Candidat {i}",
-        "email": f"candidat{i}@example.com",
-        "telephone": f"01234567{i:02d}",
-        "cv": f"Uploads/cv_{i}.pdf",
-        "lettre_motivation": f"Lettre de motivation du candidat {i}",
-        "created_at": datetime.now(timezone.utc),
-    }
-    for i in range(1, 31)
-]
+# Update recruiter with offers
+db.recruiters.update_one(
+    {"userId": recruiter_user_id},
+    {"$set": {"offers": [offer_1_id, offer_2_id]}}
+)
 
-candidatures = []
-for i, candidate in enumerate(candidates):
-    offre = random.choice(offres)
-    candidature = {
-        "_id": ObjectId(),
-        "candidate_id": candidate["_id"],
-        "offre_id": offre["_id"],
-        "statut": "en_attente",
-        "date_postulation": datetime.now(timezone.utc),
-        "cv_path": candidate["cv"],
-        "lettre_motivation": candidate["lettre_motivation"],
-    }
-    candidatures.append(candidature)
-    # Update offre
-    for o in offres:
-        if o["_id"] == offre["_id"]:
-            o["candidature_ids"].append(candidature["_id"])
+# 6. Insert an application
+application = {
+    "_id": ObjectId(),
+    "candidateId": candidate_user_id,
+    "offerId": offer_1_id,
+    "status": "pending",
+    "cvPath": "uploads/cv_bob.pdf",
+    "lettreMotivation": "Je suis motivé pour rejoindre Tech Corp.",
+    "createdAt": datetime.utcnow()
+}
+application_id = db.applications.insert_one(application).inserted_id
 
-# Insert data
-db.entreprises.insert_many(entreprises)
-db.recruteurs.insert_many(recruteurs)
-db.offres.insert_many(offres)
-db.candidates.insert_many(candidates)
-db.candidatures.insert_many(candidatures)
+# Update offer and candidate with application
+db.offers.update_one(
+    {"_id": offer_1_id},
+    {"$push": {"applications": application_id}}
+)
+db.candidates.update_one(
+    {"userId": candidate_user_id},
+    {"$push": {"applications": application_id}}
+)
 
-print(f"Inserted {len(offres)} offres, {len(candidates)} candidates, {len(candidatures)} candidatures")
+# 7. Insert an interview
+interview = {
+    "_id": ObjectId(),
+    "offerId": offer_1_id,
+    "candidateId": candidate_user_id,
+    "videoPath": "uploads/interview_bob.mp4",
+    "transcriptions": [
+        {"questionId": "1", "text": "J'ai implémenté une API REST avec Flask."},
+        {"questionId": "2", "text": "J'ai travaillé sur un projet e-commerce."}
+    ],
+    "score": 85,
+    "report": {
+        "sentiment": "positive",
+        "coherence": 90,
+        "relevance": 80
+    },
+    "createdAt": datetime.utcnow()
+}
+interview_id = db.interviews.insert_one(interview).inserted_id
+
+# Associate interview with application
+db.applications.update_one(
+    {"_id": application_id},
+    {"$set": {"interview": interview_id}}
+)
+
+print("Sample data inserted successfully!")
+print(f"Recruiter User ID: {recruiter_user_id}")
+print(f"Candidate User ID: {candidate_user_id}")
+print(f"Offer 1 ID: {offer_1_id}")
+print(f"Offer 2 ID: {offer_2_id}")
+print(f"Application ID: {application_id}")
+print(f"Interview ID: {interview_id}")
+
 client.close()

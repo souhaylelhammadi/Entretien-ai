@@ -1,11 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import resetAuthState,{
+import {
   loginUser,
-  
   setEmail,
   setPassword,
+  clearForm,
 } from "../store/auth/authSlice";
 import { toast } from "react-toastify";
 
@@ -13,12 +13,15 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { email, password, loading, error, isAuthenticated, user } =
+  const { email, password, loading, authError, isAuthenticated, user } =
     useSelector((state) => state.auth);
 
-  // Reset error state when component mounts
+  // State for form-specific errors
+  const [formErrors, setFormErrors] = useState({});
+
+  // Reset form state when component mounts
   useEffect(() => {
-    dispatch(resetAuthState());
+    dispatch(clearForm());
   }, [dispatch]);
 
   // Redirect if authenticated
@@ -26,28 +29,47 @@ const Login = () => {
     if (isAuthenticated && user) {
       const redirectTo =
         location.state?.from?.pathname ||
-        (user.role === "recruiter" ? "/recrutement" : "/");
-      navigate(redirectTo);
+        (user.role === "recruteur" ? "/recrutement" : "/");
+      console.log("Redirecting to:", redirectTo, "Role:", user.role); // Debugging
+      navigate(redirectTo, { replace: true });
     }
   }, [isAuthenticated, user, navigate, location]);
 
+  const validateForm = () => {
+    const errors = {};
+    if (!email.trim()) {
+      errors.email = "L'email est requis";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = "L'email est invalide";
+    }
+    if (!password) {
+      errors.password = "Le mot de passe est requis";
+    }
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
-      toast.error("Please fill in all fields");
+
+    if (!validateForm()) {
+      toast.error("Veuillez corriger les erreurs dans le formulaire");
       return;
     }
 
     try {
+      console.log("Attempting login with:", { email }); // Debugging
       const result = await dispatch(loginUser({ email, password }));
-      if (result.meta.requestStatus === "fulfilled") {
-        toast.success("Login successful");
-        dispatch(resetAuthState()); // Clear form
-      } else if (result.meta.requestStatus === "rejected") {
-        toast.error(result.payload?.message || "Login failed");
+      console.log("Login result:", result); // Debugging
+      if (loginUser.fulfilled.match(result)) {
+        toast.success("Connexion réussie");
+        dispatch(clearForm());
+      } else if (loginUser.rejected.match(result)) {
+        toast.error(result.payload || "Échec de la connexion");
       }
     } catch (err) {
-      toast.error("Login failed. Please try again.");
+      console.error("Login error:", err); // Debugging
+      toast.error("Échec de la connexion. Veuillez réessayer.");
     }
   };
 
@@ -56,8 +78,12 @@ const Login = () => {
       <div className="w-full max-w-md bg-white rounded-lg shadow border border-gray-200">
         <div className="p-4 space-y-4 md:p-6 md:space-y-6">
           <h1 className="text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl text-center">
-            Sign in to your account
+            Connexion à votre compte
           </h1>
+
+          {authError && (
+            <p className="text-sm text-red-600 text-center">{authError}</p>
+          )}
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
@@ -65,7 +91,7 @@ const Login = () => {
                 htmlFor="email"
                 className="block mb-2 text-sm font-medium text-gray-900"
               >
-                Email address
+                Adresse email
               </label>
               <input
                 type="email"
@@ -73,15 +99,25 @@ const Login = () => {
                 id="email"
                 value={email}
                 onChange={(e) => dispatch(setEmail(e.target.value))}
-                className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
-                placeholder="name@company.com"
+                className={`bg-gray-50 border ${
+                  formErrors.email || authError
+                    ? "border-red-500"
+                    : "border-gray-300"
+                } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
+                placeholder="nom@entreprise.com"
                 required
-                aria-invalid={error ? "true" : "false"}
-                aria-describedby={error ? "email-error" : undefined}
+                aria-invalid={formErrors.email || authError ? "true" : "false"}
+                aria-describedby={
+                  formErrors.email
+                    ? "email-error"
+                    : authError
+                    ? "server-error"
+                    : undefined
+                }
               />
-              {error && (
+              {formErrors.email && (
                 <p id="email-error" className="mt-1 text-sm text-red-600">
-                  {error}
+                  {formErrors.email}
                 </p>
               )}
             </div>
@@ -91,7 +127,7 @@ const Login = () => {
                 htmlFor="password"
                 className="block mb-2 text-sm font-medium text-gray-900"
               >
-                Password
+                Mot de passe
               </label>
               <input
                 type="password"
@@ -99,15 +135,27 @@ const Login = () => {
                 id="password"
                 value={password}
                 onChange={(e) => dispatch(setPassword(e.target.value))}
+                className={`bg-gray-50 border ${
+                  formErrors.password || authError
+                    ? "border-red-500"
+                    : "border-gray-300"
+                } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
                 placeholder="••••••••"
-                className="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
                 required
-                aria-invalid={error ? "true" : "false"}
-                aria-describedby={error ? "password-error" : undefined}
+                aria-invalid={
+                  formErrors.password || authError ? "true" : "false"
+                }
+                aria-describedby={
+                  formErrors.password
+                    ? "password-error"
+                    : authError
+                    ? "server-error"
+                    : undefined
+                }
               />
-              {error && (
+              {formErrors.password && (
                 <p id="password-error" className="mt-1 text-sm text-red-600">
-                  {error}
+                  {formErrors.password}
                 </p>
               )}
             </div>
@@ -125,7 +173,7 @@ const Login = () => {
                   htmlFor="remember-me"
                   className="ml-2 block text-sm text-gray-900"
                 >
-                  Remember me
+                  Se souvenir de moi
                 </label>
               </div>
 
@@ -134,7 +182,7 @@ const Login = () => {
                   to="/forgot-password"
                   className="font-medium text-blue-600 hover:text-blue-500"
                 >
-                  Forgot password?
+                  Mot de passe oublié ?
                 </Link>
               </div>
             </div>
@@ -168,20 +216,20 @@ const Login = () => {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  Signing in...
+                  Connexion en cours...
                 </span>
               ) : (
-                "Sign in"
+                "Se connecter"
               )}
             </button>
 
             <p className="text-sm font-light text-gray-500 text-center">
-              Don't have an account yet?{" "}
+              Vous n'avez pas de compte ?{" "}
               <Link
                 to="/register"
                 className="font-medium text-blue-600 hover:underline"
               >
-                Sign up
+                S'inscrire
               </Link>
             </p>
           </form>

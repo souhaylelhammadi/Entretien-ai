@@ -12,6 +12,7 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  LogIn,
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -19,6 +20,7 @@ import {
   submitCandidature,
   resetCandidatureStatus,
 } from "../store/offresEmploiSlice";
+import { toast } from "react-toastify";
 
 function DetailsOffreEmploi() {
   const { id } = useParams();
@@ -31,11 +33,23 @@ function DetailsOffreEmploi() {
     candidatureStatus,
     candidatureError,
   } = useSelector((state) => state.offresEmploi);
+  const { token } = useSelector((state) => state.auth);
   const [cv, setCv] = useState(null);
   const [lettreMotivation, setLettreMotivation] = useState("");
   const [showApplicationForm, setShowApplicationForm] = useState(false);
+  const [submissionSuccess, setSubmissionSuccess] = useState(false);
 
   useEffect(() => {
+    console.log("Fetching offer with ID:", id);
+    if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
+      console.error("Invalid ObjectId:", id);
+      toast.error("Format d'ID d'offre invalide");
+      dispatch({
+        type: "offresEmploi/fetchOffreById/rejected",
+        payload: "Format d'ID d'offre invalide",
+      });
+      return;
+    }
     dispatch(fetchOffreById(id));
     return () => {
       dispatch(resetCandidatureStatus());
@@ -43,12 +57,26 @@ function DetailsOffreEmploi() {
   }, [dispatch, id]);
 
   useEffect(() => {
+    console.log("Redux state:", {
+      offre,
+      loading,
+      error,
+      candidatureStatus,
+      candidatureError,
+    });
     if (candidatureStatus === "success") {
-      navigate("/offres", {
-        state: { message: "Candidature envoyée avec succès !" },
-      });
+      toast.success("Candidature envoyée avec succès !");
+      setSubmissionSuccess(true);
+      const timer = setTimeout(() => {
+        navigate("/offres", {
+          state: { message: "Candidature envoyée avec succès !" },
+        });
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else if (candidatureStatus === "failed") {
+      toast.error(candidatureError || "Échec de l'envoi de la candidature");
     }
-  }, [candidatureStatus, navigate]);
+  }, [candidatureStatus, candidatureError, navigate]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -60,24 +88,32 @@ function DetailsOffreEmploi() {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ].includes(file.type)
     ) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert("Le fichier CV ne doit pas dépasser 5 Mo.");
+      if (file.size > 5 * 1024 * 1024 || file.size === 0) {
+        toast.error(
+          "Le fichier CV est invalide ou dépasse la taille maximale de 5 Mo."
+        );
         return;
       }
       setCv(file);
     } else {
-      alert("Veuillez sélectionner un fichier PDF, DOC ou DOCX.");
+      toast.error("Veuillez sélectionner un fichier PDF, DOC ou DOCX.");
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!cv || !lettreMotivation.trim()) {
-      alert(
+      toast.error(
         "Veuillez remplir tous les champs obligatoires (CV, lettre de motivation)."
       );
       return;
     }
+
+    console.log("Submitting candidature:", {
+      offreId: id,
+      cv: cv.name,
+      lettreMotivation: lettreMotivation.substring(0, 50) + "...",
+    });
 
     dispatch(
       submitCandidature({
@@ -86,6 +122,17 @@ function DetailsOffreEmploi() {
         lettreMotivation,
       })
     );
+  };
+
+  const handleLoginRedirect = () => {
+    navigate("/login", { state: { from: `/offre/${id}` } });
+  };
+
+  const handleResetForm = () => {
+    setCv(null);
+    setLettreMotivation("");
+    setSubmissionSuccess(false);
+    dispatch(resetCandidatureStatus());
   };
 
   if (loading) {
@@ -110,7 +157,7 @@ function DetailsOffreEmploi() {
             {error || "Offre introuvable"}
           </h2>
           <button
-            onClick={() => navigate("/offres-emploi")}
+            onClick={() => navigate("/offres")}
             className="bg-indigo-600 text-white py-3 px-6 rounded-xl hover:bg-indigo-700 transition-colors shadow-md"
           >
             Retour aux offres
@@ -124,7 +171,7 @@ function DetailsOffreEmploi() {
     <div className="bg-gradient-to-br from-gray-50 to-indigo-50 min-h-screen mt-16">
       <div className="max-w-6xl mx-auto px-4 py-6">
         <button
-          onClick={() => navigate("/offres-emploi")}
+          onClick={() => navigate("/offres")}
           className="inline-flex items-center text-indigo-600 mb-4 hover:text-indigo-800 transition-colors font-medium"
         >
           <ArrowLeft className="mr-1 h-5 w-5" /> Retour aux offres
@@ -218,75 +265,120 @@ function DetailsOffreEmploi() {
                     showApplicationForm ? "block" : "hidden"
                   } md:block`}
                 >
-                  {candidatureError && (
-                    <div className="bg-red-50 text-red-600 p-3 rounded-xl mb-4 flex items-center text-sm gap-2">
-                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                      <span>{candidatureError}</span>
-                    </div>
-                  )}
-
-                  <form onSubmit={handleSubmit}>
-                    <div className="mb-4">
-                      <label
-                        htmlFor="cv-upload"
-                        className="block text-sm font-medium text-gray-700 mb-2"
-                      >
-                        CV <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="file"
-                        id="cv-upload"
-                        accept=".pdf,.doc,.docx"
-                        onChange={handleFileChange}
-                        className="hidden"
-                        required
-                      />
-                      <label
-                        htmlFor="cv-upload"
-                        className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-indigo-200 rounded-xl cursor-pointer text-gray-600 hover:bg-indigo-50 transition-colors text-sm"
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        {cv ? cv.name : "Télécharger votre CV"}
-                      </label>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Formats acceptés: PDF, DOC, DOCX (max 5 Mo)
+                  {!token ? (
+                    <div className="text-center">
+                      <LogIn className="h-10 w-10 text-indigo-500 mx-auto mb-4" />
+                      <p className="text-gray-700 mb-4">
+                        Vous devez être connecté pour postuler à cette offre.
                       </p>
-                    </div>
-
-                    <div className="mb-4">
-                      <label
-                        htmlFor="lettre-motivation"
-                        className="block text-sm font-medium text-gray-700 mb-2"
+                      <button
+                        onClick={handleLoginRedirect}
+                        className="w-full bg-indigo-600 text-white py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-md"
                       >
-                        Lettre de motivation{" "}
-                        <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        id="lettre-motivation"
-                        value={lettreMotivation}
-                        onChange={(e) => setLettreMotivation(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                        rows="5"
-                        required
-                        placeholder="Présentez-vous et expliquez votre motivation..."
-                      />
+                        <LogIn className="mr-2 h-5 w-5" />
+                        Se connecter
+                      </button>
                     </div>
-
-                    <button
-                      type="submit"
-                      className="w-full bg-indigo-600 text-white py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-md"
-                      disabled={candidatureStatus === "pending"}
-                    >
-                      {candidatureStatus === "pending" ? (
-                        <Loader2 className="animate-spin h-5 w-5 mr-2" />
-                      ) : (
-                        <Send className="mr-2 h-5 w-5" />
+                  ) : submissionSuccess ? (
+                    <div className="text-center">
+                      <svg
+                        className="h-10 w-10 text-green-500 mx-auto mb-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      <p className="text-gray-700 mb-4">
+                        Candidature envoyée avec succès !
+                      </p>
+                      <button
+                        onClick={() => navigate("/offres")}
+                        className="w-full bg-indigo-600 text-white py-3 px-4 rounded-xl hover:bg-indigo-700 transition-colors shadow-md"
+                      >
+                        Retour aux offres
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {candidatureError && (
+                        <div className="bg-red-50 text-red-600 p-3 rounded-xl mb-4 flex items-center text-sm gap-2">
+                          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                          <span>{candidatureError}</span>
+                        </div>
                       )}
-                      {candidatureStatus === "pending"
-                        ? "Envoi..."
-                        : "Postuler"}
-                    </button>
-                  </form>
+
+                      <form onSubmit={handleSubmit}>
+                        <div className="mb-4">
+                          <label
+                            htmlFor="cv-upload"
+                            className="block text-sm font-medium text-gray-700 mb-2"
+                          >
+                            CV <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="file"
+                            id="cv-upload"
+                            accept=".pdf,.doc,.docx"
+                            onChange={handleFileChange}
+                            className="hidden"
+                            required
+                          />
+                          <label
+                            htmlFor="cv-upload"
+                            className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-indigo-200 rounded-xl cursor-pointer text-gray-600 hover:bg-indigo-50 transition-colors text-sm"
+                          >
+                            <Upload className="mr-2 h-4 w-4" />
+                            {cv ? cv.name : "Télécharger votre CV"}
+                          </label>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Formats acceptés: PDF, DOC, DOCX (max 5 Mo)
+                          </p>
+                        </div>
+
+                        <div className="mb-4">
+                          <label
+                            htmlFor="lettre-motivation"
+                            className="block text-sm font-medium text-gray-700 mb-2"
+                          >
+                            Lettre de motivation{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            id="lettre-motivation"
+                            value={lettreMotivation}
+                            onChange={(e) =>
+                              setLettreMotivation(e.target.value)
+                            }
+                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                            rows="5"
+                            required
+                            placeholder="Présentez-vous et expliquez votre motivation..."
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="w-full bg-indigo-600 text-white py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-md"
+                          disabled={candidatureStatus === "pending"}
+                        >
+                          {candidatureStatus === "pending" ? (
+                            <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                          ) : (
+                            <Send className="mr-2 h-5 w-5" />
+                          )}
+                          {candidatureStatus === "pending"
+                            ? "Envoi..."
+                            : "Postuler"}
+                        </button>
+                      </form>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

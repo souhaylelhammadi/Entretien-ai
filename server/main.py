@@ -4,7 +4,7 @@ from flask_pymongo import PyMongo
 from bson import ObjectId
 from datetime import datetime, timezone
 import os
-from auth import init_auth, register, login, get_profile
+from app.routes.auth import init_auth, register, login, get_profile
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
