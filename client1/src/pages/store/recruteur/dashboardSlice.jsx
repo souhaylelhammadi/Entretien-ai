@@ -75,6 +75,7 @@ const dashboardSlice = createSlice({
     loading: true,
     error: null,
     lastFetch: null,
+    pagination: { currentPage: 1, itemsPerPage: 10, total: 0 }, // Initialize pagination
   },
   reducers: {
     setActiveTab: (state, action) => {
@@ -110,6 +111,7 @@ const dashboardSlice = createSlice({
         state.interviews = action.payload.interviews;
         state.lastFetch = new Date().toISOString();
         state.error = null;
+        state.pagination.total = action.payload.candidates.length; // Update total based on fetched candidates
         console.log("Updated dashboard state:", action.payload);
       })
       .addCase(fetchInitialData.rejected, (state, action) => {

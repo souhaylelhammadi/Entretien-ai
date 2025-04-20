@@ -16,21 +16,18 @@ const Login = () => {
   const { email, password, loading, authError, isAuthenticated, user } =
     useSelector((state) => state.auth);
 
-  // State for form-specific errors
   const [formErrors, setFormErrors] = useState({});
 
-  // Reset form state when component mounts
   useEffect(() => {
     dispatch(clearForm());
   }, [dispatch]);
 
-  // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
       const redirectTo =
         location.state?.from?.pathname ||
         (user.role === "recruteur" ? "/recrutement" : "/");
-      console.log("Redirecting to:", redirectTo, "Role:", user.role); // Debugging
+      console.log("Redirecting to:", redirectTo, "Role:", user.role);
       navigate(redirectTo, { replace: true });
     }
   }, [isAuthenticated, user, navigate, location]);
@@ -58,9 +55,9 @@ const Login = () => {
     }
 
     try {
-      console.log("Attempting login with:", { email }); // Debugging
+      console.log("Attempting login with:", { email });
       const result = await dispatch(loginUser({ email, password }));
-      console.log("Login result:", result); // Debugging
+      console.log("Login result:", result);
       if (loginUser.fulfilled.match(result)) {
         toast.success("Connexion réussie");
         dispatch(clearForm());
@@ -68,7 +65,7 @@ const Login = () => {
         toast.error(result.payload || "Échec de la connexion");
       }
     } catch (err) {
-      console.error("Login error:", err); // Debugging
+      console.error("Login error:", err);
       toast.error("Échec de la connexion. Veuillez réessayer.");
     }
   };

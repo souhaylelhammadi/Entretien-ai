@@ -76,12 +76,15 @@ def register():
     """Register a new candidate or recruiter"""
     try:
         data = request.get_json()
+        logger.info(f"Received registration payload: {data}")
         required_fields = ["firstName", "lastName", "email", "password", "acceptTerms", "role"]
-        
-        if not all(field in data for field in required_fields):
-            return jsonify({"message": "Tous les champs de base sont requis"}), 400
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            logger.warning(f"Missing fields: {missing_fields}")
+            return jsonify({"message": f"Champs manquants: {', '.join(missing_fields)}"}), 400
         
         if not isinstance(data["acceptTerms"], bool) or not data["acceptTerms"]:
+            logger.warning("Invalid or missing acceptTerms")
             return jsonify({"message": "Vous devez accepter les conditions d'utilisation"}), 400
 
         role = data["role"]
@@ -90,13 +93,16 @@ def register():
             return jsonify({"message": "Rôle invalide. Doit être 'candidat' ou 'recruteur'"}), 400
 
         if role == "recruteur" and "entreprise_id" not in data:
+            logger.warning("Missing entreprise_id for recruteur")
             return jsonify({"message": "ID de l'entreprise requis pour les recruteurs"}), 400
 
         password = data["password"]
         if len(password) < 8 or not any(c.isupper() for c in password) or not any(c.isdigit() for c in password):
+            logger.warning("Invalid password format")
             return jsonify({"message": "Le mot de passe doit contenir au moins 8 caractères, une majuscule et un chiffre"}), 400
 
         if current_app.mongo.db.users.find_one({"email": data["email"]}):
+            logger.warning(f"Email already exists: {data['email']}")
             return jsonify({"message": "Cet email existe déjà"}), 400
 
         hashed_password = hashpw(data["password"].encode("utf-8"), gensalt())
@@ -111,9 +117,11 @@ def register():
         }
         if role == "recruteur":
             if not ObjectId.is_valid(data["entreprise_id"]):
+                logger.warning(f"Invalid entreprise_id format: {data['entreprise_id']}")
                 return jsonify({"message": "Format d'ID d'entreprise invalide"}), 400
             entreprise = current_app.mongo.db.entreprises.find_one({"_id": ObjectId(data["entreprise_id"])})
             if not entreprise:
+                logger.warning(f"Entreprise not found for ID: {data['entreprise_id']}")
                 return jsonify({"message": "Entreprise non trouvée"}), 404
             user_data["entreprise_id"] = ObjectId(data["entreprise_id"])
 
@@ -147,10 +155,12 @@ def login():
     try:
         data = request.get_json()
         if not all(field in data for field in ["email", "password"]):
+            logger.warning("Missing email or password")
             return jsonify({"message": "Email et mot de passe requis"}), 400
 
         user = current_app.mongo.db.users.find_one({"email": data["email"]})
         if not user or not checkpw(data["password"].encode("utf-8"), user["password"]):
+            logger.warning(f"Invalid credentials for email: {data['email']}")
             return jsonify({"message": "Identifiants invalides"}), 401
 
         if user["role"] not in ["candidat", "recruteur"]:
@@ -186,10 +196,12 @@ def get_profile():
         token = request.headers.get("Authorization")
         decoded = verify_token(token)
         if not decoded:
+            logger.warning("Invalid or missing token")
             return jsonify({"message": "Authentification requise ou invalide."}), 401
 
         user = current_app.mongo.db.users.find_one({"_id": ObjectId(decoded["id"])})
         if not user:
+            logger.warning(f"User not found: {decoded['id']}")
             return jsonify({"message": "Utilisateur non trouvé"}), 404
 
         user_data = {
@@ -217,6 +229,7 @@ def logout():
         token = request.headers.get("Authorization")
         decoded = verify_token(token)
         if not decoded:
+            logger.warning("Invalid or missing token")
             return jsonify({"message": "Authentification requise ou invalide."}), 401
         
         token = token.split(" ")[1]
@@ -232,84 +245,24 @@ def logout():
         logger.error(f"Erreur de déconnexion : {str(e)}", exc_info=True)
         return jsonify({"message": "Erreur serveur lors de la déconnexion", "details": str(e)}), 500
 
-@auth_bp.route("/update", methods=["PUT"])
-def update_profile():
-    """Update the authenticated user's profile"""
+@auth_bp.route("/entreprise", methods=["POST"])
+def create_entreprise():
+    """Create a new enterprise"""
     try:
-        token = request.headers.get("Authorization")
-        decoded = verify_token(token)
-        if not decoded:
-            return jsonify({"message": "Authentification requise ou invalide."}), 401
-
-        user_id = ObjectId(decoded["id"])
         data = request.get_json()
-        required_fields = ["firstName", "lastName", "email"]
-
-        if not all(field in data for field in required_fields):
-            return jsonify({"message": "Tous les champs (prénom, nom, email) sont requis"}), 400
-
-        # Validate input
-        first_name = data["firstName"].strip()
-        last_name = data["lastName"].strip()
-        email = data["email"].strip()
-
-        if not first_name or not last_name or not email:
-            return jsonify({"message": "Les champs ne peuvent pas être vides"}), 400
-
-        import re
-        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
-            return jsonify({"message": "Format d'email invalide"}), 400
-
-        # Check if email is already in use by another user
-        existing_user = current_app.mongo.db.users.find_one(
-            {"email": email, "_id": {"$ne": user_id}}
-        )
-        if existing_user:
-            return jsonify({"message": "Cet email est déjà utilisé"}), 400
-
-        # Update user data
-        update_data = {
-            "firstName": first_name,
-            "lastName": last_name,
-            "email": email,
-            "updatedAt": datetime.utcnow(),
-        }
-
-        result = current_app.mongo.db.users.update_one(
-            {"_id": user_id},
-            {"$set": update_data}
-        )
-
-        if result.matched_count == 0:
-            return jsonify({"message": "Utilisateur non trouvé"}), 404
-
-        # Fetch updated user data
-        updated_user = current_app.mongo.db.users.find_one({"_id": user_id})
-        user_data = {
-            "id": str(updated_user["_id"]),
-            "firstName": updated_user["firstName"],
-            "lastName": updated_user["lastName"],
-            "email": updated_user["email"],
-            "role": updated_user["role"],
-            "createdAt": updated_user["createdAt"].isoformat(),
-            "updatedAt": updated_user.get("updatedAt", datetime.utcnow()).isoformat(),
-        }
-        if updated_user["role"] == "recruteur":
-            user_data["entreprise_id"] = (
-                str(updated_user.get("entreprise_id", ""))
-                if updated_user.get("entreprise_id")
-                else ""
-            )
-
-        logger.info(f"Profil mis à jour pour Utilisateur ID {user_id}")
+        logger.info(f"Received entreprise creation payload: {data}")
+        if not data.get("name"):
+            logger.warning("Missing entreprise name")
+            return jsonify({"message": "Nom de l'entreprise requis"}), 400
+        result = current_app.mongo.db.entreprises.insert_one({
+            "name": data["name"],
+            "createdAt": datetime.utcnow(),
+        })
+        logger.info(f"Entreprise créée avec ID: {result.inserted_id}")
         return jsonify({
-            "message": "Profil mis à jour avec succès",
-            "user": user_data
-        }), 200
-
+            "message": "Entreprise créée",
+            "entreprise_id": str(result.inserted_id),
+        }), 201
     except Exception as e:
-        logger.error(f"Erreur de mise à jour du profil : {str(e)}", exc_info=True)
-        return jsonify({
-            "message": "Erreur serveur lors de la mise à jour du profil",
-            "details": str(e)
-        }), 500
+        logger.error(f"Erreur création entreprise: {str(e)}", exc_info=True)
+        return jsonify({"message": "Erreur serveur lors de la création de l'entreprise", "details": str(e)}), 500

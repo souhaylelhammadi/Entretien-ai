@@ -4,28 +4,31 @@ const API_BASE_URL = "http://localhost:5000";
 
 export const saveInterviewToDatabase = createAsyncThunk(
   "interview/saveInterviewToDatabase",
-  async ({ offerId }, { getState }) => {
+  async ({ applicationId }, { getState }) => {
     const { recordedBlob, recordings } = getState().interview;
-    if (!recordedBlob) return;
+    if (!recordedBlob) throw new Error("Aucune vidéo enregistrée");
 
     const formData = new FormData();
     formData.append("video", recordedBlob, `interview_${Date.now()}.webm`);
-    formData.append("offerId", offerId);
+    formData.append("applicationId", applicationId);
     recordings.forEach((rec, index) => {
       formData.append(`transcript_${index}`, rec.transcript || "");
-      formData.append(`questionIndex_${index}`, rec.questionIndex);
+      formData.append(`questionIndex_${index}`, rec.questionIndex.toString());
       formData.append(`question_${index}`, rec.question);
       formData.append(`timestamp_${index}`, rec.timestamp);
     });
 
     const response = await fetch(`${API_BASE_URL}/api/save-recording`, {
       method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+      },
       body: formData,
     });
 
     const data = await response.json();
     if (!data.success) {
-      throw new Error(data.error || "Failed to save recording");
+      throw new Error(data.error || "Échec de l'enregistrement de la vidéo");
     }
     return data;
   }
@@ -33,13 +36,20 @@ export const saveInterviewToDatabase = createAsyncThunk(
 
 export const fetchRecordings = createAsyncThunk(
   "interview/fetchRecordings",
-  async ({ offerId }) => {
+  async ({ applicationId }) => {
     const response = await fetch(
-      `${API_BASE_URL}/api/recordings?offerId=${offerId}`
+      `${API_BASE_URL}/api/recordings?applicationId=${applicationId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+        },
+      }
     );
     const data = await response.json();
     if (!data.success) {
-      throw new Error(data.error || "Failed to load previous recordings");
+      throw new Error(
+        data.error || "Échec du chargement des enregistrements précédents"
+      );
     }
     return data.data.map((rec) => ({
       questionIndex: rec.questionIndex,
@@ -71,7 +81,7 @@ const interviewSlice = createSlice({
     showModal: false,
     errorMessage: "",
     interviewStarted: false,
-    questions: [], // Ajout pour stocker les questions dynamiques
+    questions: [],
   },
   reducers: {
     setState: (state, action) => {
@@ -80,7 +90,6 @@ const interviewSlice = createSlice({
     incrementCallTime: (state) => {
       state.callTime += 1;
       if (state.callTime >= 1800) {
-        // 30 minutes
         state.interviewCompleted = true;
       }
     },
@@ -176,7 +185,8 @@ const interviewSlice = createSlice({
       })
       .addCase(saveInterviewToDatabase.rejected, (state, action) => {
         state.errorMessage =
-          action.error.message || "Failed to save interview. Please try again.";
+          action.error.message ||
+          "Échec de l'enregistrement de l'entretien. Veuillez réessayer.";
       })
       .addCase(fetchRecordings.fulfilled, (state, action) => {
         state.recordings = action.payload;
@@ -184,7 +194,8 @@ const interviewSlice = createSlice({
       })
       .addCase(fetchRecordings.rejected, (state, action) => {
         state.errorMessage =
-          action.error.message || "Failed to load previous recordings.";
+          action.error.message ||
+          "Échec du chargement des enregistrements précédents.";
       });
   },
 });

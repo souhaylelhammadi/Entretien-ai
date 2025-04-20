@@ -90,7 +90,7 @@ function OffresEmploi() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 mt-16">
+    <div className="min-h-screen bg-gray-100 ">
       <header className="bg-white shadow-sm py-4 px-6 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-4">
           <h1 className="text-2xl font-semibold text-gray-900">

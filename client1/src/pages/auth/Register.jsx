@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
-import resetAuthState, {
-  
+import axios from "axios";
+import {
   registerUser,
   setRole,
   setFirstName,
@@ -12,8 +12,12 @@ import resetAuthState, {
   setConfirmPassword,
   setCompanyName,
   setAcceptTerms,
+  clearForm,
+  resetAuthState,
 } from "../store/auth/authSlice";
 import { toast } from "react-toastify";
+
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
 const Register = () => {
   const dispatch = useDispatch();
@@ -28,14 +32,14 @@ const Register = () => {
     companyName,
     acceptTerms,
     loading,
-    error,
+    authError,
     isAuthenticated,
     user,
   } = useSelector((state) => state.auth);
 
   const [formErrors, setFormErrors] = useState({});
 
-  // Reset error state when component mounts
+  // Reset auth state when component mounts
   useEffect(() => {
     dispatch(resetAuthState());
   }, [dispatch]);
@@ -43,7 +47,7 @@ const Register = () => {
   // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
-      navigate(user.role === "recruiter" ? "/recrutement" : "/");
+      navigate(user.role === "recruteur" ? "/recrutement" : "/");
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -52,46 +56,47 @@ const Register = () => {
     let isValid = true;
 
     if (!firstName.trim()) {
-      errors.firstName = "First name is required";
+      errors.firstName = "Le prénom est requis";
       isValid = false;
     }
 
     if (!lastName.trim()) {
-      errors.lastName = "Last name is required";
+      errors.lastName = "Le nom est requis";
       isValid = false;
     }
 
     if (!email.trim()) {
-      errors.email = "Email is required";
+      errors.email = "L'email est requis";
       isValid = false;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = "Email is invalid";
+      errors.email = "L'email est invalide";
       isValid = false;
     }
 
     if (!password) {
-      errors.password = "Password is required";
+      errors.password = "Le mot de passe est requis";
       isValid = false;
     } else if (password.length < 8) {
-      errors.password = "Password must be at least 8 characters";
+      errors.password = "Le mot de passe doit contenir au moins 8 caractères";
       isValid = false;
     } else if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-      errors.password = "Password must include uppercase and number";
+      errors.password =
+        "Le mot de passe doit inclure une majuscule et un chiffre";
       isValid = false;
     }
 
     if (password !== confirmPassword) {
-      errors.confirmPassword = "Passwords don't match";
+      errors.confirmPassword = "Les mots de passe ne correspondent pas";
       isValid = false;
     }
 
-    if (role === "recruiter" && !companyName.trim()) {
-      errors.companyName = "Company name is required";
+    if (role === "recruteur" && !companyName.trim()) {
+      errors.companyName = "Le nom de l'entreprise est requis";
       isValid = false;
     }
 
     if (!acceptTerms) {
-      errors.acceptTerms = "You must accept the terms";
+      errors.acceptTerms = "Vous devez accepter les conditions";
       isValid = false;
     }
 
@@ -106,6 +111,24 @@ const Register = () => {
       return;
     }
 
+    let entreprise_id;
+    if (role === "recruteur") {
+      try {
+        const response = await axios.post(`${API_URL}/api/auth/entreprise`, {
+          name: companyName,
+        });
+        entreprise_id = response.data.entreprise_id;
+        console.log("Entreprise created with ID:", entreprise_id);
+      } catch (err) {
+        const errorMsg =
+          err.response?.data?.message || "Échec de la création de l'entreprise";
+        console.error("Entreprise creation error:", errorMsg);
+        setFormErrors({ server: errorMsg });
+        toast.error(errorMsg);
+        return;
+      }
+    }
+
     const payload = {
       firstName,
       lastName,
@@ -113,22 +136,28 @@ const Register = () => {
       password,
       acceptTerms,
       role,
-      ...(role === "recruiter" && { companyName }),
+      ...(role === "recruteur" && { entreprise_id }),
     };
+
+    console.log("Registration payload:", payload);
 
     try {
       const result = await dispatch(registerUser(payload));
       if (result.meta.requestStatus === "fulfilled") {
-        toast.success("Registration successful!");
-        dispatch(resetAuthState()); // Clear form
+        toast.success("Inscription réussie !");
+        dispatch(clearForm());
       } else if (result.meta.requestStatus === "rejected") {
-        const errorMsg = result.payload?.message || "Registration failed";
+        const errorMsg = result.payload || "Échec de l'inscription";
+        console.error("Registration error:", errorMsg);
         setFormErrors({ server: errorMsg });
         toast.error(errorMsg);
       }
     } catch (err) {
-      setFormErrors({ server: "Registration failed. Please try again." });
-      toast.error("Registration failed. Please try again.");
+      const errorMsg =
+        err.message || "Échec de l'inscription. Veuillez réessayer.";
+      console.error("Registration error:", errorMsg);
+      setFormErrors({ server: errorMsg });
+      toast.error(errorMsg);
     }
   };
 
@@ -137,7 +166,7 @@ const Register = () => {
       <div className="w-full max-w-md bg-white rounded-lg shadow border border-gray-200">
         <div className="p-4 space-y-4 md:p-6 md:space-y-6">
           <h1 className="text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl text-center">
-            Create an Account
+            Créer un compte
           </h1>
 
           {formErrors.server && (
@@ -149,30 +178,30 @@ const Register = () => {
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block mb-2 text-sm font-medium text-gray-900">
-                I am registering as a:
+                Je m'inscris en tant que :
               </label>
               <div className="flex space-x-4">
                 <button
                   type="button"
-                  onClick={() => dispatch(setRole("user"))}
+                  onClick={() => dispatch(setRole("candidat"))}
                   className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium ${
-                    role === "user"
+                    role === "candidat"
                       ? "bg-blue-600 text-white"
                       : "bg-gray-200 text-gray-900 hover:bg-gray-300"
                   }`}
                 >
-                  User
+                  Candidat
                 </button>
                 <button
                   type="button"
-                  onClick={() => dispatch(setRole("recruiter"))}
+                  onClick={() => dispatch(setRole("recruteur"))}
                   className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium ${
-                    role === "recruiter"
+                    role === "recruteur"
                       ? "bg-blue-600 text-white"
                       : "bg-gray-200 text-gray-900 hover:bg-gray-300"
                   }`}
                 >
-                  Recruiter
+                  Recruteur
                 </button>
               </div>
             </div>
@@ -183,7 +212,7 @@ const Register = () => {
                   htmlFor="firstName"
                   className="block mb-2 text-sm font-medium text-gray-900"
                 >
-                  First Name
+                  Prénom
                 </label>
                 <input
                   type="text"
@@ -194,7 +223,7 @@ const Register = () => {
                   className={`bg-gray-50 border ${
                     formErrors.firstName ? "border-red-500" : "border-gray-300"
                   } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
-                  placeholder="John"
+                  placeholder="Jean"
                   required
                   aria-invalid={formErrors.firstName ? "true" : "false"}
                   aria-describedby={
@@ -212,7 +241,7 @@ const Register = () => {
                   htmlFor="lastName"
                   className="block mb-2 text-sm font-medium text-gray-900"
                 >
-                  Last Name
+                  Nom
                 </label>
                 <input
                   type="text"
@@ -223,7 +252,7 @@ const Register = () => {
                   className={`bg-gray-50 border ${
                     formErrors.lastName ? "border-red-500" : "border-gray-300"
                   } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
-                  placeholder="Doe"
+                  placeholder="Dupont"
                   required
                   aria-invalid={formErrors.lastName ? "true" : "false"}
                   aria-describedby={
@@ -255,9 +284,9 @@ const Register = () => {
                   formErrors.email ? "border-red-500" : "border-gray-300"
                 } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
                 placeholder={
-                  role === "recruiter"
-                    ? "john.doe@company.com"
-                    : "john.doe@example.com"
+                  role === "recruteur"
+                    ? "jean.dupont@entreprise.com"
+                    : "jean.dupont@exemple.com"
                 }
                 required
                 aria-invalid={formErrors.email ? "true" : "false"}
@@ -270,13 +299,13 @@ const Register = () => {
               )}
             </div>
 
-            {role === "recruiter" && (
+            {role === "recruteur" && (
               <div>
                 <label
                   htmlFor="companyName"
                   className="block mb-2 text-sm font-medium text-gray-900"
                 >
-                  Company Name
+                  Nom de l'entreprise
                 </label>
                 <input
                   type="text"
@@ -312,7 +341,7 @@ const Register = () => {
                 htmlFor="password"
                 className="block mb-2 text-sm font-medium text-gray-900"
               >
-                Password
+                Mot de passe
               </label>
               <input
                 type="password"
@@ -336,7 +365,7 @@ const Register = () => {
                 </p>
               )}
               <p className="mt-1 text-xs text-gray-500">
-                Must include uppercase and number
+                Doit inclure une majuscule et un chiffre
               </p>
             </div>
 
@@ -345,7 +374,7 @@ const Register = () => {
                 htmlFor="confirmPassword"
                 className="block mb-2 text-sm font-medium text-gray-900"
               >
-                Confirm Password
+                Confirmer le mot de passe
               </label>
               <input
                 type="password"
@@ -398,19 +427,19 @@ const Register = () => {
               </div>
               <div className="ml-3 text-sm">
                 <label htmlFor="terms" className="text-gray-500">
-                  I accept the{" "}
+                  J'accepte les{" "}
                   <Link
                     to="/terms"
                     className="font-medium text-blue-600 hover:underline"
                   >
-                    Terms and Conditions
+                    Conditions d'utilisation
                   </Link>{" "}
-                  and{" "}
+                  et la{" "}
                   <Link
                     to="/privacy"
                     className="font-medium text-blue-600 hover:underline"
                   >
-                    Privacy Policy
+                    Politique de confidentialité
                   </Link>
                 </label>
                 {formErrors.acceptTerms && (
@@ -450,20 +479,22 @@ const Register = () => {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  Creating Account...
+                  Création du compte...
                 </span>
               ) : (
-                `Create ${role === "recruiter" ? "Recruiter" : "User"} Account`
+                `Créer un compte ${
+                  role === "recruteur" ? "Recruteur" : "Candidat"
+                }`
               )}
             </button>
 
             <p className="text-sm font-light text-gray-500 text-center">
-              Already have an account?{" "}
+              Vous avez déjà un compte ?{" "}
               <Link
                 to="/login"
                 className="font-medium text-blue-600 hover:underline"
               >
-                Sign in
+                Se connecter
               </Link>
             </p>
           </form>

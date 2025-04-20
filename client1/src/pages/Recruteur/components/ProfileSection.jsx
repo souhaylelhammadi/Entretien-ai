@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import logoutUser, { logout  } from "../../store/auth/authSlice"; // Import both logout actions
+import logoutUser  from "../../store/auth/authSlice"; 
 import { updateProfileAsync } from "../../store/recruteur/profileSlice";
 
 const ProfileSection = () => {
@@ -26,9 +26,7 @@ const ProfileSection = () => {
       navigate("/login");
     } catch (err) {
       console.error("Logout failed:", err);
-      // Fallback to client-side logout
-      dispatch(logout());
-      navigate("/login");
+    
     }
   };
 

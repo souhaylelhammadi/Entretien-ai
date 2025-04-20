@@ -31,19 +31,24 @@ def create_app():
 
     # Register blueprints
     try:
-       # from routes.candidates import candidates_bp
-       # from routes.interviews import interviews_bp
+        from routes.recruteur.candidates import candidates_bp
+        from routes.recruteur.interview import interviews_bp
         from routes.offres import offres_emploi_bp
         from routes.accepted_offers import accepted_offers_bp
         #from routes.recordings import recordings_bp
         from auth import auth_bp  # Import the auth blueprint
-
+        from routes.recruteur.dashboard import dashboard_bp
+        from routes.recruteur.jobs import jobs_bp
+        
         app.register_blueprint(auth_bp)
         app.register_blueprint(offres_emploi_bp, url_prefix="/api")
-        #app.register_blueprint(candidates_bp, url_prefix="/api")
-       # app.register_blueprint(interviews_bp, url_prefix="/api")
+        app.register_blueprint(candidates_bp, url_prefix="/api")
+        app.register_blueprint(interviews_bp, url_prefix="/api")
         app.register_blueprint(accepted_offers_bp, url_prefix="/api")
+        
        # app.register_blueprint(recordings_bp, url_prefix="/api")
+        app.register_blueprint(dashboard_bp)
+        app.register_blueprint(jobs_bp)
     except ImportError as e:
         print(f"Erreur d'importation des blueprints : {e}")
         raise

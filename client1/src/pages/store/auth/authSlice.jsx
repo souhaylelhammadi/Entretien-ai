@@ -33,7 +33,6 @@ export const loginUser = createAsyncThunk(
   "auth/loginUser",
   async ({ email, password }, { rejectWithValue }) => {
     try {
-      // Validate inputs
       if (!email || !password) {
         throw new Error("Email et mot de passe requis");
       }
@@ -73,7 +72,6 @@ export const registerUser = createAsyncThunk(
   "auth/registerUser",
   async (userData, { rejectWithValue }) => {
     try {
-      // Validate inputs
       const requiredFields = [
         "firstName",
         "lastName",
@@ -102,9 +100,7 @@ export const registerUser = createAsyncThunk(
         throw new Error("Rôle invalide. Doit être 'candidat' ou 'recruteur'");
       }
       if (userData.role === "recruteur" && !userData.entreprise_id) {
-        throw new Error(
-          "Le nom de l'entreprise est requis pour les recruteurs"
-        );
+        throw new Error("L'ID de l'entreprise est requis pour les recruteurs");
       }
       if (!userData.acceptTerms) {
         throw new Error("Vous devez accepter les conditions");
@@ -146,7 +142,6 @@ export const updateUser = createAsyncThunk(
         throw new Error("Aucun jeton trouvé");
       }
 
-      // Validate inputs
       if (!userData.firstName || !userData.lastName || !userData.email) {
         throw new Error("Tous les champs sont requis");
       }
@@ -261,23 +256,6 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
-// Utility to reset auth state
-const resetAuthState = (state) => ({
-  ...state,
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  role: "candidat",
-  email: "",
-  password: "",
-  confirmPassword: "",
-  firstName: "",
-  lastName: "",
-  companyName: "",
-  acceptTerms: false,
-  authError: state.authError || "",
-});
-
 const authSlice = createSlice({
   name: "auth",
   initialState: {
@@ -337,11 +315,24 @@ const authSlice = createSlice({
       state.acceptTerms = false;
       state.authError = "";
     },
-    logout: resetAuthState,
+    resetAuthState: (state) => {
+      state.user = null;
+      state.token = null;
+      state.isAuthenticated = false;
+      state.role = "candidat";
+      state.email = "";
+      state.password = "";
+      state.confirmPassword = "";
+      state.firstName = "";
+      state.lastName = "";
+      state.companyName = "";
+      state.acceptTerms = false;
+      state.authError = "";
+      state.loading = false;
+    },
   },
   extraReducers: (builder) => {
     builder
-      // Login User
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -357,7 +348,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.authError = action.payload;
       })
-      // Register User
       .addCase(registerUser.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -373,7 +363,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.authError = action.payload;
       })
-      // Update User
       .addCase(updateUser.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -387,7 +376,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.authError = action.payload;
       })
-      // Check Auth Status
       .addCase(checkAuthStatus.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -406,7 +394,6 @@ const authSlice = createSlice({
         state.token = null;
         state.authError = action.payload;
       })
-      // Logout User
       .addCase(logoutUser.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -425,7 +412,6 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.authError = action.payload;
       })
-      // Handle invalid actions
       .addDefaultCase((state, action) => {
         if (!action || !action.type) {
           console.warn("Invalid action in authSlice:", action);
@@ -446,7 +432,7 @@ export const {
   setRole,
   setAcceptTerms,
   clearForm,
-  logout,
+  resetAuthState,
 } = authSlice.actions;
 
 export default authSlice.reducer;

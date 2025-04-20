@@ -69,6 +69,7 @@ export const selectCandidatesData = createSelector(
     pagination: candidatesState.pagination || {
       currentPage: 1,
       itemsPerPage: 10,
+      total: 0, // Ensure total is initialized
     },
     viewDocument: candidatesState.viewDocument || {
       isOpen: false,
@@ -86,7 +87,7 @@ const candidatesSlice = createSlice({
   name: "candidates",
   initialState: {
     candidates: [],
-    pagination: { currentPage: 1, itemsPerPage: 10 },
+    pagination: { currentPage: 1, itemsPerPage: 10, total: 0 }, // Ensure total is initialized
     viewDocument: {
       isOpen: false,
       type: "",
@@ -126,6 +127,7 @@ const candidatesSlice = createSlice({
         state.status = "succeeded";
         state.loading = false;
         state.candidates = action.payload;
+        state.pagination.total = action.payload.length; // Update total based on fetched candidates
         console.log("Updated candidates state:", action.payload);
       })
       .addCase(fetchCandidates.rejected, (state, action) => {

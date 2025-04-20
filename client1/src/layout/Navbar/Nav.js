@@ -1,31 +1,54 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { logout, updateUser } from "../../pages/store/auth/authSlice"; // Adjust path to authSlice
+import { logoutUser } from "../../pages/store/auth/authSlice";
 import { toast } from "react-toastify";
+import { Menu, X, ChevronDown, User, LogOut } from "lucide-react";
 
 const Navbar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { isAuthenticated, user, loading } = useSelector((state) => state.auth);
+  const location = useLocation();
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
 
-  // State for dropdown and modal
+  // State for dropdown and mobile menu
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // State for edit profile form
-  const [formData, setFormData] = useState({
-    firstName: user?.firstName || "",
-    lastName: user?.lastName || "",
-    email: user?.email || "",
-  });
-  const [formErrors, setFormErrors] = useState({});
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isDropdownOpen && !event.target.closest(".profile-dropdown")) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  // Close dropdown and mobile menu on route change
+  useEffect(() => {
+    setIsDropdownOpen(false);
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
 
   // Handle logout
-  const handleLogout = () => {
-    dispatch(logout());
-    toast.success("Déconnexion réussie");
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      const result = await dispatch(logoutUser());
+      if (logoutUser.fulfilled.match(result)) {
+        toast.success("Déconnexion réussie");
+        navigate("/");
+      } else {
+        toast.error(result.payload || "Échec de la déconnexion");
+      }
+    } catch (err) {
+      toast.error("Erreur lors de la déconnexion");
+    }
+    setIsDropdownOpen(false);
   };
 
   // Toggle dropdown
@@ -33,151 +56,188 @@ const Navbar = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
 
-  // Open/close modal
-  const openModal = () => {
-    setFormData({
-      firstName: user?.firstName || "",
-      lastName: user?.lastName || "",
-      email: user?.email || "",
-    });
-    setFormErrors({});
-    setIsModalOpen(true);
-    setIsDropdownOpen(false);
+  // Toggle mobile menu
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
+  // Get user initials for avatar fallback
+  const getUserInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`;
+    } else if (user?.firstName) {
+      return user.firstName.charAt(0);
+    } else if (user?.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+    return "U";
   };
 
-  // Handle form input changes
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // Validate form
-  const validateForm = () => {
-    const errors = {};
-    if (!formData.firstName.trim()) {
-      errors.firstName = "Le prénom est requis";
-    }
-    if (!formData.lastName.trim()) {
-      errors.lastName = "Le nom est requis";
-    }
-    if (!formData.email.trim()) {
-      errors.email = "L'email est requis";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = "L'email est invalide";
-    }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) {
-      return;
-    }
-
-    try {
-      const result = await dispatch(
-        updateUser({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-        })
-      );
-      if (updateUser.fulfilled.match(result)) {
-        toast.success("Profil mis à jour avec succès");
-        closeModal();
-      } else if (updateUser.rejected.match(result)) {
-        toast.error(result.payload || "Échec de la mise à jour du profil");
-      }
-    } catch (err) {
-      toast.error("Erreur lors de la mise à jour du profil");
-    }
+  // Check if route is active
+  const isRouteActive = (path) => {
+    return location.pathname === path;
   };
 
   return (
-    <nav className="bg-white shadow-md fixed w-full top-0 z-50">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+    <nav className="bg-white/80 backdrop-blur-md shadow-sm sticky w-full top-0 z-50">
+      <div className="container mx-auto px-4 md:px-8 py-3">
+        <div className="flex justify-between items-center">
           {/* Logo */}
-          <Link to="/" className="flex items-center">
-            <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-teal-500 to-blue-500 bg-clip-text text-transparent">
+          <Link to="/" className="flex items-center group">
+            <span className="text-2xl font-extrabold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent transition-all duration-300 group-hover:scale-105">
               Interview AI
             </span>
           </Link>
 
-          {/* Navigation Links */}
-          <div className="flex items-center space-x-2 sm:space-x-4">
+          {/* Mobile menu button */}
+          <div className="flex md:hidden">
+            <button
+              onClick={toggleMobileMenu}
+              className="text-gray-600 hover:text-teal-600 focus:outline-none transition-all duration-200"
+            >
+              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
+
+          {/* Desktop Navigation Links */}
+          <div className="hidden md:flex items-center space-x-8">
             <Link
               to="/"
-              className="px-2 sm:px-3 py-2 text-gray-700 hover:text-teal-500 text-sm sm:text-base transition duration-200"
+              className={`relative text-base font-medium transition-all duration-200 group ${
+                isRouteActive("/")
+                  ? "text-teal-600"
+                  : "text-gray-600 hover:text-teal-600"
+              }`}
             >
-              Home
+              Accueil
+              <span
+                className={`absolute bottom-0 left-0 h-0.5 bg-teal-600 transition-all duration-300 ${
+                  isRouteActive("/") ? "w-full" : "w-0 group-hover:w-full"
+                }`}
+              ></span>
             </Link>
             <Link
               to="/offres"
-              className="px-2 sm:px-3 py-2 text-gray-700 hover:text-teal-500 text-sm sm:text-base transition duration-200"
+              className={`relative text-base font-medium transition-all duration-200 group ${
+                isRouteActive("/offres")
+                  ? "text-teal-600"
+                  : "text-gray-600 hover:text-teal-600"
+              }`}
             >
               Offres
+              <span
+                className={`absolute bottom-0 left-0 h-0.5 bg-teal-600 transition-all duration-300 ${
+                  isRouteActive("/offres") ? "w-full" : "w-0 group-hover:w-full"
+                }`}
+              ></span>
             </Link>
             <Link
               to="/recrutement"
-              className="px-2 sm:px-3 py-2 text-gray-700 hover:text-teal-500 text-sm sm:text-base transition duration-200"
+              className={`relative text-base font-medium transition-all duration-200 group ${
+                isRouteActive("/recrutement")
+                  ? "text-teal-600"
+                  : "text-gray-600 hover:text-teal-600"
+              }`}
             >
               Recruteur
+              <span
+                className={`absolute bottom-0 left-0 h-0.5 bg-teal-600 transition-all duration-300 ${
+                  isRouteActive("/recrutement")
+                    ? "w-full"
+                    : "w-0 group-hover:w-full"
+                }`}
+              ></span>
             </Link>
             {isAuthenticated && (
               <Link
                 to="/mesinterview"
-                className="px-2 sm:px-3 py-2 text-gray-700 hover:text-teal-500 text-sm sm:text-base transition duration-200"
+                className={`relative text-base font-medium transition-all duration-200 group ${
+                  isRouteActive("/mesinterview")
+                    ? "text-teal-600"
+                    : "text-gray-600 hover:text-teal-600"
+                }`}
               >
                 Mes Interviews
+                <span
+                  className={`absolute bottom-0 left-0 h-0.5 bg-teal-600 transition-all duration-300 ${
+                    isRouteActive("/mesinterview")
+                      ? "w-full"
+                      : "w-0 group-hover:w-full"
+                  }`}
+                ></span>
               </Link>
             )}
           </div>
 
-          {/* Auth Section */}
-          <div className="flex items-center space-x-2 sm:space-x-4">
+          {/* Auth Section - Desktop */}
+          <div className="hidden md:block">
             {isAuthenticated ? (
-              <div className="relative">
+              <div className="relative profile-dropdown">
                 <button
                   onClick={toggleDropdown}
-                  className="flex items-center space-x-2 text-gray-700 hover:text-teal-500 focus:outline-none"
+                  className="flex items-center space-x-3 text-gray-600 hover:text-teal-600 focus:outline-none transition-all duration-200 group"
                 >
-                  <span className="text-sm sm:text-base font-medium">
+                  {user?.photoUrl ? (
+                    <img
+                      src={user.photoUrl}
+                      alt="Profile"
+                      className="w-8 h-8 rounded-full object-cover border border-gray-200 group-hover:border-teal-400 transition-all"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center text-white text-sm font-medium group-hover:shadow-md transition-all">
+                      {getUserInitials()}
+                    </div>
+                  )}
+                  <span className="text-base font-medium">
                     {user?.firstName || "Profil"}
                   </span>
-                  <svg
-                    className="h-4 w-4 sm:h-5 sm:w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
+                  <ChevronDown
+                    size={16}
+                    className={`transition-transform duration-300 ${
+                      isDropdownOpen ? "rotate-180" : ""
+                    }`}
+                  />
                 </button>
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                  <div className="absolute right-0 mt-3 w-56 bg-white/95 backdrop-blur-md border border-gray-100 rounded-xl shadow-lg z-50 animate-fadeIn overflow-hidden">
+                    <div className="p-3 border-b border-gray-100">
+                      <div className="flex items-center space-x-3">
+                        {user?.photoUrl ? (
+                          <img
+                            src={user.photoUrl}
+                            alt="Profile"
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center text-white text-sm font-medium">
+                            {getUserInitials()}
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-medium text-gray-800">
+                            {user?.firstName
+                              ? `${user.firstName} ${user.lastName || ""}`
+                              : "Utilisateur"}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate max-w-32">
+                            {user?.email || ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                     <div className="py-1">
-                      <button
-                        onClick={openModal}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      <Link
+                        to="/profile"
+                        className="flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-teal-600 transition-all duration-200"
                       >
-                        Modifier le profil
-                      </button>
+                        <User size={16} className="mr-2" />
+                        Mon Profil
+                      </Link>
                       <button
                         onClick={handleLogout}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        className="flex items-center w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-teal-600 transition-all duration-200"
                       >
+                        <LogOut size={16} className="mr-2" />
                         Déconnexion
                       </button>
                     </div>
@@ -187,137 +247,108 @@ const Navbar = () => {
             ) : (
               <Link
                 to="/login"
-                className="bg-gradient-to-r from-teal-500 to-blue-500 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium shadow hover:shadow-lg transition duration-300"
+                className="bg-gradient-to-r from-teal-600 to-blue-600 text-white px-5 py-2 rounded-full text-base font-medium shadow-md hover:shadow-xl transition-all duration-300 hover:scale-105"
               >
                 Se connecter
               </Link>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Edit Profile Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900">
-                Modifier le profil
-              </h2>
-              <button
-                onClick={closeModal}
-                className="text-gray-600 hover:text-gray-800"
+        {/* Mobile menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden mt-4 py-3 border-t border-gray-100 animate-fadeIn">
+            <div className="flex flex-col space-y-2">
+              <Link
+                to="/"
+                className={`py-2 text-base font-medium ${
+                  isRouteActive("/") ? "text-teal-600" : "text-gray-700"
+                }`}
               >
-                <svg
-                  className="h-5 w-5 sm:h-6 sm:w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label
-                  htmlFor="firstName"
-                  className="block mb-1 text-sm font-medium text-gray-900"
-                >
-                  Prénom
-                </label>
-                <input
-                  type="text"
-                  name="firstName"
-                  id="firstName"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
-                  className={`w-full p-2.5 border rounded-lg text-sm sm:text-base ${
-                    formErrors.firstName ? "border-red-500" : "border-gray-300"
-                  } focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="Jean"
-                />
-                {formErrors.firstName && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {formErrors.firstName}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="lastName"
-                  className="block mb-1 text-sm font-medium text-gray-900"
-                >
-                  Nom
-                </label>
-                <input
-                  type="text"
-                  name="lastName"
-                  id="lastName"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
-                  className={`w-full p-2.5 border rounded-lg text-sm sm:text-base ${
-                    formErrors.lastName ? "border-red-500" : "border-gray-300"
-                  } focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="Dupont"
-                />
-                {formErrors.lastName && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {formErrors.lastName}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block mb-1 text-sm font-medium text-gray-900"
-                >
-                  Email
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  id="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className={`w-full p-2.5 border rounded-lg text-sm sm:text-base ${
-                    formErrors.email ? "border-red-500" : "border-gray-300"
-                  } focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="jean.dupont@exemple.com"
-                />
-                {formErrors.email && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {formErrors.email}
-                  </p>
-                )}
-              </div>
-              <div className="flex justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base text-white bg-gradient-to-r from-teal-500 to-blue-500 rounded-lg hover:shadow-lg transition duration-300 ${
-                    loading ? "opacity-75 cursor-not-allowed" : ""
+                Accueil
+              </Link>
+              <Link
+                to="/offres"
+                className={`py-2 text-base font-medium ${
+                  isRouteActive("/offres") ? "text-teal-600" : "text-gray-700"
+                }`}
+              >
+                Offres
+              </Link>
+              <Link
+                to="/recrutement"
+                className={`py-2 text-base font-medium ${
+                  isRouteActive("/recrutement")
+                    ? "text-teal-600"
+                    : "text-gray-700"
+                }`}
+              >
+                Recruteur
+              </Link>
+              {isAuthenticated && (
+                <Link
+                  to="/mesinterview"
+                  className={`py-2 text-base font-medium ${
+                    isRouteActive("/mesinterview")
+                      ? "text-teal-600"
+                      : "text-gray-700"
                   }`}
                 >
-                  {loading ? "Enregistrement..." : "Enregistrer"}
-                </button>
-              </div>
-            </form>
+                  Mes Interviews
+                </Link>
+              )}
+
+              {/* Auth options for mobile */}
+              {isAuthenticated ? (
+                <>
+                  <div className="w-full h-px bg-gray-100 my-2"></div>
+                  <div className="flex items-center space-x-3 py-2">
+                    {user?.photoUrl ? (
+                      <img
+                        src={user.photoUrl}
+                        alt="Profile"
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center text-white text-sm font-medium">
+                        {getUserInitials()}
+                      </div>
+                    )}
+                    <span className="text-base font-medium text-gray-800">
+                      {user?.firstName
+                        ? `${user.firstName} ${user.lastName || ""}`
+                        : "Utilisateur"}
+                    </span>
+                  </div>
+                  <Link
+                    to="/profile"
+                    className="flex items-center py-2 text-base font-medium text-gray-700"
+                  >
+                    <User size={16} className="mr-2" />
+                    Mon Profil
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center py-2 text-base font-medium text-gray-700"
+                  >
+                    <LogOut size={16} className="mr-2" />
+                    Déconnexion
+                  </button>
+                </>
+              ) : (
+                <div className="pt-2">
+                  <Link
+                    to="/login"
+                    className="inline-block bg-gradient-to-r from-teal-600 to-blue-600 text-white px-5 py-2 rounded-full text-base font-medium shadow-md transition-all duration-300"
+                  >
+                    Se connecter
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </nav>
   );
 };

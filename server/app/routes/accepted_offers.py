@@ -78,9 +78,11 @@ def get_accepted_offers():
                 candidature["jobDetails"] = {
                     "title": offer.get("titre", "N/A"),
                     "company": entreprise.get("nom", "N/A") if entreprise else offer.get("entreprise", {}).get("nom", "N/A"),
-                    "department": offer.get("departement", "N/A"),
+                    "departement": offer.get("departement", "N/A"),
                     "location": offer.get("localisation", "N/A"),
-                    "requirements": offer.get("competences_requises", []),
+                    "description": offer.get("description", "N/A"),
+                    
+
                     "entreprise_id": str(offer.get("entreprise", {}).get("_id", "")) if offer.get("entreprise", {}).get("_id") else ""
                 }
             else:

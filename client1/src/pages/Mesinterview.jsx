@@ -105,7 +105,7 @@ const MesInterview = () => {
                 Localisation
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Compétences
+                description
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Statut
@@ -126,7 +126,7 @@ const MesInterview = () => {
                         {candidature.jobDetails?.title || "N/A"}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {candidature.jobDetails?.department || "N/A"}
+                        {candidature.jobDetails?.departement || "N/A"}
                       </div>
                     </div>
                   </div>
@@ -142,23 +142,14 @@ const MesInterview = () => {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-2">
-                    {(candidature.jobDetails?.requirements || []).map(
-                      (skill, i) => (
-                        <span
-                          key={i}
-                          className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800"
-                        >
-                          {skill}
-                        </span>
-                      )
-                    )}
+                    {candidature.jobDetails?.description || "N/A"}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     {statusIcons[candidature.status] || statusIcons.accepted}
                     <span className="ml-2">
-                      {statusLabels[candidature.status] || "Acceptée"}
+                      {statusLabels[candidature.status] || "N/A"}
                     </span>
                   </div>
                 </td>
@@ -187,17 +178,7 @@ const MesInterview = () => {
                         Planifier Entretien
                       </button>
                     )}
-                    {candidature.status !== "completed" && (
-                      <button
-                        onClick={() =>
-                          handleStatusChange(candidature._id, "completed")
-                        }
-                        className="flex items-center px-3 py-1 bg-green-500 text-white rounded-md text-sm hover:bg-green-600"
-                      >
-                        <CheckCircle2 className="h-4 w-4 mr-1" />
-                        Terminer
-                      </button>
-                    )}
+
                     {candidature.status !== "cancelled" && (
                       <button
                         onClick={() =>
