@@ -83,14 +83,41 @@ def require_auth(role="recruteur"):
 # --- Routes ---
 @offres_emploi_bp.route('/offres-emploi', methods=['GET'])
 def get_offres_emploi():
-    """Retrieve all job offers with pagination"""
+    """Retrieve job offers with pagination - all offers for candidates, only recruiter's offers for recruiters"""
     try:
         db = current_app.mongo.db
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 10))
         
-        offres = list(db.offres.find().skip((page - 1) * per_page).limit(per_page))
-        total = db.offres.count_documents({})
+        # Check if there's an authenticated recruiter
+        token = request.headers.get("Authorization")
+        is_recruiter = False
+        recruiter_id = None
+        
+        if token:
+            try:
+                decoded_payload = verify_token(token)
+                if decoded_payload and decoded_payload.get("role") == "recruteur":
+                    is_recruiter = True
+                    recruiter_id = decoded_payload.get("id")
+                    logger.info(f"Authenticated recruiter {recruiter_id} viewing job offers")
+            except Exception as e:
+                logger.warning(f"Error verifying token: {str(e)}")
+        
+        # If it's a recruiter, filter offers to show only their own
+        query = {}
+        if is_recruiter and recruiter_id:
+            # Pour les recruteurs, filtrer pour n'afficher que leurs propres offres
+            # La structure dans le document d'offre est "recruteur._id" pour stocker l'ID du recruteur
+            # ou parfois "recruteur_id" directement dans le document
+            query = {"$or": [
+                {"recruteur._id": ObjectId(recruiter_id)},
+                {"recruteur_id": recruiter_id}
+            ]}
+            logger.info(f"Filtering offers for recruiter: {recruiter_id}")
+        
+        offres = list(db.offres.find(query).skip((page - 1) * per_page).limit(per_page))
+        total = db.offres.count_documents(query)
         
         offres_serialized = []
         for offre in offres:
@@ -99,7 +126,7 @@ def get_offres_emploi():
                 'titre': offre.get('titre', 'Titre non spécifié'),
                 'description': offre.get('description', 'Description non disponible'),
                 'localisation': offre.get('localisation', 'Localisation non spécifiée'),
-                'competences_requises': offre.get('competences_requises', []),
+                'departement': offre.get('departement', 'Département non spécifié'),
                 'createdAt': offre.get('created_at', datetime.now(timezone.utc)).isoformat() + "Z",
                 'entreprise': offre.get('entreprise', {}).get('nom', 'Entreprise non spécifiée'),
                 'recruteur': {
@@ -137,7 +164,7 @@ def get_offre_by_id(offre_id):
             'titre': offre.get('titre', 'Titre non spécifié'),
             'description': offre.get('description', 'Description non disponible'),
             'localisation': offre.get('localisation', 'Localisation non spécifiée'),
-            'competences_requises': offre.get('competences_requises', []),
+            'departement': offre.get('departement', 'Département non spécifié'),
             'createdAt': offre.get('created_at', datetime.now(timezone.utc)).isoformat() + "Z",
             'entreprise': offre.get('entreprise', {}).get('nom', 'Entreprise non spécifiée'),
             'recruteur': {
@@ -152,150 +179,6 @@ def get_offre_by_id(offre_id):
     except Exception as e:
         return handle_mongo_error(e, "récupérer l'offre")
 
-@offres_emploi_bp.route("/offres-emploi", methods=["POST"])
-@require_auth(role="recruteur")
-def create_offre_emploi(auth_payload):
-    """Create a new job offer"""
-    try:
-        db = current_app.mongo.db
-        data = request.get_json()
-        required_fields = ["titre", "description", "localisation", "departement", "competences_requises", "entreprise_id", "recruteur_id"]
-        is_valid, error_message = validate_required_fields(data, required_fields)
-        if not is_valid:
-            return jsonify({"error": error_message}), 400
-
-        auth_user_id = auth_payload.get("id")
-        auth_entreprise_id = auth_payload.get("user_db_data", {}).get("entreprise_id")
-        if data["recruteur_id"] != auth_user_id:
-            return jsonify({"error": "Non autorisé à créer une offre pour un autre recruteur."}), 403
-        if data["entreprise_id"] != auth_entreprise_id:
-            return jsonify({"error": "Non autorisé à créer une offre pour cette entreprise."}), 403
-
-        if not isinstance(data.get("competences_requises"), list):
-            return jsonify({"error": "Les compétences requises doivent être une liste."}), 400
-        if not ObjectId.is_valid(data["entreprise_id"]) or not ObjectId.is_valid(data["recruteur_id"]):
-            return jsonify({"error": "Format d'ID d'entreprise ou de recruteur invalide."}), 400
-
-        entreprise = db.entreprises.find_one({"_id": ObjectId(data["entreprise_id"])})
-        recruteur = db.users.find_one({"_id": ObjectId(data["recruteur_id"]), "role": "recruteur"})
-        if not entreprise:
-            return jsonify({"error": "Entreprise non trouvée."}), 404
-        if not recruteur:
-            return jsonify({"error": "Recruteur non trouvé ou rôle invalide."}), 404
-
-        offre_data = {
-            "titre": data["titre"].strip(),
-            "description": data["description"].strip(),
-            "localisation": data["localisation"].strip(),
-            "departement": data["departement"].strip(),
-            "salaire_min": float(data.get("salaire_min", 0.0)),
-            "competences_requises": [skill.strip() for skill in data["competences_requises"] if isinstance(skill, str) and skill.strip()],
-            "entreprise": {
-                "_id": entreprise["_id"],
-                "nom": entreprise.get("nom", "N/A"),
-                "secteur": entreprise.get("secteur", "N/A")
-            },
-            "recruteur": {
-                "_id": recruteur["_id"],
-                "nom": f"{recruteur.get('firstName', '')} {recruteur.get('lastName', '')}".strip() or recruteur.get("email")
-            },
-            "candidature_ids": [],  # Initialize candidature_ids
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
-            "status": data.get("status", "open")
-        }
-
-        result = db.offres.insert_one(offre_data)
-        logger.info(f"Offre créée ID : {result.inserted_id} par Recruteur ID: {auth_user_id}")
-        created_offre = db.offres.find_one({"_id": result.inserted_id})
-        return jsonify(serialize_doc(created_offre)), 201
-
-    except Exception as e:
-        return handle_mongo_error(e, "créer l'offre")
-
-@offres_emploi_bp.route("/offres-emploi/<string:offre_id>", methods=["PUT"])
-@require_auth(role="recruteur")
-def update_offre_emploi(offre_id, auth_payload):
-    """Update an existing job offer"""
-    try:
-        db = current_app.mongo.db
-        if not ObjectId.is_valid(offre_id):
-            return jsonify({"error": "Format d'ID d'offre invalide."}), 400
-
-        data = request.get_json()
-        updatable_fields = ["titre", "description", "localisation", "departement", "competences_requises", "salaire_min", "status"]
-        required_fields_for_update = ["titre", "description", "localisation", "departement", "competences_requises"]
-        is_valid, error_message = validate_required_fields(data, required_fields_for_update)
-        if not is_valid:
-            return jsonify({"error": error_message}), 400
-
-        if "competences_requises" in data and not isinstance(data["competences_requises"], list):
-            return jsonify({"error": "Les compétences requises doivent être une liste."}), 400
-
-        offre = db.offres.find_one({"_id": ObjectId(offre_id)})
-        if not offre:
-            return jsonify({"error": "Offre non trouvée."}), 404
-
-        auth_user_id = auth_payload.get("id")
-        if str(offre.get("recruteur", {}).get("_id")) != auth_user_id:
-            return jsonify({"error": "Non autorisé à modifier cette offre d'emploi."}), 403
-        if str(offre.get("entreprise", {}).get("_id")) != auth_payload.get("user_db_data", {}).get("entreprise_id"):
-            return jsonify({"error": "Non autorisé à modifier cette offre d'emploi."}), 403
-
-        update_data = {}
-        for field in updatable_fields:
-            if field in data:
-                if isinstance(data[field], str):
-                    update_data[field] = data[field].strip()
-                elif field == "competences_requises":
-                    update_data[field] = [skill.strip() for skill in data[field] if isinstance(skill, str) and skill.strip()]
-                elif field == "salaire_min":
-                    update_data[field] = float(data.get("salaire_min", 0.0))
-                else:
-                    update_data[field] = data[field]
-
-        if not update_data:
-            return jsonify({"error": "Aucune donnée à mettre à jour fournie."}), 400
-
-        update_data["updated_at"] = datetime.now(timezone.utc)
-
-        result = db.offres.update_one(
-            {"_id": ObjectId(offre_id)},
-            {"$set": update_data}
-        )
-
-        logger.info(f"Offre ID {offre_id} mise à jour par Recruteur ID: {auth_user_id}")
-        updated_offre = db.offres.find_one({"_id": ObjectId(offre_id)})
-        return jsonify(serialize_doc(updated_offre)), 200
-
-    except Exception as e:
-        return handle_mongo_error(e, "mettre à jour l'offre")
-
-@offres_emploi_bp.route("/offres-emploi/<string:offre_id>", methods=["DELETE"])
-@require_auth(role="recruteur")
-def delete_offre_emploi(offre_id, auth_payload):
-    """Delete a job offer"""
-    try:
-        db = current_app.mongo.db
-        if not ObjectId.is_valid(offre_id):
-            return jsonify({"error": "Format d'ID d'offre invalide."}), 400
-
-        offre = db.offres.find_one({"_id": ObjectId(offre_id)})
-        if not offre:
-            return jsonify({"error": "Offre non trouvée."}), 404
-
-        auth_user_id = auth_payload.get("id")
-        if str(offre.get("recruteur", {}).get("_id")) != auth_user_id:
-            return jsonify({"error": "Non autorisé à supprimer cette offre d'emploi."}), 403
-        if str(offre.get("entreprise", {}).get("_id")) != auth_payload.get("user_db_data", {}).get("entreprise_id"):
-            return jsonify({"error": "Non autorisé à supprimer cette offre d'emploi."}), 403
-
-        result = db.offres.delete_one({"_id": ObjectId(offre_id)})
-        logger.info(f"Offre ID {offre_id} supprimée par Recruteur ID: {auth_user_id}")
-        return jsonify({"message": "Offre supprimée avec succès."}), 200
-
-    except Exception as e:
-        return handle_mongo_error(e, "supprimer l'offre")
 
 @offres_emploi_bp.route("/candidatures", methods=["POST"])
 @require_auth(role="candidat")

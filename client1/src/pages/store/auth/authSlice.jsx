@@ -28,6 +28,12 @@ const retryRequest = async (fn, retries = 2, delay = 1000) => {
   }
 };
 
+// Function to clean token (remove "Bearer" if present)
+const cleanToken = (token) => {
+  if (!token) return null;
+  return token.startsWith("Bearer ") ? token.substring(7) : token;
+};
+
 // Async thunk to login user
 export const loginUser = createAsyncThunk(
   "auth/loginUser",
@@ -51,8 +57,18 @@ export const loginUser = createAsyncThunk(
       const response = await retryRequest(request);
       console.log("Login response:", response.data);
 
-      localStorage.setItem("token", response.data.token);
-      return response.data;
+      // Clean token before storing (remove Bearer prefix if present)
+      const token = cleanToken(response.data.token);
+      console.log("Token reçu (premiers caractères):", token.substring(0, 10) + "...");
+      
+      // Store clean token in localStorage
+      localStorage.setItem("token", token);
+      console.log("Token stored in localStorage:", token);
+
+      return {
+        ...response.data,
+        token: token,
+      };
     } catch (err) {
       console.error("Login error:", err.message, err.response?.data);
       const message =
@@ -184,31 +200,41 @@ export const checkAuthStatus = createAsyncThunk(
         throw new Error("Aucun jeton trouvé");
       }
 
-      console.log("Checking auth status");
-      const request = () =>
-        axios.get(`${API_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-          timeout: 10000,
-        });
+      console.log("Vérification du token (premiers caractères):", token.substring(0, 10) + "...");
+      
+      // Create headers with the token (without Bearer prefix)
+      const config = {
+        headers: {
+          Authorization: token,
+        },
+      };
 
-      const response = await retryRequest(request);
+      const response = await retryRequest(() =>
+        axios.get(`${API_URL}/api/auth/me`, config)
+      );
       console.log("Auth status response:", response.data);
 
-      return response.data;
+      return {
+        ...response.data,
+        token: token,
+      };
     } catch (err) {
       console.error(
         "Check auth status error:",
         err.message,
         err.response?.data
       );
-      localStorage.removeItem("token");
+
+      // Clear token if authentication fails
+      if (err.response?.status === 401) {
+        console.log("Clearing token due to auth failure");
+        localStorage.removeItem("token");
+      }
+
       const message =
         err.response?.data?.message ||
-        (err.code === "ECONNABORTED"
-          ? "Délai d'attente dépassé. Vérifiez votre connexion."
-          : err.message === "Network Error"
-          ? "Erreur réseau. Vérifiez que le serveur est accessible."
-          : err.message || "Échec de la vérification de l'authentification");
+        err.message ||
+        "Échec de la vérification de l'authentification";
       return rejectWithValue(message);
     }
   }

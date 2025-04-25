@@ -59,7 +59,7 @@ const JobsSection = () => {
       localisation: newJob.location,
       description: newJob.description,
       competences_requises: newJob.requirements,
-      salaire_min: newJob.salaryMin,
+
       status: newJob.status,
       recruteur_id: user?._id,
       entreprise_id: user?.entreprise_id,
@@ -159,7 +159,7 @@ const JobsSection = () => {
       location: job.localisation || "",
       description: job.description || "",
       requirements: job.competences_requises || [],
-      salaryMin: job.salaire_min || 0,
+
       status: job.status || "open",
     }));
   };
@@ -245,14 +245,7 @@ const JobsSection = () => {
                 dispatch(setNewJob({ location: e.target.value }))
               }
             />
-            <InputField
-              label="Minimum Salary"
-              type="number"
-              value={newJob.salaryMin}
-              onChange={(e) =>
-                dispatch(setNewJob({ salaryMin: Number(e.target.value) }))
-              }
-            />
+
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Description *
@@ -315,7 +308,7 @@ const JobsSection = () => {
                     location: "",
                     description: "",
                     requirements: [],
-                    salaryMin: 0,
+
                     status: "open",
                   })
                 );

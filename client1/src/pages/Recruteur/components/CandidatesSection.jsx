@@ -11,6 +11,7 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
+  AlertCircle,
 } from "lucide-react";
 import {
   fetchCandidates,
@@ -19,6 +20,7 @@ import {
   setViewDocument,
   closeDocumentView,
 } from "../../store/recruteur/dashcandidatesSlice";
+import { toast } from "react-hot-toast";
 
 const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
@@ -52,12 +54,48 @@ const CandidatesSection = () => {
 
   const handleViewDocument = (type, cv_path, content, candidateName) => {
     console.log("Viewing document:", { type, cv_path, content, candidateName });
-    if (cv_path || content) {
+
+    if (type === "cv") {
+      // Même si cv_path est vide ou null, on peut quand même essayer d'afficher le CV
+      // car notre backend va renvoyer un PDF "CV non disponible"
+      console.log(
+        "Opening CV with path:",
+        `${BASE_URL}${cv_path || `/api/candidates/cv/unavailable`}`
+      );
+
+      const path = cv_path || `/api/candidates/cv/unavailable`;
+      dispatch(
+        setViewDocument({
+          isOpen: true,
+          type,
+          cv_path: path,
+          content,
+          candidateName,
+        })
+      );
+    } else if (type === "lettre") {
+      // Vérification pour les lettres de motivation
+      if (!content || content.trim() === "") {
+        console.warn("No content provided for cover letter view");
+        toast.error(
+          "La lettre de motivation n'est pas disponible pour ce candidat",
+          {
+            duration: 3000,
+            icon: "📝❌",
+          }
+        );
+        return;
+      }
+
       dispatch(
         setViewDocument({ isOpen: true, type, cv_path, content, candidateName })
       );
     } else {
-      console.warn("No cv_path or content provided for document view");
+      console.warn("Invalid document type or missing content:", type);
+      toast.error("Ce document n'est pas disponible", {
+        duration: 3000,
+        icon: "❌",
+      });
     }
   };
 
@@ -208,18 +246,43 @@ const CandidatesSection = () => {
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(100vh-140px)]">
               {viewDocument.type === "cv" && viewDocument.cv_path ? (
-                <iframe
-                  src={`${BASE_URL}${viewDocument.cv_path}#toolbar=0&navpanes=0&scrollbar=0`}
-                  className="w-full h-[60vh] border-0"
-                  title="CV"
-                  onError={(e) => {
-                    console.error("Error loading PDF:", e);
-                  }}
-                />
+                <div className="relative">
+                  <iframe
+                    src={`${BASE_URL}${viewDocument.cv_path}#toolbar=0&navpanes=0&scrollbar=0`}
+                    className="w-full h-[60vh] border-0"
+                    title="CV"
+                    onLoad={(e) => {
+                      console.log("CV iframe loaded successfully");
+                    }}
+                    onError={(e) => {
+                      console.error("Error loading PDF:", e);
+                      toast.error(
+                        "Impossible de charger le CV. Le fichier est peut-être inaccessible ou corrompu.",
+                        {
+                          duration: 5000,
+                          icon: "❌",
+                        }
+                      );
+                    }}
+                  />
+                </div>
               ) : viewDocument.type === "cv" ? (
-                <p className="text-red-500">
-                  Impossible de charger le CV. Veuillez réessayer.
-                </p>
+                <div className="flex flex-col items-center justify-center h-[60vh]">
+                  <AlertCircle className="h-16 w-16 text-red-400 mb-4" />
+                  <p className="text-red-500 text-lg font-medium">
+                    Le CV n'est pas disponible
+                  </p>
+                  <p className="text-gray-500 mt-2">
+                    Le candidat n'a pas fourni de CV ou le fichier est
+                    inaccessible.
+                  </p>
+                  <p className="text-gray-500 mt-2 text-sm">
+                    URL attendue:{" "}
+                    {viewDocument.cv_path
+                      ? `${BASE_URL}${viewDocument.cv_path}`
+                      : "Non définie"}
+                  </p>
+                </div>
               ) : viewDocument.type === "lettre" && viewDocument.content ? (
                 <div className="prose max-w-none">
                   {viewDocument.content.split("\n").map((p, idx) => (
@@ -229,9 +292,15 @@ const CandidatesSection = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500">
-                  Aucun document disponible pour l'affichage.
-                </p>
+                <div className="flex flex-col items-center justify-center h-[60vh]">
+                  <FileText className="h-16 w-16 text-gray-400 mb-4" />
+                  <p className="text-gray-500 text-lg font-medium">
+                    Aucun document disponible
+                  </p>
+                  <p className="text-gray-400 mt-2">
+                    Le document demandé n'est pas disponible pour l'affichage.
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -340,25 +409,19 @@ const CandidatesSection = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex space-x-3">
-                              {candidate.candidat?.cv ? (
-                                <button
-                                  onClick={() =>
-                                    handleViewDocument(
-                                      "cv",
-                                      candidate.candidat.cv,
-                                      null,
-                                      candidate.candidat.nom || "Inconnu"
-                                    )
-                                  }
-                                  className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
-                                >
-                                  <Eye className="h-4 w-4 mr-1" /> CV
-                                </button>
-                              ) : (
-                                <span className="text-sm text-gray-500">
-                                  CV non disponible
-                                </span>
-                              )}
+                              <button
+                                onClick={() =>
+                                  handleViewDocument(
+                                    "cv",
+                                    candidate.candidat?.cv,
+                                    null,
+                                    candidate.candidat?.nom || "Inconnu"
+                                  )
+                                }
+                                className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
+                              >
+                                <Eye className="h-4 w-4 mr-1" /> CV
+                              </button>
                               {candidate.candidat?.lettre_motivation && (
                                 <button
                                   onClick={() =>
