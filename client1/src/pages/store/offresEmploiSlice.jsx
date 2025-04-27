@@ -26,6 +26,7 @@ export const fetchOffresEmploi = createAsyncThunk(
       const request = () =>
         axios.get(`${API_URL}/api/offres-emploi`, { timeout: 10000 });
       const response = await retryRequest(request);
+
       if (!response.data || !Array.isArray(response.data.offres)) {
         console.error(
           "Invalid response format: Expected an array in 'offres'",
@@ -33,19 +34,26 @@ export const fetchOffresEmploi = createAsyncThunk(
         );
         return rejectWithValue("Format de réponse invalide du serveur");
       }
+
       console.log("fetchOffresEmploi response:", response.data.offres);
-      return response.data.offres.map((offre) => ({
-        id: offre.id || "",
-        titre: offre.titre || "Titre non spécifié",
-        entreprise: offre.entreprise || "Entreprise non spécifiée",
-        localisation: offre.localisation || "Localisation non spécifiée",
-        valide: offre.valide !== undefined ? offre.valide : true,
-        description: offre.description || "Description non disponible",
-        competences_requises: Array.isArray(offre.competences_requises)
-          ? offre.competences_requises
-          : [],
-        createdAt: offre.createdAt || new Date().toISOString(),
-      }));
+
+      return response.data.offres.map((offre) => {
+        const dateCreation =
+          offre.date_creation && !isNaN(new Date(offre.date_creation))
+            ? offre.date_creation
+            : new Date().toISOString();
+
+        return {
+          id: offre.id || "",
+          titre: offre.titre || "Titre non spécifié",
+          entreprise: offre.entreprise || "Entreprise non spécifiée",
+          localisation: offre.localisation || "Localisation non spécifiée",
+          departement: offre.departement || "Département non spécifié",
+          valide: offre.valide !== undefined ? offre.valide : true,
+          description: offre.description || "Description non disponible",
+          date_creation: dateCreation,
+        };
+      });
     } catch (error) {
       console.error("Fetch offres error:", error.message, error.response?.data);
       const message =
@@ -66,29 +74,34 @@ export const fetchOffreById = createAsyncThunk(
   async (id, { rejectWithValue }) => {
     try {
       if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
-        console.error("Invalid ObjectId:", id);
         throw new Error("ID de l’offre invalide");
       }
+
       const request = () =>
         axios.get(`${API_URL}/api/offres-emploi/${id}`, { timeout: 10000 });
       const response = await retryRequest(request);
+
       console.log("fetchOffreById response:", response.data);
+
       const offre = response.data;
       if (!offre || !offre.id) {
         console.error("Invalid offer data:", offre);
         return rejectWithValue("Données de l’offre invalides");
       }
+
+      const dateCreation =
+        offre.date_creation && !isNaN(new Date(offre.date_creation))
+          ? offre.date_creation
+          : new Date().toISOString();
+
       return {
         id: offre.id || id,
         titre: offre.titre || "Titre non spécifié",
         entreprise: offre.entreprise || "Entreprise non spécifiée",
         localisation: offre.localisation || "Localisation non spécifiée",
+        departement: offre.departement || "Département non spécifié",
         description: offre.description || "Description non disponible",
-        competences_requises: Array.isArray(offre.competences_requises)
-          ? offre.competences_requises
-          : [],
-        salaire_min: offre.salaire_min || 0,
-        createdAt: offre.createdAt || new Date().toISOString(),
+        date_creation: dateCreation,
       };
     } catch (error) {
       console.error(
@@ -118,6 +131,7 @@ export const submitCandidature = createAsyncThunk(
           "Tous les champs (offreId, cv, lettreMotivation) sont requis"
         );
       }
+
       const { auth } = getState();
       const token = auth.token;
       if (!token) {
@@ -165,6 +179,29 @@ export const submitCandidature = createAsyncThunk(
   }
 );
 
+// Utility function to filter job offers
+const filterOffres = (state) => {
+  const searchLower = state.searchTerm.toLowerCase();
+  const locationLower = state.locationFilter.toLowerCase();
+  const secteurLower = state.secteurFilter.toLowerCase();
+
+  return state.offres.filter((offre) => {
+    const titre = offre.titre?.toLowerCase() || "";
+    const entreprise = offre.entreprise?.toLowerCase() || "";
+    const localisation = offre.localisation?.toLowerCase() || "";
+    const departement = offre.departement?.toLowerCase() || "";
+
+    return (
+      (titre.includes(searchLower) ||
+        entreprise.includes(searchLower) ||
+        localisation.includes(searchLower)) &&
+      (locationLower === "" || localisation.includes(locationLower)) &&
+      (secteurLower === "" || departement.includes(secteurLower))
+    );
+  });
+};
+
+// Slice
 const offresEmploiSlice = createSlice({
   name: "offresEmploi",
   initialState: {
@@ -177,7 +214,7 @@ const offresEmploiSlice = createSlice({
     locationFilter: "",
     secteurFilter: "",
     isFilterOpen: false,
-    candidatureStatus: "idle", // idle, pending, success, failed
+    candidatureStatus: "idle",
     candidatureError: null,
   },
   reducers: {
@@ -210,14 +247,15 @@ const offresEmploiSlice = createSlice({
       .addCase(fetchOffresEmploi.fulfilled, (state, action) => {
         state.loading = false;
         state.offres = action.payload;
-        state.filteredOffres = action.payload;
-        console.log("fetchOffresEmploi fulfilled:", action.payload);
+        state.filteredOffres = filterOffres({
+          ...state,
+          offres: action.payload,
+        });
       })
       .addCase(fetchOffresEmploi.rejected, (state, action) => {
         state.loading = false;
         state.error =
           action.payload || "Erreur lors de la récupération des offres";
-        console.error("fetchOffresEmploi rejected:", action.payload);
       })
       .addCase(fetchOffreById.pending, (state) => {
         state.loading = true;
@@ -226,19 +264,17 @@ const offresEmploiSlice = createSlice({
       .addCase(fetchOffreById.fulfilled, (state, action) => {
         state.loading = false;
         state.selectedOffre = action.payload;
-        console.log("fetchOffreById fulfilled:", action.payload);
       })
       .addCase(fetchOffreById.rejected, (state, action) => {
         state.loading = false;
         state.error =
           action.payload || "Erreur lors de la récupération de l’offre";
-        console.error("fetchOffreById rejected:", action.payload);
       })
       .addCase(submitCandidature.pending, (state) => {
         state.candidatureStatus = "pending";
         state.candidatureError = null;
       })
-      .addCase(submitCandidature.fulfilled, (state, action) => {
+      .addCase(submitCandidature.fulfilled, (state) => {
         state.candidatureStatus = "success";
         state.candidatureError = null;
       })
@@ -249,27 +285,6 @@ const offresEmploiSlice = createSlice({
       });
   },
 });
-
-// Utility to filter job offers
-const filterOffres = (state) => {
-  const searchLower = state.searchTerm.toLowerCase();
-  const locationLower = state.locationFilter.toLowerCase();
-  const secteurLower = state.secteurFilter.toLowerCase();
-
-  return state.offres.filter((offre) => {
-    const titre = offre.titre?.toLowerCase() || "";
-    const entreprise = offre.entreprise?.toLowerCase() || "";
-    const localisation = offre.localisation?.toLowerCase() || "";
-
-    return (
-      (titre.includes(searchLower) ||
-        entreprise.includes(searchLower) ||
-        localisation.includes(searchLower)) &&
-      (locationLower === "" || localisation.includes(locationLower)) &&
-      (secteurLower === "" || entreprise.includes(secteurLower))
-    );
-  });
-};
 
 export const {
   setSearchTerm,

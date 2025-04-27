@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   LayoutDashboard,
@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   Menu,
   Bell,
- 
 } from "lucide-react";
 import {
   fetchInitialData,
@@ -20,12 +19,12 @@ import {
   clearDashboardError,
   setSelectedPeriod,
 } from "../store/recruteur/dashboardSlice";
+import { fetchProfile } from "../store/recruteur/profileSlice";
 import { useNavigate } from "react-router-dom";
 import JobsSection from "./components/JobsSection";
 import CandidatesSection from "./components/CandidatesSection";
 import InterviewsSection from "./components/InterviewsSection";
 import ProfileSection from "./components/ProfileSection";
-
 import { Bar, Line, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -69,11 +68,18 @@ const DashboardRecrutement = () => {
     selectedPeriod,
   } = useSelector((state) => state.dashboard);
   const { user, token, isAuthenticated } = useSelector((state) => state.auth);
+  const {
+    profile,
+    loading: profileLoading,
+    error: profileError,
+  } = useSelector((state) => state.profile);
 
   // Vérifier si l'utilisateur est authentifié
   useEffect(() => {
     if (!isAuthenticated || !token) {
-      console.log("Utilisateur non authentifié, redirection vers la page de connexion");
+      console.log(
+        "Utilisateur non authentifié, redirection vers la page de connexion"
+      );
       navigate("/login");
     }
   }, [isAuthenticated, token, navigate]);
@@ -81,14 +87,45 @@ const DashboardRecrutement = () => {
   // Charger les données du dashboard si l'utilisateur est authentifié
   useEffect(() => {
     if (isAuthenticated && token) {
-      console.log("Chargement des données du dashboard avec token:", token.substring(0, 15) + "...");
-      dispatch(fetchInitialData({ page: 1, limit: 10 }));
+      console.log(
+        "Chargement des données du dashboard avec token:",
+        token.substring(0, 15) + "..."
+      );
+      dispatch(fetchInitialData({ page: 1, limit: 10, token }));
+
+      // Load profile data
+      try {
+        dispatch(fetchProfile())
+          .unwrap()
+          .then(() => console.log("Profile loaded successfully"))
+          .catch((err) => console.error("Failed to load profile:", err));
+      } catch (error) {
+        console.error("Error dispatching profile fetch:", error);
+      }
     }
   }, [dispatch, token, isAuthenticated]);
 
+  // Effect to fetch profile data when switching to profile tab
+  useEffect(() => {
+    if (activeTab === "profile" && isAuthenticated && token) {
+      console.log("ProfileTab active: Checking profile data availability");
+      if (!profile && !profileLoading) {
+        console.log("Fetching profile data for profile tab");
+        dispatch(fetchProfile());
+      }
+    }
+  }, [activeTab, dispatch, isAuthenticated, token, profile, profileLoading]);
+
+  // Log profile errors for debugging
+  useEffect(() => {
+    if (profileError) {
+      console.error("Profile error detected:", profileError);
+    }
+  }, [profileError]);
+
   const handlePeriodChange = (period) => {
     dispatch(setSelectedPeriod(period));
-    dispatch(fetchGraphData({ period }));
+    dispatch(fetchGraphData({ period, token }));
   };
 
   const menuItems = [
@@ -108,18 +145,18 @@ const DashboardRecrutement = () => {
       label: "Entretiens",
       icon: <Calendar className="w-5 h-5" />,
     },
-    
     { tab: "profile", label: "Profil", icon: <User className="w-5 h-5" /> },
   ];
 
   const handleRetry = () => {
     dispatch(clearDashboardError());
-    dispatch(fetchInitialData({ page: 1, limit: 10 }));
+    dispatch(fetchInitialData({ page: 1, limit: 10, token }));
   };
 
   // Fonction pour gérer la déconnexion ou les problèmes d'authentification
   const handleAuthError = () => {
     localStorage.removeItem("token");
+    dispatch({ type: "auth/logout" });
     navigate("/login");
   };
 
@@ -228,14 +265,16 @@ const DashboardRecrutement = () => {
     }
 
     if (error) {
+      const isAuthError =
+        error.includes("Unauthorized") || error.includes("Session expired");
       return (
         <div className="bg-red-100/90 backdrop-blur-md text-red-700 p-6 rounded-2xl shadow-sm animate-fadeIn">
           <p>{error}</p>
           <button
             className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
-            onClick={handleRetry}
+            onClick={isAuthError ? handleAuthError : handleRetry}
           >
-            Réessayer
+            {isAuthError ? "Se reconnecter" : "Réessayer"}
           </button>
         </div>
       );
@@ -529,7 +568,7 @@ const DashboardRecrutement = () => {
                 }`}
             >
               <span className="flex-shrink-0 mr-3">{icon}</span>
-              <span className="truncate transition-all duration-300 md:group-hover:opacity-100 md:opacity-0">
+              <span className="truncate transition-all duration-300 md:group-hover:opacity-100 ">
                 {label}
               </span>
             </button>

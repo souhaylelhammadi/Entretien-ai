@@ -209,7 +209,9 @@ function DetailsOffreEmploi() {
                   <div className="flex flex-col items-center text-center gap-1">
                     <Clock className="h-6 w-6 text-indigo-500" />
                     <span className="text-sm font-medium">
-                      {new Date(offre.createdAt).toLocaleDateString("fr-FR")}
+                      {new Date(offre.date_creation).toLocaleDateString(
+                        "fr-FR"
+                      )}
                     </span>
                   </div>
                 </div>
@@ -219,9 +221,9 @@ function DetailsOffreEmploi() {
                     <h2 className="text-lg font-semibold text-gray-900 mb-3 border-l-4 border-indigo-500 pl-3">
                       Description du poste
                     </h2>
-                    <p className="text-gray-700 text-sm leading-relaxed">
+                    <pre className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap break-words">
                       {offre.description}
-                    </p>
+                    </pre>
                   </div>
 
                   {offre.competences_requises?.length > 0 && (

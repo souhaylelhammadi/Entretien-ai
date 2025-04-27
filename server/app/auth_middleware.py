@@ -34,7 +34,7 @@ def require_auth(f):
             # For recruiters, add additional security checks
             if data["role"] == "recruteur":
                 # Get user from database to verify it still exists and is active
-                user = current_app.mongo.db.users.find_one({"_id": ObjectId(data["id"])})
+                user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(data["id"])})
                 if not user:
                     logger.warning(f"Utilisateur non trouvé: {data['id']}")
                     return jsonify({"error": "Compte utilisateur non trouvé"}), 401
@@ -46,6 +46,12 @@ def require_auth(f):
                 # Check for IP change if IP tracking is enabled
                 if current_app.config.get("TRACK_IP_CHANGES", False):
                     current_ip = request.remote_addr
+                    
+                    # Ensure user_sessions collection exists
+                    if "user_sessions" not in current_app.mongo.db.list_collection_names():
+                        current_app.mongo.db.create_collection("user_sessions")
+                        logger.info("Created user_sessions collection")
+                    
                     user_sessions = current_app.mongo.db.user_sessions.find_one({
                         "user_id": ObjectId(data["id"]),
                         "token": token
@@ -83,6 +89,10 @@ def require_auth(f):
                 
                 # Record the activity
                 try:
+                    if "activities" not in current_app.mongo.db.list_collection_names():
+                        current_app.mongo.db.create_collection("activities")
+                        logger.info("Created activities collection")
+                    
                     current_app.mongo.db.activities.insert_one({
                         "user_id": ObjectId(data["id"]),
                         "action": request.path,
@@ -163,9 +173,9 @@ def recruiter_only(f):
                 return jsonify({"error": "Accès réservé aux recruteurs"}), 403
                 
             # Get user from database to verify it still exists and is active
-            user = current_app.mongo.db.users.find_one({"_id": ObjectId(data["id"])})
+            user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(data["id"])})
             if not user:
-                logger.warning(f"Utilisateur non trouvé: {data['id']}")
+                logger.warning(f"Utilisateur introuvable: {data['id']}")
                 return jsonify({"error": "Compte utilisateur non trouvé"}), 401
                 
             if user.get("status") and user.get("status") != "active":
@@ -210,6 +220,10 @@ def recruiter_only(f):
                 
             # Record the activity
             try:
+                if "activities" not in current_app.mongo.db.list_collection_names():
+                    current_app.mongo.db.create_collection("activities")
+                    logger.info("Created activities collection")
+                
                 current_app.mongo.db.activities.insert_one({
                     "user_id": ObjectId(data["id"]),
                     "action": request.path,

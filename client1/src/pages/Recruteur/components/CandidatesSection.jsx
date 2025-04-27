@@ -26,14 +26,16 @@ const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
 const CandidatesSection = () => {
   const dispatch = useDispatch();
-  const { candidates, jobs, pagination, viewDocument } = useSelector(
-    (state) => ({
+  const { candidates, jobs, pagination, viewDocument, loading, error } =
+    useSelector((state) => ({
       candidates: state.candidates.candidates || [],
       jobs: state.dashboard.jobs || [],
       pagination: state.candidates.pagination,
       viewDocument: state.candidates.viewDocument,
-    })
-  );
+      loading: state.candidates.loading,
+      error: state.candidates.error,
+    }));
+  const { token, user } = useSelector((state) => state.auth);
 
   const [expandedOffers, setExpandedOffers] = useState({});
   const [filters, setFilters] = useState({
@@ -43,52 +45,98 @@ const CandidatesSection = () => {
   });
 
   useEffect(() => {
-    console.log("Fetching candidates...");
-    dispatch(fetchCandidates());
+    console.log("Chargement des candidats liés au recruteur...");
+    dispatch(fetchCandidates())
+      .unwrap()
+      .then(() => console.log("Candidats chargés avec succès"))
+      .catch((error) =>
+        console.error("Erreur lors du chargement des candidats:", error)
+      );
   }, [dispatch]);
 
+  // Afficher des messages toast en cas d'erreur
+  useEffect(() => {
+    if (error) {
+      toast.error(`Erreur: ${error}`);
+    }
+  }, [error]);
+
   const handleEvaluate = async (candidateId, status) => {
-    console.log(`Evaluating candidate ${candidateId} to ${status}`);
-    dispatch(updateCandidateStatus({ candidateId, status }));
+    console.log(
+      `Évaluation du candidat ${candidateId}, nouveau statut: ${status}`
+    );
+    try {
+      await dispatch(updateCandidateStatus({ candidateId, status })).unwrap();
+      toast.success(`Statut mis à jour avec succès: ${status}`);
+    } catch (error) {
+      toast.error(`Erreur lors de la mise à jour du statut: ${error}`);
+    }
   };
 
   const handleViewDocument = (type, cv_path, content, candidateName) => {
     console.log("Viewing document:", { type, cv_path, content, candidateName });
 
     if (type === "cv") {
-      // Même si cv_path est vide ou null, on peut quand même essayer d'afficher le CV
-      // car notre backend va renvoyer un PDF "CV non disponible"
+      // Pour le CV, on utilise toujours l'iframe avec le PDF
       console.log(
         "Opening CV with path:",
         `${BASE_URL}${cv_path || `/api/candidates/cv/unavailable`}`
       );
 
-      const path = cv_path || `/api/candidates/cv/unavailable`;
+      // Vérifier si le chemin est un chemin Windows absolu
+      const formattedPath =
+        cv_path && cv_path.startsWith("C:\\")
+          ? `/api/candidates/cv/${cv_path.split("\\").pop()}` // Extraire juste le nom du fichier
+          : cv_path || `/api/candidates/cv/unavailable`;
+
       dispatch(
         setViewDocument({
           isOpen: true,
           type,
-          cv_path: path,
-          content,
+          cv_path: formattedPath,
+          content: null,
           candidateName,
         })
       );
     } else if (type === "lettre") {
-      // Vérification pour les lettres de motivation
-      if (!content || content.trim() === "") {
-        console.warn("No content provided for cover letter view");
-        toast.error(
-          "La lettre de motivation n'est pas disponible pour ce candidat",
-          {
-            duration: 3000,
-            icon: "📝❌",
-          }
-        );
-        return;
+      // Pour la lettre, on garde le contenu texte brut
+      console.log("Opening letter content:", content);
+      console.log("Type de content:", typeof content);
+      console.log("Longueur content:", content ? content.length : 0);
+      console.log("Nom du candidat:", candidateName);
+
+      // Vérifier et nettoyer le contenu
+      let cleanedContent = content;
+
+      // Si le contenu est un objet, essayer de l'extraire correctement
+      if (content && typeof content === "object") {
+        console.log("Content is an object, trying to extract:", content);
+        cleanedContent = JSON.stringify(content);
+      }
+
+      // Gérer le cas où le contenu est vide ou trop court
+      if (
+        !cleanedContent ||
+        (typeof cleanedContent === "string" && cleanedContent.trim().length < 3)
+      ) {
+        console.warn("Letter content is empty or too short:", cleanedContent);
+        toast.error("La lettre de motivation est vide ou trop courte", {
+          duration: 3000,
+          icon: "📝❌",
+        });
+        // Continuer quand même avec le contenu disponible
       }
 
       dispatch(
-        setViewDocument({ isOpen: true, type, cv_path, content, candidateName })
+        setViewDocument({
+          isOpen: true,
+          type,
+          cv_path: null,
+          content:
+            cleanedContent ||
+            "Aucun contenu de lettre de motivation disponible.", // Texte par défaut
+          candidateName: candidateName || "Candidat", // Valeur par défaut pour le nom
+        })
       );
     } else {
       console.warn("Invalid document type or missing content:", type);
@@ -108,6 +156,24 @@ const CandidatesSection = () => {
 
   const getFilteredCandidates = () => {
     console.log("Raw candidates:", candidates);
+
+    // Ajouter des logs détaillés pour examiner le premier candidat
+    if (candidates && candidates.length > 0) {
+      console.log("DÉTAIL DU PREMIER CANDIDAT:");
+      console.log("- ID:", candidates[0].id);
+      console.log("- Nom:", candidates[0].candidat?.nom);
+      console.log("- CV:", candidates[0].candidat?.cv);
+      console.log(
+        "- Lettre motivation:",
+        candidates[0].candidat?.lettre_motivation
+      );
+      console.log(
+        "- Lettre motivation text:",
+        candidates[0].candidat?.lettre_motivation_text
+      );
+      console.log("Candidat objet complet:", candidates[0].candidat);
+    }
+
     console.log("Jobs:", jobs);
     const filtered = candidates.filter((candidate) => {
       if (!candidate.id) {
@@ -246,25 +312,45 @@ const CandidatesSection = () => {
             </div>
             <div className="p-6 overflow-y-auto max-h-[calc(100vh-140px)]">
               {viewDocument.type === "cv" && viewDocument.cv_path ? (
-                <div className="relative">
-                  <iframe
-                    src={`${BASE_URL}${viewDocument.cv_path}#toolbar=0&navpanes=0&scrollbar=0`}
-                    className="w-full h-[60vh] border-0"
-                    title="CV"
-                    onLoad={(e) => {
-                      console.log("CV iframe loaded successfully");
-                    }}
-                    onError={(e) => {
-                      console.error("Error loading PDF:", e);
-                      toast.error(
-                        "Impossible de charger le CV. Le fichier est peut-être inaccessible ou corrompu.",
-                        {
-                          duration: 5000,
-                          icon: "❌",
-                        }
-                      );
-                    }}
-                  />
+                <iframe
+                  title="Document viewer - CV"
+                  src={`${BASE_URL}${viewDocument.cv_path}`}
+                  className="w-full h-[70vh]"
+                  style={{ border: "none" }}
+                  onLoad={() => console.log("CV iframe loaded successfully")}
+                  onError={(e) => console.error("Error loading CV iframe:", e)}
+                ></iframe>
+              ) : viewDocument.type === "lettre" && viewDocument.content ? (
+                <div className="prose max-w-none">
+                  <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                    Lettre de motivation -{" "}
+                    {viewDocument.candidateName || "Candidat"}
+                  </h2>
+                  <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                    {viewDocument.content &&
+                    typeof viewDocument.content === "string" &&
+                    viewDocument.content.trim().length > 3 ? (
+                      viewDocument.content.split("\n").map((paragraph, idx) =>
+                        paragraph.trim() ? (
+                          <p
+                            key={idx}
+                            className="mb-4 text-gray-700 whitespace-pre-line"
+                          >
+                            {paragraph}
+                          </p>
+                        ) : (
+                          <br key={idx} />
+                        )
+                      )
+                    ) : (
+                      <p className="text-orange-500 italic">
+                        Lettre de motivation :{" "}
+                        {viewDocument.content
+                          ? `"${viewDocument.content}"`
+                          : "Non disponible"}
+                      </p>
+                    )}
+                  </div>
                 </div>
               ) : viewDocument.type === "cv" ? (
                 <div className="flex flex-col items-center justify-center h-[60vh]">
@@ -283,13 +369,15 @@ const CandidatesSection = () => {
                       : "Non définie"}
                   </p>
                 </div>
-              ) : viewDocument.type === "lettre" && viewDocument.content ? (
-                <div className="prose max-w-none">
-                  {viewDocument.content.split("\n").map((p, idx) => (
-                    <p key={idx} className="mb-4 text-gray-700">
-                      {p}
-                    </p>
-                  ))}
+              ) : viewDocument.type === "lettre" ? (
+                <div className="flex flex-col items-center justify-center h-[60vh]">
+                  <AlertCircle className="h-16 w-16 text-red-400 mb-4" />
+                  <p className="text-red-500 text-lg font-medium">
+                    La lettre de motivation n'est pas disponible
+                  </p>
+                  <p className="text-gray-500 mt-2">
+                    Le candidat n'a pas fourni de lettre de motivation.
+                  </p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-[60vh]">
@@ -422,21 +510,44 @@ const CandidatesSection = () => {
                               >
                                 <Eye className="h-4 w-4 mr-1" /> CV
                               </button>
-                              {candidate.candidat?.lettre_motivation && (
-                                <button
-                                  onClick={() =>
-                                    handleViewDocument(
-                                      "lettre",
-                                      null,
-                                      candidate.candidat.lettre_motivation,
-                                      candidate.candidat.nom || "Inconnu"
-                                    )
-                                  }
-                                  className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-green-50 text-green-700 hover:bg-green-100"
-                                >
-                                  <FileText className="h-4 w-4 mr-1" /> Lettre
-                                </button>
-                              )}
+
+                              {/* Bouton lettre toujours visible */}
+                              <button
+                                onClick={() => {
+                                  console.log(
+                                    "Lettre button clicked for:",
+                                    candidate
+                                  );
+                                  // Vérifier les données disponibles
+                                  console.log("Candidate data:", {
+                                    id: candidate.id,
+                                    nom:
+                                      candidate.candidat?.nom ||
+                                      candidate.nom ||
+                                      "Candidat",
+                                    lettre:
+                                      candidate.candidat?.lettre_motivation ||
+                                      candidate.lettre_motivation ||
+                                      "Aucun contenu disponible",
+                                  });
+
+                                  handleViewDocument(
+                                    "lettre",
+                                    null,
+                                    // Essayer différentes structures possibles pour la lettre
+                                    candidate.candidat?.lettre_motivation ||
+                                      candidate.lettre_motivation ||
+                                      "",
+                                    // Essayer différentes structures possibles pour le nom
+                                    candidate.candidat?.nom ||
+                                      candidate.nom ||
+                                      "Candidat"
+                                  );
+                                }}
+                                className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-green-50 text-green-700 hover:bg-green-100"
+                              >
+                                <FileText className="h-4 w-4 mr-1" /> Lettre
+                              </button>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">

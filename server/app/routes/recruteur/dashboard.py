@@ -343,6 +343,14 @@ def get_graph_data(*args):
 def init_indexes():
     try:
         collections = current_app.mongo.db.list_collection_names()
+        # Create collections if they don't exist
+        required_collections = ['offres', 'candidates', 'interviews', 'utilisateurs']
+        for collection in required_collections:
+            if collection not in collections:
+                current_app.mongo.db.create_collection(collection)
+                logger.info(f"Created collection: {collection}")
+        
+        # Create indexes
         if "offres" in collections:
             current_app.mongo.db.offres.create_index("recruteur_id")
             current_app.mongo.db.offres.create_index("created_at")
@@ -355,3 +363,9 @@ def init_indexes():
         logger.info("MongoDB indexes created successfully")
     except Exception as e:
         logger.error(f"Error creating MongoDB indexes: {str(e)}")
+
+# Register init_indexes to run when the app initializes
+@dashboard_bp.record
+def on_blueprint_registered(state):
+    with state.app.app_context():
+        init_indexes()

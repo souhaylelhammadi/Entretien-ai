@@ -45,10 +45,26 @@ function OffresEmploi() {
 
   useEffect(() => {
     console.log("filteredOffres:", filteredOffres);
+    filteredOffres.forEach((offre, index) => {
+      console.log(`Offre ${index}:`, {
+        id: offre.id,
+        titre: offre.titre,
+        date_creation: offre.date_creation,
+        isValidDate: !isNaN(new Date(offre.date_creation)),
+      });
+    });
   }, [filteredOffres]);
 
   const formatDate = (dateString) => {
+    if (!dateString) {
+      console.warn("formatDate: No dateString provided");
+      return "Date inconnue";
+    }
     const date = new Date(dateString);
+    if (isNaN(date)) {
+      console.warn(`formatDate: Invalid dateString: ${dateString}`);
+      return "Date inconnue";
+    }
     const now = new Date();
     const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
     return diffInDays === 0
@@ -60,10 +76,12 @@ function OffresEmploi() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="flex flex-col items-center">
-          <Loader2 className="animate-spin h-10 w-10 text-blue-600 mb-3" />
-          <p className="text-gray-600 font-medium">Chargement en cours...</p>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="animate-spin h-12 w-12 text-indigo-600" />
+          <p className="text-lg font-medium text-gray-700">
+            Chargement des offres...
+          </p>
         </div>
       </div>
     );
@@ -71,16 +89,16 @@ function OffresEmploi() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm">
-          <Frown className="h-10 w-10 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md">
+          <Frown className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-800 mb-3">
             Une erreur est survenue
           </h3>
-          <p className="text-gray-500 mb-4">{error}</p>
+          <p className="text-gray-600 mb-6">{error}</p>
           <button
             onClick={() => dispatch(fetchOffresEmploi())}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
           >
             Réessayer
           </button>
@@ -90,73 +108,89 @@ function OffresEmploi() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 ">
-      <header className="bg-white shadow-sm py-4 px-6 sticky top-0 z-20">
-        <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-4">
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Offres d’emploi
-          </h1>
-          <div className="flex items-center w-full max-w-xl relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+      <header className="bg-gradient-to-r from-indigo-600 to-teal-600 text-white shadow-lg py-6 px-4 md:px-8 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <h1 className="text-3xl font-bold tracking-tight">Offres d’Emploi</h1>
+          <div className="flex items-center w-full max-w-2xl relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
               placeholder="Rechercher un poste, une compétence ou une localisation"
               value={searchTerm}
               onChange={(e) => dispatch(setSearchTerm(e.target.value))}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700 placeholder-gray-400 shadow-sm"
+              className="w-full pl-12 pr-4 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white placeholder-gray-300 focus:ring-2 focus:ring-white focus:outline-none transition-all duration-300"
+              aria-label="Rechercher des offres d'emploi"
             />
             <button
               onClick={() => dispatch(toggleFilterOpen())}
-              className="ml-2 p-2 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors flex items-center"
+              className="ml-3 p-3 bg-white/20 rounded-xl hover:bg-white/30 transition-colors duration-300 flex items-center"
+              aria-expanded={isFilterOpen}
+              aria-label="Toggle filters"
             >
-              <Filter className="h-5 w-5 text-gray-600" />
+              <Filter className="h-5 w-5 text-white" />
               <ChevronDown
-                className={`h-4 w-4 ml-1 transition-transform ${
+                className={`h-4 w-4 ml-2 transition-transform duration-300 ${
                   isFilterOpen ? "rotate-180" : ""
                 }`}
               />
             </button>
           </div>
         </div>
-        {isFilterOpen && (
-          <div className="max-w-7xl mx-auto mt-4 bg-white p-4 rounded-md shadow-md">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div
+          className={`max-w-7xl mx-auto mt-4 overflow-hidden transition-all duration-300 ease-in-out ${
+            isFilterOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+          }`}
+        >
+          <div className="bg-white p-6 rounded-xl shadow-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="location-filter"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Localisation
                 </label>
                 <input
+                  id="location-filter"
                   type="text"
                   placeholder="Ville ou région"
                   value={locationFilter}
                   onChange={(e) => dispatch(setLocationFilter(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-colors duration-300"
+                  aria-label="Filtrer par localisation"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="secteur-filter"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Secteur
                 </label>
                 <input
+                  id="secteur-filter"
                   type="text"
                   placeholder="Secteur d’activité"
                   value={secteurFilter}
                   onChange={(e) => dispatch(setSecteurFilter(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-colors duration-300"
+                  aria-label="Filtrer par secteur"
                 />
               </div>
             </div>
           </div>
-        )}
+        </div>
       </header>
-      <main className="max-w-7xl mx-auto py-8">
+      <main className="max-w-7xl mx-auto py-10 px-4 md:px-8">
         {filteredOffres.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm text-center">
+          <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
             <svg
-              className="mx-auto h-10 w-10 text-gray-400 mb-3"
+              className="mx-auto h-12 w-12 text-gray-400 mb-4"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -165,63 +199,47 @@ function OffresEmploi() {
                 d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <h3 className="text-xl font-semibold text-gray-800 mb-3">
               Aucune offre correspondante
             </h3>
-            <p className="text-gray-500">
+            <p className="text-gray-600">
               Ajustez vos critères pour trouver des opportunités.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredOffres.map((offre) => (
               <Link
                 key={offre.id}
                 to={`/offre/${offre.id}`}
-                className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200 flex flex-col h-full"
+                className="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 hover:scale-[1.02] border border-gray-100 flex flex-col"
+                aria-label={`Voir les détails de l'offre ${offre.titre}`}
               >
                 <div className="flex items-start space-x-4 flex-1">
-                  <Building className="h-8 w-8 text-blue-600 flex-shrink-0 mt-1" />
+                  <Building className="h-10 w-10 text-indigo-600 flex-shrink-0 mt-1" />
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors line-clamp-2">
+                    <h3 className="text-lg font-semibold text-gray-900 hover:text-indigo-600 transition-colors duration-200 line-clamp-2">
                       {offre.titre}
                     </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {offre.entreprise}
+                    <p className="text-sm text-gray-600 mt-1 font-medium">
+                      {offre.entreprise || "Entreprise inconnue"}
                     </p>
-                    <div className="mt-2 space-y-1 text-sm text-gray-500">
+                    <div className="mt-3 space-y-2 text-sm text-gray-500">
                       <div className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-1 flex-shrink-0" />
-                        <span className="truncate">{offre.localisation}</span>
+                        <MapPin className="h-5 w-5 mr-2 text-gray-400 flex-shrink-0" />
+                        <span className="truncate">
+                          {offre.localisation || "Non spécifiée"}
+                        </span>
                       </div>
                       <div className="flex items-center">
-                        <Briefcase className="h-4 w-4 mr-1 flex-shrink-0" />
+                        <Briefcase className="h-5 w-5 mr-2 text-gray-400 flex-shrink-0" />
                         <span>{offre.valide ? "Ouverte" : "Fermée"}</span>
                       </div>
                       <div className="flex items-center">
-                        <Clock className="h-4 w-4 mr-1 flex-shrink-0" />
-                        <span>{formatDate(offre.createdAt)}</span>
+                        <Clock className="h-5 w-5 mr-2 text-gray-400 flex-shrink-0" />
+                        <span>{formatDate(offre.date_creation)}</span>
                       </div>
                     </div>
-                    {offre.competences_requises.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {offre.competences_requises
-                          .slice(0, 3)
-                          .map((competence, index) => (
-                            <span
-                              key={index}
-                              className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full whitespace-nowrap"
-                            >
-                              {competence}
-                            </span>
-                          ))}
-                        {offre.competences_requises.length > 3 && (
-                          <span className="text-xs text-gray-500">
-                            +{offre.competences_requises.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
               </Link>

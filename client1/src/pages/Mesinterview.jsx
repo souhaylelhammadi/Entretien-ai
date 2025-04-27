@@ -13,7 +13,7 @@ import {
   fetchAcceptedOffers,
   updateOfferStatus,
   clearOffersError,
-} from "../pages/store/acceptedOffersSlice";
+} from "./store/acceptedOffersSlice";
 import { toast } from "react-toastify";
 
 const statusIcons = {
@@ -45,8 +45,11 @@ const MesInterview = () => {
     if (error) {
       toast.error(error);
       dispatch(clearOffersError());
+      if (error.includes("connecté") || error.includes("Jeton malformé")) {
+        navigate("/login");
+      }
     }
-  }, [error, dispatch]);
+  }, [error, dispatch, navigate]);
 
   const handleStartInterview = (applicationId) => {
     navigate(`/interview/${applicationId}`);
@@ -82,12 +85,15 @@ const MesInterview = () => {
     );
   }
 
+  // Ensure candidatures is an array
+  const candidaturesList = Array.isArray(candidatures) ? candidatures : [];
+
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
       <div className="p-6 border-b">
         <h1 className="text-2xl font-bold text-gray-800">Mes Entretiens</h1>
         <p className="text-gray-600 mt-1">
-          {candidatures.length} candidature(s) acceptée(s)
+          {candidaturesList.length} candidature(s) acceptée(s)
         </p>
       </div>
 
@@ -105,7 +111,7 @@ const MesInterview = () => {
                 Localisation
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                description
+                Description
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Statut
@@ -116,7 +122,7 @@ const MesInterview = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {candidatures.map((candidature) => (
+            {candidaturesList.map((candidature) => (
               <tr key={candidature._id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
@@ -126,7 +132,7 @@ const MesInterview = () => {
                         {candidature.jobDetails?.title || "N/A"}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {candidature.jobDetails?.departement || "N/A"}
+                        {candidature.jobDetails?.department || "N/A"}
                       </div>
                     </div>
                   </div>
@@ -178,7 +184,6 @@ const MesInterview = () => {
                         Planifier Entretien
                       </button>
                     )}
-
                     {candidature.status !== "cancelled" && (
                       <button
                         onClick={() =>
@@ -198,7 +203,7 @@ const MesInterview = () => {
         </table>
       </div>
 
-      {candidatures.length === 0 && (
+      {candidaturesList.length === 0 && (
         <div className="text-center py-12">
           <CheckCircle2 className="h-12 w-12 text-gray-400 mx-auto" />
           <h3 className="mt-2 text-sm font-medium text-gray-900">

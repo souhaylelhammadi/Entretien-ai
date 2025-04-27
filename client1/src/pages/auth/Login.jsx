@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   loginUser,
   setEmail,
-  setPassword,
+  setMotDePasse,
   clearForm,
 } from "../store/auth/authSlice";
 import { toast } from "react-toastify";
@@ -13,7 +13,7 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { email, password, loading, authError, isAuthenticated, user } =
+  const { email, mot_de_passe, loading, authError, isAuthenticated, user } =
     useSelector((state) => state.auth);
 
   const [formErrors, setFormErrors] = useState({});
@@ -39,8 +39,8 @@ const Login = () => {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       errors.email = "L'email est invalide";
     }
-    if (!password) {
-      errors.password = "Le mot de passe est requis";
+    if (!mot_de_passe) {
+      errors.mot_de_passe = "Le mot de passe est requis";
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -56,7 +56,7 @@ const Login = () => {
 
     try {
       console.log("Attempting login with:", { email });
-      const result = await dispatch(loginUser({ email, password }));
+      const result = await dispatch(loginUser({ email, mot_de_passe }));
       console.log("Login result:", result);
       if (loginUser.fulfilled.match(result)) {
         toast.success("Connexion réussie");
@@ -121,38 +121,41 @@ const Login = () => {
 
             <div>
               <label
-                htmlFor="password"
+                htmlFor="mot_de_passe"
                 className="block mb-2 text-sm font-medium text-gray-900"
               >
                 Mot de passe
               </label>
               <input
                 type="password"
-                name="password"
-                id="password"
-                value={password}
-                onChange={(e) => dispatch(setPassword(e.target.value))}
+                name="mot_de_passe"
+                id="mot_de_passe"
+                value={mot_de_passe}
+                onChange={(e) => dispatch(setMotDePasse(e.target.value))}
                 className={`bg-gray-50 border ${
-                  formErrors.password || authError
+                  formErrors.mot_de_passe || authError
                     ? "border-red-500"
                     : "border-gray-300"
                 } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
                 placeholder="••••••••"
                 required
                 aria-invalid={
-                  formErrors.password || authError ? "true" : "false"
+                  formErrors.mot_de_passe || authError ? "true" : "false"
                 }
                 aria-describedby={
-                  formErrors.password
-                    ? "password-error"
+                  formErrors.mot_de_passe
+                    ? "mot_de_passe-error"
                     : authError
                     ? "server-error"
                     : undefined
                 }
               />
-              {formErrors.password && (
-                <p id="password-error" className="mt-1 text-sm text-red-600">
-                  {formErrors.password}
+              {formErrors.mot_de_passe && (
+                <p
+                  id="mot_de_passe-error"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {formErrors.mot_de_passe}
                 </p>
               )}
             </div>

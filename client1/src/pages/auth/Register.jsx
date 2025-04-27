@@ -5,12 +5,12 @@ import axios from "axios";
 import {
   registerUser,
   setRole,
-  setFirstName,
-  setLastName,
+  setNom,
   setEmail,
-  setPassword,
-  setConfirmPassword,
-  setCompanyName,
+  setMotDePasse,
+  setConfirmMotDePasse,
+  setTelephone,
+  setNomEntreprise,
   setAcceptTerms,
   clearForm,
   resetAuthState,
@@ -24,12 +24,12 @@ const Register = () => {
   const navigate = useNavigate();
   const {
     role,
-    firstName,
-    lastName,
+    nom,
     email,
-    password,
-    confirmPassword,
-    companyName,
+    mot_de_passe,
+    confirmMotDePasse,
+    telephone,
+    nomEntreprise,
     acceptTerms,
     loading,
     authError,
@@ -39,12 +39,10 @@ const Register = () => {
 
   const [formErrors, setFormErrors] = useState({});
 
-  // Reset auth state when component mounts
   useEffect(() => {
     dispatch(resetAuthState());
   }, [dispatch]);
 
-  // Redirect if authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
       navigate(user.role === "recruteur" ? "/recrutement" : "/");
@@ -55,13 +53,8 @@ const Register = () => {
     const errors = {};
     let isValid = true;
 
-    if (!firstName.trim()) {
-      errors.firstName = "Le prénom est requis";
-      isValid = false;
-    }
-
-    if (!lastName.trim()) {
-      errors.lastName = "Le nom est requis";
+    if (!nom.trim()) {
+      errors.nom = "Le nom est requis";
       isValid = false;
     }
 
@@ -73,25 +66,34 @@ const Register = () => {
       isValid = false;
     }
 
-    if (!password) {
-      errors.password = "Le mot de passe est requis";
+    if (!telephone.trim()) {
+      errors.telephone = "Le téléphone est requis";
       isValid = false;
-    } else if (password.length < 8) {
-      errors.password = "Le mot de passe doit contenir au moins 8 caractères";
+    } else if (!/^\d{10}$/.test(telephone)) {
+      errors.telephone = "Le numéro de téléphone doit contenir 10 chiffres";
       isValid = false;
-    } else if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-      errors.password =
+    }
+
+    if (!mot_de_passe) {
+      errors.mot_de_passe = "Le mot de passe est requis";
+      isValid = false;
+    } else if (mot_de_passe.length < 8) {
+      errors.mot_de_passe =
+        "Le mot de passe doit contenir au moins 8 caractères";
+      isValid = false;
+    } else if (!/[A-Z]/.test(mot_de_passe) || !/[0-9]/.test(mot_de_passe)) {
+      errors.mot_de_passe =
         "Le mot de passe doit inclure une majuscule et un chiffre";
       isValid = false;
     }
 
-    if (password !== confirmPassword) {
-      errors.confirmPassword = "Les mots de passe ne correspondent pas";
+    if (mot_de_passe !== confirmMotDePasse) {
+      errors.confirmMotDePasse = "Les mots de passe ne correspondent pas";
       isValid = false;
     }
 
-    if (role === "recruteur" && !companyName.trim()) {
-      errors.companyName = "Le nom de l'entreprise est requis";
+    if (role === "recruteur" && !nomEntreprise.trim()) {
+      errors.nomEntreprise = "Le nom de l'entreprise est requis";
       isValid = false;
     }
 
@@ -115,14 +117,14 @@ const Register = () => {
     if (role === "recruteur") {
       try {
         const response = await axios.post(`${API_URL}/api/auth/entreprise`, {
-          name: companyName,
+          nom: nomEntreprise,
         });
         entreprise_id = response.data.entreprise_id;
-        console.log("Entreprise created with ID:", entreprise_id);
+        console.log("Entreprise créée avec ID:", entreprise_id);
       } catch (err) {
         const errorMsg =
           err.response?.data?.message || "Échec de la création de l'entreprise";
-        console.error("Entreprise creation error:", errorMsg);
+        console.error("Erreur création entreprise:", errorMsg);
         setFormErrors({ server: errorMsg });
         toast.error(errorMsg);
         return;
@@ -130,32 +132,32 @@ const Register = () => {
     }
 
     const payload = {
-      firstName,
-      lastName,
+      nom,
       email,
-      password,
+      mot_de_passe,
+      telephone,
       acceptTerms,
       role,
       ...(role === "recruteur" && { entreprise_id }),
     };
 
-    console.log("Registration payload:", payload);
+    console.log("Payload d'inscription:", payload);
 
     try {
       const result = await dispatch(registerUser(payload));
       if (result.meta.requestStatus === "fulfilled") {
         toast.success("Inscription réussie !");
         dispatch(clearForm());
-      } else if (result.meta.requestStatus === "rejected") {
+      } else {
         const errorMsg = result.payload || "Échec de l'inscription";
-        console.error("Registration error:", errorMsg);
+        console.error("Erreur d'inscription:", errorMsg);
         setFormErrors({ server: errorMsg });
         toast.error(errorMsg);
       }
     } catch (err) {
       const errorMsg =
         err.message || "Échec de l'inscription. Veuillez réessayer.";
-      console.error("Registration error:", errorMsg);
+      console.error("Erreur d'inscription:", errorMsg);
       setFormErrors({ server: errorMsg });
       toast.error(errorMsg);
     }
@@ -206,65 +208,32 @@ const Register = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="firstName"
-                  className="block mb-2 text-sm font-medium text-gray-900"
-                >
-                  Prénom
-                </label>
-                <input
-                  type="text"
-                  name="firstName"
-                  id="firstName"
-                  value={firstName}
-                  onChange={(e) => dispatch(setFirstName(e.target.value))}
-                  className={`bg-gray-50 border ${
-                    formErrors.firstName ? "border-red-500" : "border-gray-300"
-                  } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
-                  placeholder="Jean"
-                  required
-                  aria-invalid={formErrors.firstName ? "true" : "false"}
-                  aria-describedby={
-                    formErrors.firstName ? "firstName-error" : undefined
-                  }
-                />
-                {formErrors.firstName && (
-                  <p id="firstName-error" className="mt-1 text-sm text-red-600">
-                    {formErrors.firstName}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="lastName"
-                  className="block mb-2 text-sm font-medium text-gray-900"
-                >
-                  Nom
-                </label>
-                <input
-                  type="text"
-                  name="lastName"
-                  id="lastName"
-                  value={lastName}
-                  onChange={(e) => dispatch(setLastName(e.target.value))}
-                  className={`bg-gray-50 border ${
-                    formErrors.lastName ? "border-red-500" : "border-gray-300"
-                  } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
-                  placeholder="Dupont"
-                  required
-                  aria-invalid={formErrors.lastName ? "true" : "false"}
-                  aria-describedby={
-                    formErrors.lastName ? "lastName-error" : undefined
-                  }
-                />
-                {formErrors.lastName && (
-                  <p id="lastName-error" className="mt-1 text-sm text-red-600">
-                    {formErrors.lastName}
-                  </p>
-                )}
-              </div>
+            <div>
+              <label
+                htmlFor="nom"
+                className="block mb-2 text-sm font-medium text-gray-900"
+              >
+                Nom complet
+              </label>
+              <input
+                type="text"
+                name="nom"
+                id="nom"
+                value={nom}
+                onChange={(e) => dispatch(setNom(e.target.value))}
+                className={`bg-gray-50 border ${
+                  formErrors.nom ? "border-red-500" : "border-gray-300"
+                } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
+                placeholder="Jean Dupont"
+                required
+                aria-invalid={formErrors.nom ? "true" : "false"}
+                aria-describedby={formErrors.nom ? "nom-error" : undefined}
+              />
+              {formErrors.nom && (
+                <p id="nom-error" className="mt-1 text-sm text-red-600">
+                  {formErrors.nom}
+                </p>
+              )}
             </div>
 
             <div>
@@ -299,38 +268,68 @@ const Register = () => {
               )}
             </div>
 
+            <div>
+              <label
+                htmlFor="telephone"
+                className="block mb-2 text-sm font-medium text-gray-900"
+              >
+                Téléphone
+              </label>
+              <input
+                type="tel"
+                name="telephone"
+                id="telephone"
+                value={telephone}
+                onChange={(e) => dispatch(setTelephone(e.target.value))}
+                className={`bg-gray-50 border ${
+                  formErrors.telephone ? "border-red-500" : "border-gray-300"
+                } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
+                placeholder="0123456789"
+                required
+                aria-invalid={formErrors.telephone ? "true" : "false"}
+                aria-describedby={
+                  formErrors.telephone ? "telephone-error" : undefined
+                }
+              />
+              {formErrors.telephone && (
+                <p id="telephone-error" className="mt-1 text-sm text-red-600">
+                  {formErrors.telephone}
+                </p>
+              )}
+            </div>
+
             {role === "recruteur" && (
               <div>
                 <label
-                  htmlFor="companyName"
+                  htmlFor="nomEntreprise"
                   className="block mb-2 text-sm font-medium text-gray-900"
                 >
                   Nom de l'entreprise
                 </label>
                 <input
                   type="text"
-                  name="companyName"
-                  id="companyName"
-                  value={companyName}
-                  onChange={(e) => dispatch(setCompanyName(e.target.value))}
+                  name="nomEntreprise"
+                  id="nomEntreprise"
+                  value={nomEntreprise}
+                  onChange={(e) => dispatch(setNomEntreprise(e.target.value))}
                   className={`bg-gray-50 border ${
-                    formErrors.companyName
+                    formErrors.nomEntreprise
                       ? "border-red-500"
                       : "border-gray-300"
                   } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
                   placeholder="Tech Corp"
                   required
-                  aria-invalid={formErrors.companyName ? "true" : "false"}
+                  aria-invalid={formErrors.nomEntreprise ? "true" : "false"}
                   aria-describedby={
-                    formErrors.companyName ? "companyName-error" : undefined
+                    formErrors.nomEntreprise ? "nomEntreprise-error" : undefined
                   }
                 />
-                {formErrors.companyName && (
+                {formErrors.nomEntreprise && (
                   <p
-                    id="companyName-error"
+                    id="nomEntreprise-error"
                     className="mt-1 text-sm text-red-600"
                   >
-                    {formErrors.companyName}
+                    {formErrors.nomEntreprise}
                   </p>
                 )}
               </div>
@@ -338,30 +337,33 @@ const Register = () => {
 
             <div>
               <label
-                htmlFor="password"
+                htmlFor="mot_de_passe"
                 className="block mb-2 text-sm font-medium text-gray-900"
               >
                 Mot de passe
               </label>
               <input
                 type="password"
-                name="password"
-                id="password"
-                value={password}
-                onChange={(e) => dispatch(setPassword(e.target.value))}
+                name="mot_de_passe"
+                id="mot_de_passe"
+                value={mot_de_passe}
+                onChange={(e) => dispatch(setMotDePasse(e.target.value))}
                 className={`bg-gray-50 border ${
-                  formErrors.password ? "border-red-500" : "border-gray-300"
+                  formErrors.mot_de_passe ? "border-red-500" : "border-gray-300"
                 } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
                 placeholder="••••••••"
                 required
-                aria-invalid={formErrors.password ? "true" : "false"}
+                aria-invalid={formErrors.mot_de_passe ? "true" : "false"}
                 aria-describedby={
-                  formErrors.password ? "password-error" : undefined
+                  formErrors.mot_de_passe ? "mot_de_passe-error" : undefined
                 }
               />
-              {formErrors.password && (
-                <p id="password-error" className="mt-1 text-sm text-red-600">
-                  {formErrors.password}
+              {formErrors.mot_de_passe && (
+                <p
+                  id="mot_de_passe-error"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {formErrors.mot_de_passe}
                 </p>
               )}
               <p className="mt-1 text-xs text-gray-500">
@@ -371,37 +373,37 @@ const Register = () => {
 
             <div>
               <label
-                htmlFor="confirmPassword"
+                htmlFor="confirmMotDePasse"
                 className="block mb-2 text-sm font-medium text-gray-900"
               >
                 Confirmer le mot de passe
               </label>
               <input
                 type="password"
-                name="confirmPassword"
-                id="confirmPassword"
-                value={confirmPassword}
-                onChange={(e) => dispatch(setConfirmPassword(e.target.value))}
+                name="confirmMotDePasse"
+                id="confirmMotDePasse"
+                value={confirmMotDePasse}
+                onChange={(e) => dispatch(setConfirmMotDePasse(e.target.value))}
                 className={`bg-gray-50 border ${
-                  formErrors.confirmPassword
+                  formErrors.confirmMotDePasse
                     ? "border-red-500"
                     : "border-gray-300"
                 } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
                 placeholder="••••••••"
                 required
-                aria-invalid={formErrors.confirmPassword ? "true" : "false"}
+                aria-invalid={formErrors.confirmMotDePasse ? "true" : "false"}
                 aria-describedby={
-                  formErrors.confirmPassword
-                    ? "confirmPassword-error"
+                  formErrors.confirmMotDePasse
+                    ? "confirmMotDePasse-error"
                     : undefined
                 }
               />
-              {formErrors.confirmPassword && (
+              {formErrors.confirmMotDePasse && (
                 <p
-                  id="confirmPassword-error"
+                  id="confirmMotDePasse-error"
                   className="mt-1 text-sm text-red-600"
                 >
-                  {formErrors.confirmPassword}
+                  {formErrors.confirmMotDePasse}
                 </p>
               )}
             </div>

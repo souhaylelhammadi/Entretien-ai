@@ -3,14 +3,50 @@ import { createSelector } from "reselect";
 
 export const fetchCandidates = createAsyncThunk(
   "candidates/fetchCandidates",
-  async (_, { rejectWithValue }) => {
+  async (_, { rejectWithValue, getState }) => {
     try {
-      const response = await fetch("http://localhost:5000/api/candidates");
-      if (!response.ok) {
-        throw new Error(`Failed to fetch candidates: ${response.statusText}`);
+      const { auth } = getState();
+      let token = auth.token || localStorage.getItem("token");
+      const userId =
+        auth.user?._id || auth.user?.id || localStorage.getItem("userId");
+
+      if (!token) {
+        throw new Error("Aucun jeton d'authentification trouvé");
       }
+
+      if (!userId) {
+        throw new Error("ID utilisateur non trouvé, veuillez vous reconnecter");
+      }
+
+      console.log("========== FETCH CANDIDATES ==========");
+      console.log("Recruteur ID utilisé:", userId);
+      console.log("Token (20 premiers car.):", token.substring(0, 20) + "...");
+
+      // Ajouter recruteur_id pour filtrer les candidats par recruteur
+      const url = `http://localhost:5000/api/candidates?recruteur_id=${userId}`;
+      console.log("URL de récupération des candidats:", url);
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: token,
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("Statut réponse candidats:", response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Erreur récupération candidats:", errorData);
+        throw new Error(
+          `Échec de récupération des candidats: ${response.statusText}`
+        );
+      }
+
       const data = await response.json();
-      console.log("Fetched candidates:", data);
+      console.log(`Nombre de candidats récupérés: ${data.length || 0}`);
+      console.log("========== FIN FETCH CANDIDATES ==========");
+
       return data.map((candidate) => ({
         ...candidate,
         id: String(candidate.id),
@@ -24,6 +60,8 @@ export const fetchCandidates = createAsyncThunk(
           telephone: candidate.candidat?.telephone || "",
           cv: candidate.candidat?.cv || "",
           lettre_motivation: candidate.candidat?.lettre_motivation || "",
+          lettre_motivation_text:
+            candidate.candidat?.lettre_motivation_text || "",
         },
         offreEmploi: candidate.offreEmploi || {
           id: candidate.offreEmploiId,
@@ -39,19 +77,51 @@ export const fetchCandidates = createAsyncThunk(
 
 export const updateCandidateStatus = createAsyncThunk(
   "candidates/updateCandidateStatus",
-  async ({ candidateId, status }, { rejectWithValue }) => {
+  async ({ candidateId, status }, { rejectWithValue, getState }) => {
     try {
+      const { auth } = getState();
+      let token = auth.token || localStorage.getItem("token");
+      const userId = auth.user?._id || auth.user?.id || localStorage.getItem("userId");
+      
+      if (!token) {
+        throw new Error("Aucun jeton d'authentification trouvé");
+      }
+      
+      if (!userId) {
+        throw new Error("ID utilisateur non trouvé, veuillez vous reconnecter");
+      }
+      
+      console.log("========== UPDATE CANDIDATE STATUS ==========");
+      console.log("Mise à jour candidat ID:", candidateId);
+      console.log("Nouveau statut:", status);
+      console.log("Recruteur ID:", userId);
+      
       const response = await fetch(
         `http://localhost:5000/api/candidates/${candidateId}`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ statut: status }),
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": token 
+          },
+          body: JSON.stringify({ 
+            statut: status,
+            recruteur_id: userId // Ajouter l'ID du recruteur pour la vérification côté serveur
+          }),
         }
       );
+      
+      console.log("Statut réponse mise à jour:", response.status);
+      
       if (!response.ok) {
-        throw new Error(`Failed to update status: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Erreur mise à jour candidat:", errorData);
+        throw new Error(`Échec de mise à jour du statut: ${response.statusText}`);
       }
+      
+      console.log("Mise à jour réussie du candidat");
+      console.log("========== FIN UPDATE CANDIDATE STATUS ==========");
+      
       return { candidateId, status };
     } catch (err) {
       console.error("Error updating candidate status:", err);

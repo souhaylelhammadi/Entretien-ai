@@ -13,6 +13,10 @@ export const fetchAcceptedOffers = createAsyncThunk(
           "Vous devez être connecté pour accéder aux candidatures acceptées"
         );
       }
+      if (token.split(".").length !== 3) {
+        localStorage.removeItem("token");
+        throw new Error("Jeton malformé. Veuillez vous reconnecter.");
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/accepted-offers`, {
         method: "GET",
@@ -23,11 +27,15 @@ export const fetchAcceptedOffers = createAsyncThunk(
       });
       const data = await response.json();
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem("token");
+        }
         throw new Error(
           data.error || "Échec de la récupération des candidatures acceptées"
         );
       }
-      return data.data; // Return the array of candidatures
+      // Ensure the response is an array
+      return Array.isArray(data.offers) ? data.offers : [];
     } catch (error) {
       console.error("fetchAcceptedOffers error:", error.message);
       return rejectWithValue(error.message);
@@ -46,6 +54,10 @@ export const updateOfferStatus = createAsyncThunk(
           "Vous devez être connecté pour mettre à jour une candidature"
         );
       }
+      if (token.split(".").length !== 3) {
+        localStorage.removeItem("token");
+        throw new Error("Jeton malformé. Veuillez vous reconnecter.");
+      }
 
       const response = await fetch(
         `${API_BASE_URL}/api/accepted-offers/${applicationId}`,
@@ -60,11 +72,14 @@ export const updateOfferStatus = createAsyncThunk(
       );
       const data = await response.json();
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem("token");
+        }
         throw new Error(
           data.error || "Échec de la mise à jour du statut de la candidature"
         );
       }
-      return data.data; // Return the updated candidature
+      return data.offer;
     } catch (error) {
       console.error("updateOfferStatus error:", error.message);
       return rejectWithValue(error.message);
@@ -89,6 +104,7 @@ const acceptedOffersSlice = createSlice({
       .addCase(fetchAcceptedOffers.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.candidatures = []; // Reset to avoid undefined
       })
       .addCase(fetchAcceptedOffers.fulfilled, (state, action) => {
         state.loading = false;
@@ -97,6 +113,7 @@ const acceptedOffersSlice = createSlice({
       .addCase(fetchAcceptedOffers.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.candidatures = []; // Ensure array on error
       })
       .addCase(updateOfferStatus.pending, (state) => {
         state.loading = true;

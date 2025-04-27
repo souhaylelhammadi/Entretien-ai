@@ -1,0 +1,26 @@
+2025-04-26 19:37:28,656 [ERROR] __main__: MONGO_URI environment variable is not set
+2025-04-26 19:37:28,657 [ERROR] __main__: Failed to start application: MONGO_URI environment variable is not set
+Traceback (most recent call last):
+  File "C:\Users\souhayl\OneDrive\Bureau\interview-ai\server\app.py", line 111, in <module>
+    app = create_app()
+          ^^^^^^^^^^^^
+  File "C:\Users\souhayl\OneDrive\Bureau\interview-ai\server\app.py", line 39, in create_app
+    raise ValueError("MONGO_URI environment variable is not set")
+ValueError: MONGO_URI environment variable is not set
+2025-04-26 20:03:30,867 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-26 20:03:30,882 [INFO] __main__: MongoDB connection established successfully
+2025-04-26 20:03:31,029 [INFO] __main__: Created collection: utilisateurs
+2025-04-26 20:03:31,187 [INFO] __main__: All blueprints registered successfully
+2025-04-26 20:03:31,194 [INFO] __main__: Starting Flask application on port 5000
+2025-04-26 20:03:31,373 [INFO] werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.11.162:5000
+2025-04-26 20:03:31,374 [INFO] werkzeug: [33mPress CTRL+C to quit[0m
+2025-04-26 20:03:31,381 [INFO] werkzeug:  * Restarting with stat
+2025-04-26 20:03:32,842 [INFO] __main__: Upload folder ensured: C:/Users/souhayl/OneDrive/Bureau/interview-ai/server/Uploads
+2025-04-26 20:03:32,849 [INFO] __main__: MongoDB connection established successfully
+2025-04-26 20:03:32,949 [INFO] __main__: All blueprints registered successfully
+2025-04-26 20:03:32,950 [INFO] __main__: Starting Flask application on port 5000
+2025-04-26 20:03:33,025 [WARNING] werkzeug:  * Debugger is active!
+2025-04-26 20:03:33,033 [INFO] werkzeug:  * Debugger PIN: 145-665-582

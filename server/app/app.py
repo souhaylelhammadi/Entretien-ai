@@ -4,6 +4,8 @@ from flask_pymongo import PyMongo
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+import subprocess
+import sys
 
 load_dotenv()  # Load environment variables from .env
 
@@ -17,12 +19,40 @@ def setup_background_tasks(app):
     except Exception as e:
         print(f"Erreur lors de la configuration des tâches d'arrière-plan : {e}")
 
+def initialize_database():
+    """Initialiser la base de données avec les données d'exemple"""
+    try:
+        print("Initialisation de la base de données avec les données d'exemple...")
+        # Chemin relatif vers le script insert_data.py depuis le répertoire actuel
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'insert_data.py')
+        
+        if not os.path.exists(script_path):
+            print(f"Erreur: Le script d'initialisation n'existe pas: {script_path}")
+            return False
+            
+        # Exécuter le script en tant que processus externe
+        process = subprocess.run([sys.executable, script_path], 
+                                 capture_output=True, 
+                                 text=True,
+                                 cwd=os.path.dirname(script_path))
+        
+        if process.returncode == 0:
+            print("Base de données initialisée avec succès!")
+            print(process.stdout)
+            return True
+        else:
+            print(f"Erreur lors de l'initialisation de la base de données: {process.stderr}")
+            return False
+    except Exception as e:
+        print(f"Exception lors de l'initialisation de la base de données: {str(e)}")
+        return False
+
 def create_app():
     app = Flask(__name__)
     CORS(app, supports_credentials=True)
 
-    # Configuration
-    app.config["MONGO_URI"] = os.getenv("MONGODB_URI")
+    # Configuration - Utiliser le même nom de base de données que insert_data.py
+    app.config["MONGO_URI"] = "mongodb://localhost:27017/DB_entretien_ai"
     app.config["JWT_SECRET"] = os.getenv("JWT_SECRET", "your-secret-key")
     
     # Security and feature flags
@@ -46,13 +76,10 @@ def create_app():
             print("Connexion à MongoDB établie")
             
             # Create indexes for better performance and security
-            mongo.db.users.create_index("email", unique=True)
+            # Utiliser les noms de collections en français
+            mongo.db.Utilisateurs.create_index("email", unique=True)
             mongo.db.blacklist.create_index("token", unique=True)
             mongo.db.blacklist.create_index("expires_at", expireAfterSeconds=0)
-            mongo.db.user_sessions.create_index("user_id")
-            mongo.db.user_sessions.create_index("token")
-            mongo.db.activities.create_index([("timestamp", -1)])
-            mongo.db.recruiter_profiles.create_index("user_id", unique=True)
             
             # Run initialization tasks that would have been in before_first_request
             setup_background_tasks(app)
@@ -70,7 +97,7 @@ def create_app():
         #from routes.recordings import recordings_bp
         from auth import auth_bp  # Import the auth blueprint
         from routes.recruteur.dashboard import dashboard_bp
-        from routes.recruteur.jobs import jobs_bp
+        from routes.recruteur.Offres import Offres_recruteur_bp
         from routes.recruteur.profile import profile_bp  # Import the new profile blueprint
         
         app.register_blueprint(auth_bp)
@@ -79,7 +106,7 @@ def create_app():
         app.register_blueprint(interviews_bp, url_prefix="/api")
         app.register_blueprint(accepted_offers_bp, url_prefix="/api")
         app.register_blueprint(dashboard_bp)
-        app.register_blueprint(jobs_bp)
+        app.register_blueprint(Offres_recruteur_bp)
         app.register_blueprint(profile_bp)  # Register the profile blueprint
         
     except ImportError as e:
@@ -91,11 +118,19 @@ def create_app():
     def init_app_command():
         """Initialize application data and run startup tasks."""
         setup_background_tasks(app)
+        initialize_database()
         print("Application initialization complete")
-
     return app
 
 if __name__ == "__main__":
     app = create_app()
+    
+    # Vérifier si une initialisation de la base de données est demandée
+    init_db = os.getenv("INIT_DB", "false").lower() in ('true', '1', 't')
+    if init_db:
+        initialize_database()
+    
     port = int(os.getenv("PORT", 5000))
+    print(f"Démarrage de l'application sur le port {port}...")
+    print(f"Pour initialiser la base de données, définissez la variable d'environnement INIT_DB=true")
     app.run(host="0.0.0.0", port=port, debug=True)

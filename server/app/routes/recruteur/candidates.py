@@ -25,39 +25,80 @@ def serialize_doc(doc):
 def get_candidates():
     """Retrieve all candidatures with associated candidate and job offer details."""
     try:
+        # Obtenir le token d'authentification
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            print("Aucun token d'authentification fourni", file=sys.stderr)
+            return jsonify({"error": "Authentification requise"}), 401
+            
+        # Extraire et valider l'utilisateur
+        from app.routes.recruteur.Offres import get_user_from_token
+        user = get_user_from_token(auth_header)
+        
+        if not user:
+            print("Token invalide ou expiré", file=sys.stderr)
+            return jsonify({"error": "Token invalide ou expiré"}), 401
+            
+        if user.get('role') != 'recruteur':
+            print(f"Accès non autorisé pour le rôle: {user.get('role')}", file=sys.stderr)
+            return jsonify({"error": "Accès réservé aux recruteurs"}), 403
+            
+        # Obtenir l'ID du recruteur
+        recruteur_id = user.get('id')
+        if not recruteur_id:
+            print("ID recruteur non trouvé dans les données utilisateur", file=sys.stderr)
+            return jsonify({"error": "Impossible d'identifier le recruteur"}), 400
+            
+        print(f"Récupération des candidatures pour le recruteur: {recruteur_id}", file=sys.stderr)
+        
+        # Obtenir les offres du recruteur
         db = current_app.mongo.db
-        print("Fetching candidatures from database...", file=sys.stderr)
-        candidatures = list(db.candidatures.find())
-        print(f"Found {len(candidatures)} candidatures in database", file=sys.stderr)
+        offres_du_recruteur = list(db.offres.find({"recruteur_id": recruteur_id}))
+        offre_ids = [offre.get('_id') for offre in offres_du_recruteur if offre.get('_id')]
+        
+        if not offre_ids:
+            print(f"Aucune offre trouvée pour le recruteur {recruteur_id}", file=sys.stderr)
+            return jsonify([]), 200
+            
+        print(f"Offres trouvées pour le recruteur: {len(offre_ids)}", file=sys.stderr)
+        
+        # Récupérer uniquement les candidatures liées aux offres du recruteur
+        candidatures = list(db.candidatures.find({"offre_id": {"$in": offre_ids}}))
+        print(f"Trouvé {len(candidatures)} candidatures pour les offres du recruteur", file=sys.stderr)
         
         result = []
         for candidature in candidatures:
             try:
-                print(f"Processing candidature: {str(candidature.get('_id'))}", file=sys.stderr)
+                print(f"Traitement candidature: {str(candidature.get('_id'))}", file=sys.stderr)
                 
                 # Validate candidate_id
                 if "candidate_id" not in candidature:
-                    print(f"Missing candidate_id in candidature: {str(candidature.get('_id'))}", file=sys.stderr)
+                    print(f"ID candidat manquant dans la candidature: {str(candidature.get('_id'))}", file=sys.stderr)
                     continue
                     
                 if not ObjectId.is_valid(candidature["candidate_id"]):
-                    print(f"Invalid candidate_id format: {candidature['candidate_id']}", file=sys.stderr)
+                    print(f"Format d'ID candidat invalide: {candidature['candidate_id']}", file=sys.stderr)
                     continue
                 
                 # Get candidate
                 candidate = db.candidates.find_one({"_id": ObjectId(candidature["candidate_id"])})
                 if not candidate:
-                    print(f"Candidate not found for ID: {candidature['candidate_id']}", file=sys.stderr)
+                    print(f"Candidat non trouvé pour l'ID: {candidature['candidate_id']}", file=sys.stderr)
                     continue
                 
                 # Get job offer
                 if "offre_id" not in candidature:
-                    print(f"Missing offre_id in candidature: {str(candidature.get('_id'))}", file=sys.stderr)
+                    print(f"ID offre manquant dans la candidature: {str(candidature.get('_id'))}", file=sys.stderr)
                     continue
                     
                 offre = db.offres.find_one({"_id": candidature["offre_id"]})
                 if not offre:
-                    print(f"Offre not found for ID: {candidature['offre_id']}", file=sys.stderr)
+                    print(f"Offre non trouvée pour l'ID: {candidature['offre_id']}", file=sys.stderr)
+                    continue
+                
+                # Vérification que l'offre appartient bien au recruteur
+                if offre.get('recruteur_id') != recruteur_id:
+                    print(f"Offre {offre.get('_id')} n'appartient pas au recruteur {recruteur_id}", file=sys.stderr)
                     continue
                 
                 # Build CV URL
@@ -65,7 +106,6 @@ def get_candidates():
                 # Dans tous les cas, fournir une URL - même si le CV n'existe pas
                 # La route servira un PDF "CV non disponible" si nécessaire
                 cv_url = f"/api/candidates/cv/{str(candidate['_id'])}"
-                print(f"CV URL generated: {cv_url}", file=sys.stderr)
                 
                 # Build candidature data
                 candidature_data = {
@@ -86,40 +126,85 @@ def get_candidates():
                     "date_postulation": candidature.get("date_postulation", datetime.now(timezone.utc)).isoformat(),
                 }
                 result.append(candidature_data)
-                print(f"Successfully processed candidature: {candidature_data['id']}", file=sys.stderr)
+                print(f"Candidature traitée avec succès: {candidature_data['id']}", file=sys.stderr)
                 
             except Exception as e:
-                print(f"Error processing candidature {str(candidature.get('_id'))}: {str(e)}", file=sys.stderr)
+                print(f"Erreur lors du traitement de la candidature {str(candidature.get('_id'))}: {str(e)}", file=sys.stderr)
                 continue
                 
-        print(f"Returning {len(result)} processed candidatures", file=sys.stderr)
+        print(f"Retour de {len(result)} candidatures traitées", file=sys.stderr)
         return jsonify(result), 200
         
     except Exception as e:
-        print(f"Error in get_candidates: {str(e)}", file=sys.stderr)
+        print(f"Erreur dans get_candidates: {str(e)}", file=sys.stderr)
         return jsonify({"error": f"Échec de la récupération des candidatures : {str(e)}"}), 500
 
 @candidates_bp.route("/candidates/<string:candidate_id>", methods=["PUT"])
 def update_candidate_status(candidate_id):
     """Update the status of a candidature."""
     try:
+        # Obtenir le token d'authentification
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            print("Aucun token d'authentification fourni", file=sys.stderr)
+            return jsonify({"error": "Authentification requise"}), 401
+            
+        # Extraire et valider l'utilisateur
+        from app.routes.recruteur.Offres import get_user_from_token
+        user = get_user_from_token(auth_header)
+        
+        if not user:
+            print("Token invalide ou expiré", file=sys.stderr)
+            return jsonify({"error": "Token invalide ou expiré"}), 401
+            
+        if user.get('role') != 'recruteur':
+            print(f"Accès non autorisé pour le rôle: {user.get('role')}", file=sys.stderr)
+            return jsonify({"error": "Accès réservé aux recruteurs"}), 403
+            
+        # Obtenir l'ID du recruteur
+        recruteur_id = user.get('id')
+        if not recruteur_id:
+            print("ID recruteur non trouvé dans les données utilisateur", file=sys.stderr)
+            return jsonify({"error": "Impossible d'identifier le recruteur"}), 400
+        
         db = current_app.mongo.db
         data = request.get_json()
         if not data or "statut" not in data:
             return jsonify({"error": "Statut requis"}), 400
-        if data["statut"] not in ["en_attente", "acceptee", "refusee"]:
+        if data["statut"] not in ["en_attente", "acceptee", "refusee", "interviewing", "hired", "rejected"]:
             return jsonify({"error": "Statut invalide"}), 400
         if not ObjectId.is_valid(candidate_id):
             return jsonify({"error": "Format d'ID invalide"}), 400
+            
+        # Récupérer la candidature
+        candidature = db.candidatures.find_one({"_id": ObjectId(candidate_id)})
+        if not candidature:
+            return jsonify({"error": "Candidature non trouvée"}), 404
+            
+        # Vérifier que l'offre appartient au recruteur
+        offre_id = candidature.get("offre_id")
+        if not offre_id:
+            return jsonify({"error": "Offre non trouvée pour cette candidature"}), 404
+            
+        offre = db.offres.find_one({"_id": offre_id})
+        if not offre:
+            return jsonify({"error": "Offre non trouvée"}), 404
+            
+        if offre.get("recruteur_id") != recruteur_id:
+            print(f"Tentative non autorisée de mise à jour - recruteur {recruteur_id} essaie de modifier une candidature pour l'offre de {offre.get('recruteur_id')}", file=sys.stderr)
+            return jsonify({"error": "Vous n'êtes pas autorisé à modifier cette candidature"}), 403
+            
+        # Mettre à jour le statut
         result = db.candidatures.update_one(
             {"_id": ObjectId(candidate_id)},
             {"$set": {"statut": data["statut"]}}
         )
-        if result.matched_count == 0:
-            return jsonify({"error": "Candidature non trouvée"}), 404
+        
+        print(f"Statut de la candidature {candidate_id} mis à jour vers {data['statut']} par le recruteur {recruteur_id}", file=sys.stderr)
         return jsonify({"message": "Statut mis à jour"}), 200
     except Exception as e:
-        return jsonify({"error": "Échec de la mise à jour du statut"}), 500
+        print(f"Erreur lors de la mise à jour du statut: {str(e)}", file=sys.stderr)
+        return jsonify({"error": f"Échec de la mise à jour du statut: {str(e)}"}), 500
 
 def generate_not_available_pdf(message="CV non disponible"):
     """
@@ -288,161 +373,4 @@ def serve_cv(candidate_id):
             generate_not_available_pdf(), 
             mimetype="application/pdf",
             headers={"Content-Disposition": f"inline; filename=cv_non_disponible.pdf"}
-        )
-
-@candidates_bp.route("/candidates/lettre-motivation/<string:candidate_id>", methods=["GET"])
-def serve_lettre_motivation(candidate_id):
-    """
-    Serve the motivation letter PDF file for a given candidate.
-    """
-    try:
-        print(f"Serving motivation letter for candidate ID: {candidate_id}", file=sys.stderr)
-        db = current_app.mongo.db
-        
-        # Validate candidate_id
-        if not ObjectId.is_valid(candidate_id):
-            print(f"Invalid candidate ID format: {candidate_id}", file=sys.stderr)
-            return jsonify({"error": "Format d'ID de candidat invalide"}), 400
-            
-        # Find the candidate - first check in candidates collection
-        candidate = db.candidates.find_one({"_id": ObjectId(candidate_id)})
-        
-        # If not found in candidates, check if this is a candidature ID
-        if not candidate:
-            print(f"Candidate not found directly, checking candidatures for ID: {candidate_id}", file=sys.stderr)
-            candidature = db.candidatures.find_one({"_id": ObjectId(candidate_id)})
-            if candidature and "candidate_id" in candidature and ObjectId.is_valid(candidature["candidate_id"]):
-                candidate = db.candidates.find_one({"_id": ObjectId(candidature["candidate_id"])})
-        
-        # If still not found, check if there's a candidature with this candidate_id
-        if not candidate:
-            print(f"Checking candidatures with candidate_id: {candidate_id}", file=sys.stderr)
-            candidature = db.candidatures.find_one({"candidate_id": ObjectId(candidate_id)})
-            if candidature and "candidate_id" in candidature:
-                candidate = db.candidates.find_one({"_id": ObjectId(candidature["candidate_id"])})
-                
-        # If still not found, return placeholder PDF
-        if not candidate:
-            print(f"Candidate not found for ID: {candidate_id}", file=sys.stderr)
-            return Response(
-                generate_not_available_pdf("Lettre de motivation non disponible"), 
-                mimetype="application/pdf",
-                headers={"Content-Disposition": f"inline; filename=lettre_non_disponible.pdf"}
-            )
-            
-        # Check for motivation letter in different possible fields
-        lettre_path = None
-        
-        # Check in 'lettre_motivation' field (might be a path or base64 or text)
-        if candidate.get("lettre_motivation"):
-            lettre_path = candidate.get("lettre_motivation")
-            print(f"Motivation letter from 'lettre_motivation' field found", file=sys.stderr)
-            
-        # If no motivation letter found
-        if not lettre_path:
-            print(f"No motivation letter found for candidate: {candidate_id}", file=sys.stderr)
-            return Response(
-                generate_not_available_pdf("Lettre de motivation non disponible"), 
-                mimetype="application/pdf",
-                headers={"Content-Disposition": f"inline; filename=lettre_non_disponible.pdf"}
-            )
-        
-        # If it's a base64 string, decode and serve it
-        if lettre_path.startswith("data:application/pdf;base64,"):
-            try:
-                print(f"Detected base64 PDF data for motivation letter", file=sys.stderr)
-                base64_data = lettre_path.split(',')[1]
-                pdf_data = base64.b64decode(base64_data)
-                return Response(
-                    pdf_data,
-                    mimetype="application/pdf",
-                    headers={"Content-Disposition": f"inline; filename=lettre_{candidate.get('nom', 'candidat')}.pdf"}
-                )
-            except Exception as e:
-                print(f"Error processing base64 PDF for motivation letter: {str(e)}", file=sys.stderr)
-                # Fall through to generate placeholder PDF
-        
-        # If it's a plain text, convert to PDF
-        if not lettre_path.startswith("data:") and not os.path.exists(lettre_path):
-            try:
-                # For simplicity, we're just returning a placeholder PDF with a message
-                # In a real scenario, you would generate a PDF from the text
-                print(f"Converting text motivation letter to PDF", file=sys.stderr)
-                return Response(
-                    generate_not_available_pdf(f"Lettre de motivation: {lettre_path[:500]}..."), 
-                    mimetype="application/pdf",
-                    headers={"Content-Disposition": f"inline; filename=lettre_{candidate.get('nom', 'candidat')}.pdf"}
-                )
-            except Exception as e:
-                print(f"Error converting text to PDF: {str(e)}", file=sys.stderr)
-                return Response(
-                    generate_not_available_pdf("Lettre de motivation non disponible"), 
-                    mimetype="application/pdf",
-                    headers={"Content-Disposition": f"inline; filename=lettre_non_disponible.pdf"}
-                )
-        
-        # If it's a file path, validate and serve
-        if os.path.exists(lettre_path):
-            # Check file size and validity
-            try:
-                file_size = os.path.getsize(lettre_path)
-                print(f"Motivation letter file size: {file_size} bytes", file=sys.stderr)
-                if file_size == 0:
-                    print(f"Motivation letter file is empty: {lettre_path}", file=sys.stderr)
-                    return Response(
-                        generate_not_available_pdf("Lettre de motivation non disponible"), 
-                        mimetype="application/pdf",
-                        headers={"Content-Disposition": f"inline; filename=lettre_non_disponible.pdf"}
-                    )
-                    
-                # Quick check if file appears to be a PDF (magic bytes)
-                with open(lettre_path, 'rb') as f:
-                    header = f.read(4)
-                    if header != b'%PDF':
-                        print(f"File does not appear to be a PDF: {lettre_path}", file=sys.stderr)
-                        # Try to read it as text and convert
-                        try:
-                            with open(lettre_path, 'r') as f:
-                                lettre_text = f.read()
-                                return Response(
-                                    generate_not_available_pdf(f"Lettre de motivation: {lettre_text[:500]}..."), 
-                                    mimetype="application/pdf",
-                                    headers={"Content-Disposition": f"inline; filename=lettre_{candidate.get('nom', 'candidat')}.pdf"}
-                                )
-                        except:
-                            return Response(
-                                generate_not_available_pdf("Lettre de motivation non disponible"), 
-                                mimetype="application/pdf",
-                                headers={"Content-Disposition": f"inline; filename=lettre_non_disponible.pdf"}
-                            )
-                
-                # Serve the PDF file
-                print(f"Serving motivation letter file: {lettre_path}", file=sys.stderr)
-                return send_file(
-                    lettre_path,
-                    mimetype="application/pdf",
-                    as_attachment=False,
-                    download_name=f"lettre_{candidate.get('nom', 'candidat')}.pdf"
-                )
-            except Exception as e:
-                print(f"Error validating motivation letter file: {str(e)}", file=sys.stderr)
-                return Response(
-                    generate_not_available_pdf("Lettre de motivation non disponible"), 
-                    mimetype="application/pdf",
-                    headers={"Content-Disposition": f"inline; filename=lettre_non_disponible.pdf"}
-                )
-
-        # If we got here, something went wrong
-        print(f"Could not process motivation letter: {lettre_path}", file=sys.stderr)
-        return Response(
-            generate_not_available_pdf("Lettre de motivation non disponible"), 
-            mimetype="application/pdf",
-            headers={"Content-Disposition": f"inline; filename=lettre_non_disponible.pdf"}
-        )
-    except Exception as e:
-        print(f"Error serving motivation letter: {str(e)}", file=sys.stderr)
-        return Response(
-            generate_not_available_pdf("Lettre de motivation non disponible"), 
-            mimetype="application/pdf",
-            headers={"Content-Disposition": f"inline; filename=lettre_non_disponible.pdf"}
         )

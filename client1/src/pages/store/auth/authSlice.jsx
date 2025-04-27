@@ -3,17 +3,17 @@ import axios from "axios";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
-// Middleware to catch invalid actions
+// Middleware pour valider les actions Redux
 export const validateActionMiddleware = () => (next) => (action) => {
   if (!action || !action.type) {
-    console.warn("Invalid action detected:", action);
-    return; // Block invalid actions
+    console.warn("Action invalide détectée:", action);
+    return;
   }
-  console.log("Dispatching action:", action.type);
+  console.log("Dispatch action:", action.type);
   return next(action);
 };
 
-// Utility for retrying failed requests
+// Fonction pour réessayer les requêtes en cas d'échec (timeout ou erreur réseau)
 const retryRequest = async (fn, retries = 2, delay = 1000) => {
   for (let i = 0; i < retries; i++) {
     try {
@@ -22,55 +22,59 @@ const retryRequest = async (fn, retries = 2, delay = 1000) => {
       if (i === retries - 1 || !err.code || err.code !== "ECONNABORTED") {
         throw err;
       }
-      console.warn(`Retry ${i + 1}/${retries} after ${delay}ms`);
+      console.warn(`Tentative ${i + 1}/${retries} après ${delay}ms`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 };
 
-// Function to clean token (remove "Bearer" if present)
+// Nettoyer le jeton (supprimer "Bearer " si présent)
 const cleanToken = (token) => {
   if (!token) return null;
   return token.startsWith("Bearer ") ? token.substring(7) : token;
 };
 
-// Async thunk to login user
+// Thunk pour la connexion
 export const loginUser = createAsyncThunk(
   "auth/loginUser",
-  async ({ email, password }, { rejectWithValue }) => {
+  async ({ email, mot_de_passe }, { rejectWithValue }) => {
     try {
-      if (!email || !password) {
+      if (!email || !mot_de_passe) {
         throw new Error("Email et mot de passe requis");
       }
       if (!/^\S+@\S+\.\S+$/.test(email)) {
         throw new Error("Format d'email invalide");
       }
 
-      console.log("Attempting login with:", { email });
+      console.log("Tentative de connexion avec:", { email });
       const request = () =>
         axios.post(
           `${API_URL}/api/auth/login`,
-          { email, password },
+          { email, mot_de_passe },
           { timeout: 10000 }
         );
 
       const response = await retryRequest(request);
-      console.log("Login response:", response.data);
+      console.log("Réponse de connexion:", response.data);
 
-      // Clean token before storing (remove Bearer prefix if present)
       const token = cleanToken(response.data.token);
-      console.log("Token reçu (premiers caractères):", token.substring(0, 10) + "...");
-      
-      // Store clean token in localStorage
+      if (!token || token.split(".").length !== 3) {
+        throw new Error("Jeton reçu invalide");
+      }
+      console.log(
+        "Jeton reçu (premiers caractères):",
+        token.substring(0, 10) + "..."
+      );
+
       localStorage.setItem("token", token);
-      console.log("Token stored in localStorage:", token);
+      console.log("Jeton stocké dans localStorage:", token);
 
       return {
         ...response.data,
         token: token,
       };
     } catch (err) {
-      console.error("Login error:", err.message, err.response?.data);
+      console.error("Erreur de connexion:", err.message, err.response?.data);
       const message =
         err.response?.data?.message ||
         (err.code === "ECONNABORTED"
@@ -83,16 +87,16 @@ export const loginUser = createAsyncThunk(
   }
 );
 
-// Async thunk to register user
+// Thunk pour l'inscription
 export const registerUser = createAsyncThunk(
   "auth/registerUser",
   async (userData, { rejectWithValue }) => {
     try {
       const requiredFields = [
-        "firstName",
-        "lastName",
+        "nom",
         "email",
-        "password",
+        "mot_de_passe",
+        "telephone",
         "role",
       ];
       if (!requiredFields.every((field) => userData[field])) {
@@ -101,12 +105,12 @@ export const registerUser = createAsyncThunk(
       if (!/^\S+@\S+\.\S+$/.test(userData.email)) {
         throw new Error("Format d'email invalide");
       }
-      if (userData.password.length < 8) {
+      if (userData.mot_de_passe.length < 8) {
         throw new Error("Le mot de passe doit contenir au moins 8 caractères");
       }
       if (
-        !/[A-Z]/.test(userData.password) ||
-        !/[0-9]/.test(userData.password)
+        !/[A-Z]/.test(userData.mot_de_passe) ||
+        !/[0-9]/.test(userData.mot_de_passe)
       ) {
         throw new Error(
           "Le mot de passe doit inclure une majuscule et un chiffre"
@@ -122,19 +126,24 @@ export const registerUser = createAsyncThunk(
         throw new Error("Vous devez accepter les conditions");
       }
 
-      console.log("Attempting registration with:", userData);
+      console.log("Tentative d'inscription avec:", userData);
       const request = () =>
         axios.post(`${API_URL}/api/auth/register`, userData, {
           timeout: 10000,
         });
 
       const response = await retryRequest(request);
-      console.log("Register response:", response.data);
+      console.log("Réponse d'inscription:", response.data);
 
-      localStorage.setItem("token", response.data.token);
+      const token = cleanToken(response.data.token);
+      if (!token || token.split(".").length !== 3) {
+        throw new Error("Jeton reçu invalide");
+      }
+
+      localStorage.setItem("token", token);
       return response.data;
     } catch (err) {
-      console.error("Register error:", err.message, err.response?.data);
+      console.error("Erreur d'inscription:", err.message, err.response?.data);
       const message =
         err.response?.data?.message ||
         (err.code === "ECONNABORTED"
@@ -147,7 +156,7 @@ export const registerUser = createAsyncThunk(
   }
 );
 
-// Async thunk to update user information
+// Thunk pour la mise à jour du profil utilisateur
 export const updateUser = createAsyncThunk(
   "auth/updateUser",
   async (userData, { rejectWithValue, getState }) => {
@@ -157,15 +166,19 @@ export const updateUser = createAsyncThunk(
       if (!token) {
         throw new Error("Aucun jeton trouvé");
       }
+      if (token.split(".").length !== 3) {
+        localStorage.removeItem("token");
+        throw new Error("Jeton malformé");
+      }
 
-      if (!userData.firstName || !userData.lastName || !userData.email) {
+      if (!userData.nom || !userData.email || !userData.telephone) {
         throw new Error("Tous les champs sont requis");
       }
       if (!/^\S+@\S+\.\S+$/.test(userData.email)) {
         throw new Error("Format d'email invalide");
       }
 
-      console.log("Attempting to update user with:", userData);
+      console.log("Tentative de mise à jour de l'utilisateur avec:", userData);
       const request = () =>
         axios.put(`${API_URL}/api/auth/update`, userData, {
           headers: { Authorization: `Bearer ${token}` },
@@ -173,11 +186,11 @@ export const updateUser = createAsyncThunk(
         });
 
       const response = await retryRequest(request);
-      console.log("Update user response:", response.data);
+      console.log("Réponse de mise à jour:", response.data);
 
       return response.data.user;
     } catch (err) {
-      console.error("Update user error:", err.message, err.response?.data);
+      console.error("Erreur de mise à jour:", err.message, err.response?.data);
       const message =
         err.response?.data?.message ||
         (err.code === "ECONNABORTED"
@@ -190,7 +203,7 @@ export const updateUser = createAsyncThunk(
   }
 );
 
-// Async thunk to check authentication status
+// Thunk pour vérifier l'état d'authentification
 export const checkAuthStatus = createAsyncThunk(
   "auth/checkAuthStatus",
   async (_, { rejectWithValue }) => {
@@ -199,20 +212,26 @@ export const checkAuthStatus = createAsyncThunk(
       if (!token) {
         throw new Error("Aucun jeton trouvé");
       }
+      if (token.split(".").length !== 3) {
+        localStorage.removeItem("token");
+        throw new Error("Jeton malformé");
+      }
 
-      console.log("Vérification du token (premiers caractères):", token.substring(0, 10) + "...");
-      
-      // Create headers with the token (without Bearer prefix)
+      console.log(
+        "Vérification du jeton (premiers caractères):",
+        token.substring(0, 10) + "..."
+      );
+
       const config = {
         headers: {
-          Authorization: token,
+          Authorization: `Bearer ${token}`,
         },
       };
 
       const response = await retryRequest(() =>
         axios.get(`${API_URL}/api/auth/me`, config)
       );
-      console.log("Auth status response:", response.data);
+      console.log("Réponse de vérification d'authentification:", response.data);
 
       return {
         ...response.data,
@@ -220,14 +239,15 @@ export const checkAuthStatus = createAsyncThunk(
       };
     } catch (err) {
       console.error(
-        "Check auth status error:",
+        "Erreur de vérification d'authentification:",
         err.message,
         err.response?.data
       );
 
-      // Clear token if authentication fails
-      if (err.response?.status === 401) {
-        console.log("Clearing token due to auth failure");
+      if (err.response?.status === 401 || err.message === "Jeton malformé") {
+        console.log(
+          "Suppression du jeton en raison d'échec d'authentification"
+        );
         localStorage.removeItem("token");
       }
 
@@ -240,7 +260,7 @@ export const checkAuthStatus = createAsyncThunk(
   }
 );
 
-// Async thunk to logout user
+// Thunk pour la déconnexion
 export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
   async (_, { rejectWithValue, getState }) => {
@@ -250,8 +270,12 @@ export const logoutUser = createAsyncThunk(
       if (!token) {
         throw new Error("Aucun jeton trouvé");
       }
+      if (token.split(".").length !== 3) {
+        localStorage.removeItem("token");
+        throw new Error("Jeton malformé");
+      }
 
-      console.log("Attempting logout");
+      console.log("Tentative de déconnexion");
       const request = () =>
         axios.post(
           `${API_URL}/api/auth/logout`,
@@ -263,12 +287,12 @@ export const logoutUser = createAsyncThunk(
         );
 
       const response = await retryRequest(request);
-      console.log("Logout response:", response.data);
+      console.log("Réponse de déconnexion:", response.data);
 
       localStorage.removeItem("token");
       return response.data;
     } catch (err) {
-      console.error("Logout error:", err.message, err.response?.data);
+      console.error("Erreur de déconnexion:", err.message, err.response?.data);
       localStorage.removeItem("token");
       const message =
         err.response?.data?.message ||
@@ -282,6 +306,7 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
+// Création du slice Redux
 const authSlice = createSlice({
   name: "auth",
   initialState: {
@@ -290,11 +315,11 @@ const authSlice = createSlice({
     isAuthenticated: false,
     role: "candidat",
     email: "",
-    password: "",
-    confirmPassword: "",
-    firstName: "",
-    lastName: "",
-    companyName: "",
+    mot_de_passe: "",
+    confirmMotDePasse: "",
+    nom: "",
+    telephone: "",
+    nomEntreprise: "",
     acceptTerms: false,
     loading: false,
     authError: "",
@@ -303,25 +328,28 @@ const authSlice = createSlice({
     setEmail: (state, action) => {
       state.email = action.payload;
     },
-    setPassword: (state, action) => {
-      state.password = action.payload;
+    setMotDePasse: (state, action) => {
+      state.mot_de_passe = action.payload;
     },
-    setConfirmPassword: (state, action) => {
-      state.confirmPassword = action.payload;
+    setConfirmMotDePasse: (state, action) => {
+      state.confirmMotDePasse = action.payload;
     },
-    setFirstName: (state, action) => {
-      state.firstName = action.payload;
+    setNom: (state, action) => {
+      state.nom = action.payload;
     },
-    setLastName: (state, action) => {
-      state.lastName = action.payload;
+    setTelephone: (state, action) => {
+      state.telephone = action.payload;
     },
-    setCompanyName: (state, action) => {
-      state.companyName = action.payload;
+    setNomEntreprise: (state, action) => {
+      state.nomEntreprise = action.payload;
     },
     setRole: (state, action) => {
       const validRoles = ["candidat", "recruteur"];
       if (!validRoles.includes(action.payload)) {
-        console.warn("Invalid role set attempt:", action.payload);
+        console.warn(
+          "Tentative de définition d'un rôle invalide:",
+          action.payload
+        );
         state.authError = "Rôle invalide. Doit être 'candidat' ou 'recruteur'";
       } else {
         state.role = action.payload;
@@ -333,11 +361,11 @@ const authSlice = createSlice({
     },
     clearForm: (state) => {
       state.email = "";
-      state.password = "";
-      state.confirmPassword = "";
-      state.firstName = "";
-      state.lastName = "";
-      state.companyName = "";
+      state.mot_de_passe = "";
+      state.confirmMotDePasse = "";
+      state.nom = "";
+      state.telephone = "";
+      state.nomEntreprise = "";
       state.acceptTerms = false;
       state.authError = "";
     },
@@ -347,11 +375,11 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.role = "candidat";
       state.email = "";
-      state.password = "";
-      state.confirmPassword = "";
-      state.firstName = "";
-      state.lastName = "";
-      state.companyName = "";
+      state.mot_de_passe = "";
+      state.confirmMotDePasse = "";
+      state.nom = "";
+      state.telephone = "";
+      state.nomEntreprise = "";
       state.acceptTerms = false;
       state.authError = "";
       state.loading = false;
@@ -359,6 +387,7 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Connexion
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -374,6 +403,7 @@ const authSlice = createSlice({
         state.loading = false;
         state.authError = action.payload;
       })
+      // Inscription
       .addCase(registerUser.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -389,6 +419,7 @@ const authSlice = createSlice({
         state.loading = false;
         state.authError = action.payload;
       })
+      // Mise à jour du profil
       .addCase(updateUser.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -402,6 +433,7 @@ const authSlice = createSlice({
         state.loading = false;
         state.authError = action.payload;
       })
+      // Vérification de l'état d'authentification
       .addCase(checkAuthStatus.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -420,6 +452,7 @@ const authSlice = createSlice({
         state.token = null;
         state.authError = action.payload;
       })
+      // Déconnexion
       .addCase(logoutUser.pending, (state) => {
         state.loading = true;
         state.authError = "";
@@ -438,27 +471,28 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.authError = action.payload;
       })
+      // Gestion des cas par défaut pour éviter les erreurs silencieuses
       .addDefaultCase((state, action) => {
         if (!action || !action.type) {
-          console.warn("Invalid action in authSlice:", action);
-          return state;
+          console.warn("Action invalide reçue:", action);
         }
-        return state;
       });
   },
 });
 
+// Export des actions
 export const {
   setEmail,
-  setPassword,
-  setConfirmPassword,
-  setFirstName,
-  setLastName,
-  setCompanyName,
+  setMotDePasse,
+  setConfirmMotDePasse,
+  setNom,
+  setTelephone,
+  setNomEntreprise,
   setRole,
   setAcceptTerms,
   clearForm,
   resetAuthState,
 } = authSlice.actions;
 
+// Export du réducteur
 export default authSlice.reducer;
