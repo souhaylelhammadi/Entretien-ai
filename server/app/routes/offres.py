@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import os
 from werkzeug.utils import secure_filename
 from functools import wraps
-from auth import verify_token
+from auth.jwt_manager import jwt_manager
 import logging
 from pymongo.errors import PyMongoError
 
@@ -38,7 +38,7 @@ def require_auth(role=None):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             token = request.headers.get("Authorization")
-            payload = verify_token(token)
+            payload = jwt_manager.verify_token(token)
             if not payload:
                 return jsonify({"error": "Authentification requise."}), 401
             if role and payload.get("role") != role:
@@ -49,51 +49,187 @@ def require_auth(role=None):
     return decorator
 
 # --- Routes ---
-@offres_emploi_bp.route('/offres-emploi', methods=['GET'])
-def get_offres_emploi():
-    try:
-        db = current_app.mongo.db
+@offres_emploi_bp.route('/offres-emploi', methods=['GET', 'POST'])
+def handle_offres_emploi():
+    if request.method == 'GET':
+        try:
+            db = current_app.mongo.db
 
-        token = request.headers.get("Authorization")
-        is_recruiter = False
-        recruiter_id = None
-        if token:
-            payload = verify_token(token)
-            if payload and payload.get("role") == "recruteur":
-                is_recruiter = True
-                recruiter_id = payload.get("id")
+            token = request.headers.get("Authorization")
+            is_recruiter = False
+            recruiter_id = None
+            if token:
+                payload = jwt_manager.verify_token(token)
+                if payload and payload.get("role") == "recruteur":
+                    is_recruiter = True
+                    recruiter_id = payload.get("id")
 
-        query = {}
+            query = {}
 
-        pipeline = [
-            {"$match": query},
-            {
-                "$lookup": {
-                    "from": "entreprises",
-                    "localField": "entreprise_id",
-                    "foreignField": "_id",
-                    "as": "entreprise"
+            pipeline = [
+                {"$match": query},
+                {
+                    "$lookup": {
+                        "from": "entreprises",
+                        "localField": "entreprise_id",
+                        "foreignField": "_id",
+                        "as": "entreprise"
+                    }
+                },
+                {"$unwind": {"path": "$entreprise", "preserveNullAndEmptyArrays": True}},
+                {
+                    "$project": {
+                        "_id": 1,
+                        "titre": 1,
+                        "description": 1,
+                        "localisation": 1,
+                        "departement": 1,
+                        "entreprise_nom": {"$ifNull": ["$entreprise.nom", "Entreprise non spécifiée"]},
+                        "date_creation": {"$ifNull": ["$date_creation", datetime.now(timezone.utc)]},
+                        "statut": 1,
+                        "questions": 1
+                    }
                 }
-            },
-            {"$unwind": {"path": "$entreprise", "preserveNullAndEmptyArrays": True}},
-            {
-                "$project": {
-                    "_id": 1,
-                    "titre": 1,
-                    "description": 1,
-                    "localisation": 1,
-                    "departement": 1,
-                    "entreprise_nom": {"$ifNull": ["$entreprise.nom", "Entreprise non spécifiée"]},
-                    "date_creation": {"$ifNull": ["$date_creation", datetime.now(timezone.utc)]},
-                    "statut": 1
-                }
+            ]
+
+            offres = db.offres.aggregate(pipeline)
+            offres_list = []
+            for offre in offres:
+                # Gérer la date de création
+                date_creation = offre.get("date_creation")
+                if isinstance(date_creation, datetime):
+                    date_creation_str = date_creation.isoformat() + "Z"
+                elif isinstance(date_creation, str):
+                    date_creation_str = date_creation
+                else:
+                    date_creation_str = datetime.now(timezone.utc).isoformat() + "Z"
+
+                offres_list.append({
+                    "id": str(offre["_id"]),
+                    "titre": offre.get("titre", "Titre non spécifié"),
+                    "description": offre.get("description", "Description non disponible"),
+                    "localisation": offre.get("localisation", "Localisation non spécifiée"),
+                    "departement": offre.get("departement", "Département non spécifié"),
+                    "entreprise": offre.get("entreprise_nom"),
+                    "date_creation": date_creation_str,
+                    "valide": offre.get("statut", "ouverte") == "ouverte",
+                    "questions": offre.get("questions", [])
+                })
+
+            return jsonify({"offres": offres_list}), 200
+
+        except Exception as e:
+            return handle_mongo_error(e, "récupération des offres")
+    
+    elif request.method == 'POST':
+        try:
+            db = current_app.mongo.db
+            data = request.get_json()
+
+            # Vérification du token et du rôle
+            token = request.headers.get("Authorization")
+            if not token:
+                return jsonify({"error": "Token d'authentification manquant"}), 401
+
+            payload = jwt_manager.verify_token(token)
+            if not payload or payload.get("role") != "recruteur":
+                return jsonify({"error": "Accès non autorisé"}), 403
+
+            # Validation des champs requis
+            required_fields = ["titre", "description", "localisation", "departement", "entreprise_id", "questions"]
+            for field in required_fields:
+                if field not in data or not data[field]:
+                    return jsonify({"error": f"Le champ {field} est requis"}), 400
+
+            # Validation des questions
+            if not isinstance(data["questions"], list):
+                return jsonify({"error": "Le champ questions doit être un tableau"}), 400
+
+            for question in data["questions"]:
+                if not isinstance(question, str) or not question.strip():
+                    return jsonify({"error": "Chaque question doit être une chaîne de caractères non vide"}), 400
+
+            # Vérification de l'existence de l'entreprise
+            if not ObjectId.is_valid(data["entreprise_id"]):
+                return jsonify({"error": "ID d'entreprise invalide"}), 400
+
+            entreprise = db.entreprises.find_one({"_id": ObjectId(data["entreprise_id"])})
+            if not entreprise:
+                return jsonify({"error": "Entreprise non trouvée"}), 404
+
+            # Création de l'offre
+            offre_data = {
+                "titre": data["titre"],
+                "description": data["description"],
+                "localisation": data["localisation"],
+                "departement": data["departement"],
+                "entreprise_id": ObjectId(data["entreprise_id"]),
+                "recruteur_id": ObjectId(payload["id"]),
+                "date_creation": datetime.now(timezone.utc),
+                "date_maj": datetime.now(timezone.utc),
+                "statut": "ouverte",
+                "questions": data["questions"],
+                "candidature_ids": []
             }
-        ]
 
-        offres = db.offres.aggregate(pipeline)
-        offres_list = []
-        for offre in offres:
-            offres_list.append({
+            result = db.offres.insert_one(offre_data)
+            offre_data["_id"] = result.inserted_id
+
+            # Conversion des ObjectId en strings pour la réponse
+            offre_data["_id"] = str(offre_data["_id"])
+            offre_data["entreprise_id"] = str(offre_data["entreprise_id"])
+            offre_data["recruteur_id"] = str(offre_data["recruteur_id"])
+            offre_data["date_creation"] = offre_data["date_creation"].isoformat() + "Z"
+            offre_data["date_maj"] = offre_data["date_maj"].isoformat() + "Z"
+
+            return jsonify(offre_data), 201
+
+        except Exception as e:
+            return handle_mongo_error(e, "création d'une offre")
+
+@offres_emploi_bp.route("/offres-emploi/<string:offre_id>", methods=["GET", "PUT", "DELETE"])
+def handle_offre_by_id(offre_id):
+    if request.method == 'GET':
+        try:
+            db = current_app.mongo.db
+            logger.info(f"Tentative de récupération de l'offre avec l'ID: {offre_id}")
+            if not ObjectId.is_valid(offre_id):
+                logger.error(f"ID invalide reçu: {offre_id}")
+                return jsonify({"error": "ID d'offre invalide."}), 400
+
+            pipeline = [
+                {"$match": {"_id": ObjectId(offre_id)}},
+                {
+                    "$lookup": {
+                        "from": "entreprises",
+                        "localField": "entreprise_id",
+                        "foreignField": "_id",
+                        "as": "entreprise"
+                    }
+                },
+                {"$unwind": {"path": "$entreprise", "preserveNullAndEmptyArrays": True}},
+                {
+                    "$project": {
+                        "_id": 1,
+                        "titre": 1,
+                        "description": 1,
+                        "localisation": 1,
+                        "departement": 1,
+                        "entreprise_nom": {"$ifNull": ["$entreprise.nom", "Entreprise non spécifiée"]},
+                        "date_creation": {"$ifNull": ["$date_creation", datetime.now(timezone.utc)]},
+                        "statut": 1,
+                        "questions": 1
+                    }
+                }
+            ]
+
+            offres = list(db.offres.aggregate(pipeline))
+            if not offres:
+                logger.error(f"Aucune offre trouvée avec l'ID: {offre_id}")
+                return jsonify({"error": "Offre non trouvée."}), 404
+
+            offre = offres[0]
+            data = {
                 "id": str(offre["_id"]),
                 "titre": offre.get("titre", "Titre non spécifié"),
                 "description": offre.get("description", "Description non disponible"),
@@ -101,66 +237,157 @@ def get_offres_emploi():
                 "departement": offre.get("departement", "Département non spécifié"),
                 "entreprise": offre.get("entreprise_nom"),
                 "date_creation": (offre.get("date_creation") or datetime.now(timezone.utc)).isoformat() + "Z",
-                "valide": offre.get("statut", "ouverte") == "ouverte"
-            })
-
-        return jsonify({"offres": offres_list}), 200
-
-    except Exception as e:
-        return handle_mongo_error(e, "récupération des offres")
-
-@offres_emploi_bp.route("/offres-emploi/<string:offre_id>", methods=["GET"])
-def get_offre_by_id(offre_id):
-    try:
-        db = current_app.mongo.db
-        if not ObjectId.is_valid(offre_id):
-            return jsonify({"error": "ID d'offre invalide."}), 400
-
-        pipeline = [
-            {"$match": {"_id": ObjectId(offre_id)}},
-            {
-                "$lookup": {
-                    "from": "entreprises",
-                    "localField": "entreprise_id",
-                    "foreignField": "_id",
-                    "as": "entreprise"
-                }
-            },
-            {"$unwind": {"path": "$entreprise", "preserveNullAndEmptyArrays": True}},
-            {
-                "$project": {
-                    "_id": 1,
-                    "titre": 1,
-                    "description": 1,
-                    "localisation": 1,
-                    "departement": 1,
-                    "entreprise_nom": {"$ifNull": ["$entreprise.nom", "Entreprise non spécifiée"]},
-                    "date_creation": {"$ifNull": ["$date_creation", datetime.now(timezone.utc)]},
-                    "statut": 1
-                }
+                "valide": offre.get("statut", "ouverte") == "ouverte",
+                "questions": offre.get("questions", [])
             }
-        ]
 
-        offres = list(db.offres.aggregate(pipeline))
-        if not offres:
-            return jsonify({"error": "Offre non trouvée."}), 404
+            return jsonify(data), 200
 
-        offre = offres[0]
-        data = {
-            "id": str(offre["_id"]),
-            "titre": offre.get("titre", "Titre non spécifié"),
-            "description": offre.get("description", "Description non disponible"),
-            "localisation": offre.get("localisation", "Localisation non spécifiée"),
-            "departement": offre.get("departement", "Département non spécifié"),
-            "entreprise": offre.get("entreprise_nom"),
-            "date_creation": (offre.get("date_creation") or datetime.now(timezone.utc)).isoformat() + "Z",
-            "valide": offre.get("statut", "ouverte") == "ouverte"
-        }
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération de l'offre: {str(e)}")
+            return handle_mongo_error(e, "récupération d'une offre")
+    
+    elif request.method == 'PUT':
+        try:
+            db = current_app.mongo.db
+            logger.info(f"Tentative de modification de l'offre avec l'ID: {offre_id}")
+            
+            # Vérification du token et du rôle
+            token = request.headers.get("Authorization")
+            if not token:
+                logger.error("Token d'authentification manquant")
+                return jsonify({"error": "Token d'authentification manquant"}), 401
 
-        return jsonify(data), 200
+            payload = jwt_manager.verify_token(token)
+            if not payload or payload.get("role") != "recruteur":
+                logger.error(f"Accès non autorisé pour le token: {token[:10]}...")
+                return jsonify({"error": "Accès non autorisé"}), 403
 
-    except Exception as e:
-        return handle_mongo_error(e, "récupération d'une offre")
+            data = request.get_json()
+            if not data:
+                logger.error("Aucune donnée fournie pour la modification")
+                return jsonify({"error": "Aucune donnée fournie"}), 400
+
+            # Vérification de la validité de l'ID
+            if not ObjectId.is_valid(offre_id):
+                logger.error(f"ID invalide reçu: {offre_id}")
+                return jsonify({"error": "ID d'offre invalide."}), 400
+
+            # Vérification de l'existence de l'offre
+            offre = db.offres.find_one({"_id": ObjectId(offre_id)})
+            if not offre:
+                logger.error(f"Aucune offre trouvée avec l'ID: {offre_id}")
+                return jsonify({"error": "Offre non trouvée"}), 404
+
+            # Vérification que le recruteur est bien le propriétaire de l'offre
+            if str(offre.get("recruteur_id")) != payload.get("id"):
+                logger.error(f"Tentative de modification par un recruteur non autorisé. ID recruteur: {payload.get('id')}, ID propriétaire: {offre.get('recruteur_id')}")
+                return jsonify({"error": "Vous n'êtes pas autorisé à modifier cette offre"}), 403
+
+            # Préparation des données à mettre à jour
+            update_data = {
+                "date_maj": datetime.now(timezone.utc)
+            }
+
+            # Mise à jour des champs fournis
+            if "titre" in data:
+                update_data["titre"] = data["titre"]
+            if "description" in data:
+                update_data["description"] = data["description"]
+            if "localisation" in data:
+                update_data["localisation"] = data["localisation"]
+            if "departement" in data:
+                update_data["departement"] = data["departement"]
+            if "statut" in data:
+                update_data["statut"] = data["statut"]
+            if "questions" in data:
+                # Validation des questions
+                if not isinstance(data["questions"], list):
+                    return jsonify({"error": "Le champ questions doit être un tableau"}), 400
+
+                for question in data["questions"]:
+                    if not isinstance(question, str) or not question.strip():
+                        return jsonify({"error": "Chaque question doit être une chaîne de caractères non vide"}), 400
+
+                update_data["questions"] = data["questions"]
+
+            logger.info(f"Données à mettre à jour: {update_data}")
+
+            # Mise à jour dans la base de données
+            result = db.offres.update_one(
+                {"_id": ObjectId(offre_id)},
+                {"$set": update_data}
+            )
+
+            if result.modified_count == 0:
+                logger.warning(f"Aucune modification effectuée pour l'offre: {offre_id}")
+                return jsonify({"error": "Aucune modification effectuée"}), 400
+
+            # Récupération de l'offre mise à jour
+            updated_offre = db.offres.find_one({"_id": ObjectId(offre_id)})
+            
+            # Conversion des ObjectId en strings pour la réponse
+            updated_offre["_id"] = str(updated_offre["_id"])
+            updated_offre["entreprise_id"] = str(updated_offre["entreprise_id"])
+            updated_offre["recruteur_id"] = str(updated_offre["recruteur_id"])
+            updated_offre["date_creation"] = updated_offre["date_creation"].isoformat() + "Z"
+            updated_offre["date_maj"] = updated_offre["date_maj"].isoformat() + "Z"
+
+            logger.info(f"Offre mise à jour avec succès: {updated_offre['_id']}")
+            return jsonify(updated_offre), 200
+
+        except Exception as e:
+            logger.error(f"Erreur lors de la modification de l'offre: {str(e)}")
+            return handle_mongo_error(e, "modification d'une offre")
+    
+    elif request.method == 'DELETE':
+        try:
+            db = current_app.mongo.db
+            logger.info(f"Tentative de suppression de l'offre avec l'ID: {offre_id}")
+            
+            # Vérification du token et du rôle
+            token = request.headers.get("Authorization")
+            if not token:
+                logger.error("Token d'authentification manquant")
+                return jsonify({"error": "Token d'authentification manquant"}), 401
+
+            payload = jwt_manager.verify_token(token)
+            if not payload or payload.get("role") != "recruteur":
+                logger.error(f"Accès non autorisé pour le token: {token[:10]}...")
+                return jsonify({"error": "Accès non autorisé"}), 403
+
+            # Vérification de la validité de l'ID
+            try:
+                object_id = ObjectId(offre_id)
+                logger.info(f"ID converti en ObjectId: {object_id}")
+            except Exception as e:
+                logger.error(f"Erreur de conversion de l'ID en ObjectId: {str(e)}")
+                return jsonify({"error": "ID d'offre invalide."}), 400
+
+            # Vérification de l'existence de l'offre
+            offre = db.offres.find_one({"_id": object_id})
+            if not offre:
+                logger.error(f"Aucune offre trouvée avec l'ID: {offre_id}")
+                return jsonify({"error": "Offre non trouvée"}), 404
+
+            # Vérification que le recruteur est bien le propriétaire de l'offre
+            if str(offre.get("recruteur_id")) != payload.get("id"):
+                logger.error(f"Tentative de suppression par un recruteur non autorisé. ID recruteur: {payload.get('id')}, ID propriétaire: {offre.get('recruteur_id')}")
+                return jsonify({"error": "Vous n'êtes pas autorisé à supprimer cette offre"}), 403
+
+            # Suppression de l'offre
+            result = db.offres.delete_one({"_id": object_id})
+
+            if result.deleted_count == 0:
+                logger.warning(f"Aucune offre supprimée avec l'ID: {offre_id}")
+                return jsonify({"error": "Aucune offre supprimée"}), 400
+
+            logger.info(f"Offre supprimée avec succès: {offre_id}")
+            return jsonify({"message": "Offre supprimée avec succès"}), 200
+
+        except Exception as e:
+            logger.error(f"Erreur lors de la suppression de l'offre: {str(e)}")
+            return handle_mongo_error(e, "suppression d'une offre")
 
 @offres_emploi_bp.route("/candidatures", methods=["POST"])
 @require_auth(role="candidat")

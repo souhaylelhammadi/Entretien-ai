@@ -1,9 +1,11 @@
 from flask import Blueprint, jsonify, request, current_app
 from bson import ObjectId
-from auth_middleware import require_auth, recruiter_only
+from datetime import datetime, timezone
+import logging
+from pymongo.errors import PyMongoError
+from auth.jwt_manager import jwt_manager
 from pydantic import BaseModel
 from typing import List, Optional
-import logging
 from flask_cors import cross_origin
 from datetime import datetime, timedelta
 
@@ -49,9 +51,9 @@ class Interview(BaseModel):
     status: str = "Planifié"
 
 @dashboard_bp.route("/offres-emploi", methods=["GET"])
-@recruiter_only
+@jwt_manager.require_auth(role="recruteur")
 @cross_origin()
-def get_offres_emploi(*args):
+def get_offres_emploi(auth_payload):
     """Retrieve job offers for the authenticated recruiter with pagination."""
     try:
         page = int(request.args.get("page", 1))
@@ -59,33 +61,38 @@ def get_offres_emploi(*args):
         skip = (page - 1) * limit
 
         if "offres" not in current_app.mongo.db.list_collection_names():
-            logger.warning(f"Collection 'offres' not found for user {request.user['id']}")
+            logger.warning(f"Collection 'offres' not found for user {auth_payload['sub']}")
             return jsonify({"offres": [], "page": page, "limit": limit, "total": 0}), 200
 
-        query = {"recruteur_id": request.user["id"]}
+        query = {"recruteur_id": auth_payload['sub']}
         total = current_app.mongo.db.offres.count_documents(query)
         offres = current_app.mongo.db.offres.find(query).skip(skip).limit(limit)
 
-        offres_list = [
-            JobOffer(
-                **{
-                    **offre,
-                    "_id": str(offre["_id"]),
-                    "created_at": offre["created_at"].isoformat() if offre.get("created_at") else None,
-                }
-            ).dict()
-            for offre in offres
-        ]
-        logger.info(f"Fetched {len(offres_list)} job offers for user {request.user['id']} via {request.method} {request.path}")
+        offres_list = []
+        for offre in offres:
+            offre_data = {
+                "id": str(offre["_id"]),
+                "titre": offre.get("titre", "Titre non spécifié"),
+                "description": offre.get("description", "Description non disponible"),
+                "localisation": offre.get("localisation", "Localisation non spécifiée"),
+                "departement": offre.get("departement", "Département non spécifié"),
+                "entreprise": offre.get("entreprise_nom", "Entreprise non spécifiée"),
+                "date_creation": offre.get("date_creation", datetime.now()).isoformat() if isinstance(offre.get("date_creation"), datetime) else datetime.now().isoformat(),
+                "valide": offre.get("statut", "ouverte") == "ouverte",
+                "questions": offre.get("questions", [])
+            }
+            offres_list.append(offre_data)
+
+        logger.info(f"Fetched {len(offres_list)} job offers for user {auth_payload['sub']} via {request.method} {request.path}")
         return jsonify({"offres": offres_list, "page": page, "limit": limit, "total": total}), 200
     except Exception as e:
-        logger.error(f"Error fetching job offers for user {request.user['id']}: {str(e)}")
+        logger.error(f"Error fetching job offers for user {auth_payload['sub']}: {str(e)}")
         return jsonify({"error": "Erreur serveur lors de la récupération des offres"}), 500
 
 @dashboard_bp.route("/candidates", methods=["GET"])
-@recruiter_only
+@jwt_manager.require_auth(role="recruteur")
 @cross_origin()
-def get_candidates(*args):
+def get_candidates(auth_payload):
     """Retrieve candidates for the authenticated recruiter with pagination."""
     try:
         page = int(request.args.get("page", 1))
@@ -93,10 +100,10 @@ def get_candidates(*args):
         skip = (page - 1) * limit
 
         if "candidates" not in current_app.mongo.db.list_collection_names():
-            logger.warning(f"Collection 'candidates' not found for user {request.user['id']}")
+            logger.warning(f"Collection 'candidates' not found for user {auth_payload['sub']}")
             return jsonify({"candidates": [], "page": page, "limit": limit, "total": 0}), 200
 
-        query = {"recruteur_id": request.user["id"]}
+        query = {"recruteur_id": auth_payload['sub']}
         total = current_app.mongo.db.candidates.count_documents(query)
         candidates = current_app.mongo.db.candidates.find(query).skip(skip).limit(limit)
         candidates_list = [
@@ -117,16 +124,16 @@ def get_candidates(*args):
             ).dict()
             for candidate in candidates
         ]
-        logger.info(f"Fetched {len(candidates_list)} candidates for user {request.user['id']} via {request.method} {request.path}")
+        logger.info(f"Fetched {len(candidates_list)} candidates for user {auth_payload['sub']} via {request.method} {request.path}")
         return jsonify({"candidates": candidates_list, "page": page, "limit": limit, "total": total}), 200
     except Exception as e:
-        logger.error(f"Error fetching candidates for user {request.user['id']}: {str(e)}")
+        logger.error(f"Error fetching candidates for user {auth_payload['sub']}: {str(e)}")
         return jsonify({"error": "Erreur serveur lors de la récupération des candidats"}), 500
 
 @dashboard_bp.route("/interviews", methods=["GET"])
-@recruiter_only
+@jwt_manager.require_auth(role="recruteur")
 @cross_origin()
-def get_interviews(*args):
+def get_interviews(auth_payload):
     """Retrieve interviews for the authenticated recruiter with pagination."""
     try:
         page = int(request.args.get("page", 1))
@@ -134,10 +141,10 @@ def get_interviews(*args):
         skip = (page - 1) * limit
 
         if "interviews" not in current_app.mongo.db.list_collection_names():
-            logger.warning(f"Collection 'interviews' not found for user {request.user['id']}")
+            logger.warning(f"Collection 'interviews' not found for user {auth_payload['sub']}")
             return jsonify({"interviews": [], "page": page, "limit": limit, "total": 0}), 200
 
-        query = {"recruteur_id": request.user["id"]}
+        query = {"recruteur_id": auth_payload['sub']}
         total = current_app.mongo.db.interviews.count_documents(query)
         interviews = current_app.mongo.db.interviews.find(query).skip(skip).limit(limit)
         interviews_list = [
@@ -152,21 +159,21 @@ def get_interviews(*args):
             ).dict()
             for interview in interviews
         ]
-        logger.info(f"Fetched {len(interviews_list)} interviews for user {request.user['id']} via {request.method} {request.path}")
+        logger.info(f"Fetched {len(interviews_list)} interviews for user {auth_payload['sub']} via {request.method} {request.path}")
         return jsonify({"interviews": interviews_list, "page": page, "limit": limit, "total": total}), 200
     except Exception as e:
-        logger.error(f"Error fetching interviews for user {request.user['id']}: {str(e)}")
+        logger.error(f"Error fetching interviews for user {auth_payload['sub']}: {str(e)}")
         return jsonify({"error": "Erreur serveur lors de la récupération des entretiens"}), 500
 
 @dashboard_bp.route("/data-graph", methods=["GET"])
-@recruiter_only
+@jwt_manager.require_auth(role="recruteur")
 @cross_origin()
-def get_graph_data(*args):
+def get_graph_data(auth_payload):
     """Retrieve data for graphs showing offers, candidates, and interviews."""
     try:
         # Get date range from query params or default to current month
         period = request.args.get("period", "month")
-        recruteur_id = request.user["id"]
+        recruteur_id = auth_payload['sub']
         
         # Calculate date range based on period
         now = datetime.now()
@@ -336,8 +343,49 @@ def get_graph_data(*args):
         logger.info(f"Successfully generated graph data for recruiter {recruteur_id}")
         return jsonify(graph_data), 200
     except Exception as e:
-        logger.error(f"Error fetching graph data for user {request.user['id']}: {str(e)}")
+        logger.error(f"Error fetching graph data for user {auth_payload['sub']}: {str(e)}")
         return jsonify({"error": "Erreur serveur lors de la récupération des données pour les graphiques"}), 500
+
+@dashboard_bp.route('/dashboard', methods=['GET'])
+@jwt_manager.require_auth(role="recruteur")
+def get_dashboard(auth_payload):
+    try:
+        db = current_app.mongo.db
+        recruiter_id = auth_payload['sub']
+        
+        # Get recruiter's offers
+        offers = list(db.offres.find({"recruteur_id": ObjectId(recruiter_id)}))
+        
+        # Get applications for these offers
+        offer_ids = [offer['_id'] for offer in offers]
+        applications = list(db.candidatures.find({"offre_id": {"$in": offer_ids}}))
+        
+        # Get candidates for these applications
+        candidate_ids = [app['user_id'] for app in applications]
+        candidates = list(db.utilisateurs.find({"_id": {"$in": candidate_ids}}))
+        
+        # Format response
+        dashboard_data = {
+            "offers": len(offers),
+            "applications": len(applications),
+            "candidates": len(candidates),
+            "recent_applications": [
+                {
+                    "id": str(app['_id']),
+                    "offer_id": str(app['offre_id']),
+                    "candidate_id": str(app['user_id']),
+                    "status": app.get('status', 'pending'),
+                    "date": app.get('date_postulation', datetime.now(timezone.utc)).isoformat()
+                }
+                for app in applications[:5]  # Get only the 5 most recent applications
+            ]
+        }
+        
+        return jsonify(dashboard_data), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching dashboard data: {str(e)}")
+        return jsonify({"error": "Error fetching dashboard data"}), 500
 
 # Create MongoDB indexes
 def init_indexes():

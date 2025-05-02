@@ -1,18 +1,17 @@
 from flask import Blueprint, jsonify, request, current_app
 from bson import ObjectId
-from auth_middleware import require_auth
 from pydantic import BaseModel, validator, Field
 from typing import List, Optional, Dict
 import logging
 from flask_cors import cross_origin
 from datetime import datetime
 import re
-from app.auth_middleware import recruiter_only
+from app.auth.jwt_manager import jwt_manager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-profile_bp = Blueprint("profile", __name__, url_prefix="/api/recruteur")
+profile_bp = Blueprint("profile", __name__, url_prefix="/api/profile")
 
 # Pydantic models for data validation
 class RecruiterProfile(BaseModel):
@@ -64,192 +63,123 @@ class ProfileUpdateRequest(BaseModel):
 def get_user_from_token(token):
     """Extract user information from JWT token."""
     # Import the function from Offres.py to avoid code duplication
-    from app.routes.recruteur.Offres import get_user_from_token as get_user
+    from server.app.routes.recruteur.Offres_recruteur import get_user_from_token as get_user
     return get_user(token)
     
-@profile_bp.route("/profile", methods=["GET"])
-@cross_origin()
-@recruiter_only
-def get_profile():
-    """
-    Route pour récupérer le profil du recruteur authentifié
-    """
+@profile_bp.route("/", methods=["GET"])
+@jwt_manager.require_auth(role="recruteur")
+def get_profile(payload):
+    """Get recruiter profile information."""
     try:
-        # L'utilisateur est déjà authentifié via le décorateur recruiter_only
-        user_id = request.user['id']
-        
-        # Récupérer les données de l'utilisateur
+        user_id = payload["sub"]
         user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(user_id)})
         
         if not user:
-            logger.warning(f"Utilisateur non trouvé avec ID: {user_id}")
-            return jsonify({"error": "Utilisateur non trouvé"}), 404
-            
-        # Formater la réponse
+            logger.warning(f"Utilisateur introuvable: {user_id}")
+            return jsonify({"message": "Utilisateur non trouvé"}), 404
+
         profile_data = {
             "id": str(user["_id"]),
-            "nom": user.get("nom", ""),
-            "prenom": user.get("prenom", ""),
-            "email": user.get("email", ""),
-            "telephone": user.get("telephone", ""),
-            "entreprise": user.get("entreprise", ""),
-            "poste": user.get("poste", ""),
-            "photo": user.get("photo", ""),
-            "date_inscription": user.get("date_inscription", datetime.utcnow()).isoformat()
+            "nom": user["nom"],
+            "email": user["email"],
+            "telephone": user["telephone"],
+            "role": user["role"]
         }
-        
-        # Ajouter des champs supplémentaires si présents
-        if "adresse" in user:
-            profile_data["adresse"] = user["adresse"]
-            
-        if "preferences" in user:
-            profile_data["preferences"] = user["preferences"]
-            
-        logger.info(f"Profil récupéré avec succès pour l'utilisateur: {user_id}")
-        return jsonify({"success": True, "profile": profile_data}), 200
-        
-    except Exception as e:
-        logger.error(f"Erreur lors de la récupération du profil: {str(e)}", exc_info=True)
-        return jsonify({"error": "Erreur serveur", "details": str(e)}), 500
 
-@profile_bp.route("/profile", methods=["PUT"])
-@cross_origin()
-@recruiter_only
-def update_profile():
-    """
-    Route pour mettre à jour le profil du recruteur authentifié
-    """
-    try:
-        # L'utilisateur est déjà authentifié via le décorateur recruiter_only
-        user_id = request.user['id']
-        
-        # Récupérer les données du corps de la requête
-        data = request.get_json()
-        
-        if not data:
-            logger.warning(f"Données manquantes pour la mise à jour du profil: {user_id}")
-            return jsonify({"error": "Données manquantes"}), 400
-            
-        # Préparer les données à mettre à jour
-        update_data = {}
-        
-        # Champs autorisés à être mis à jour
-        allowed_fields = [
-            "nom", "prenom", "telephone", "entreprise", "poste", 
-            "photo", "adresse", "preferences"
-        ]
-        
-        for field in allowed_fields:
-            if field in data:
-                update_data[field] = data[field]
+        if user["role"] == "recruteur":
+            recruteur = current_app.mongo.db.recruteurs.find_one({"utilisateur_id": ObjectId(user_id)})
+            if recruteur:
+                profile_data["poste"] = recruteur.get("poste", "")
+                profile_data["entreprise_id"] = str(recruteur.get("entreprise_id", ""))
                 
-        # Ajouter la date de mise à jour
-        update_data["date_maj"] = datetime.utcnow()
-        
-        # Effectuer la mise à jour
-        result = current_app.mongo.db.utilisateurs.update_one(
-            {"_id": ObjectId(user_id)},
+                entreprise = current_app.mongo.db.entreprises.find_one({"_id": recruteur.get("entreprise_id")})
+                if entreprise:
+                    profile_data["entreprise"] = {
+                        "id": str(entreprise["_id"]),
+                        "nom": entreprise["nom"],
+                        "secteur": entreprise.get("secteur", ""),
+                        "taille": entreprise.get("taille", "")
+                    }
+
+        return jsonify(profile_data), 200
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération du profil: {str(e)}")
+        return jsonify({"message": "Erreur serveur"}), 500
+
+@profile_bp.route("/", methods=["PUT"])
+@jwt_manager.require_auth(role="recruteur")
+def update_profile(auth_payload):
+    """Update recruiter profile information."""
+    try:
+        data = request.get_json()
+        db = current_app.mongo.db
+        recruiter_id = auth_payload['sub']
+
+        # Validate allowed fields
+        allowed_fields = ['firstName', 'lastName', 'telephone', 'entreprise']
+        update_data = {k: v for k, v in data.items() if k in allowed_fields and v}
+
+        if not update_data:
+            return jsonify({"error": "Aucune donnée à mettre à jour"}), 400
+
+        result = db.utilisateurs.update_one(
+            {"_id": ObjectId(recruiter_id)},
             {"$set": update_data}
         )
-        
-        if result.modified_count == 0:
-            logger.warning(f"Aucune modification apportée au profil: {user_id}")
-            return jsonify({"warning": "Aucune modification apportée"}), 200
-            
-        logger.info(f"Profil mis à jour avec succès pour l'utilisateur: {user_id}")
-        return jsonify({
-            "success": True, 
-            "message": "Profil mis à jour avec succès",
-            "updated_fields": list(update_data.keys())
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Erreur lors de la mise à jour du profil: {str(e)}", exc_info=True)
-        return jsonify({"error": "Erreur serveur", "details": str(e)}), 500
 
-@profile_bp.route("/change-password", methods=["POST"])
-@cross_origin()
-@recruiter_only
-def change_password():
-    """
-    Route pour modifier le mot de passe du recruteur authentifié
-    """
-    try:
-        # L'utilisateur est déjà authentifié via le décorateur recruiter_only
-        user_id = request.user['id']
-        
-        # Récupérer les données du corps de la requête
-        data = request.get_json()
-        
-        if not data:
-            logger.warning(f"Données manquantes pour le changement de mot de passe: {user_id}")
-            return jsonify({"error": "Données manquantes"}), 400
-            
-        # Vérifier que tous les champs requis sont présents
-        required_fields = ["current_password", "new_password"]
-        for field in required_fields:
-            if field not in data:
-                logger.warning(f"Champ manquant pour le changement de mot de passe: {field}")
-                return jsonify({"error": f"Le champ '{field}' est requis"}), 400
-                
-        current_password = data["current_password"]
-        new_password = data["new_password"]
-        
-        # Vérifier que le nouveau mot de passe est suffisamment fort
-        if len(new_password) < 8:
-            logger.warning("Mot de passe trop court")
-            return jsonify({"error": "Le nouveau mot de passe doit contenir au moins 8 caractères"}), 400
-            
-        # Récupérer l'utilisateur depuis la base de données
-        user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(user_id)})
-        
-        if not user:
-            logger.warning(f"Utilisateur non trouvé pour le changement de mot de passe: {user_id}")
-            return jsonify({"error": "Utilisateur non trouvé"}), 404
-            
-        # Vérifier que le mot de passe actuel est correct
-        from werkzeug.security import check_password_hash, generate_password_hash
-        
-        if not check_password_hash(user.get("password", ""), current_password):
-            logger.warning(f"Mot de passe actuel incorrect pour l'utilisateur: {user_id}")
-            return jsonify({"error": "Mot de passe actuel incorrect"}), 401
-            
-        # Hasher le nouveau mot de passe
-        hashed_password = generate_password_hash(new_password)
-        
-        # Mettre à jour le mot de passe dans la base de données
-        result = current_app.mongo.db.utilisateurs.update_one(
-            {"_id": ObjectId(user_id)},
-            {"$set": {
-                "password": hashed_password,
-                "date_maj": datetime.utcnow()
-            }}
-        )
-        
         if result.modified_count == 0:
-            logger.warning(f"Échec de la mise à jour du mot de passe pour l'utilisateur: {user_id}")
-            return jsonify({"error": "Échec de la mise à jour du mot de passe"}), 500
-            
-        logger.info(f"Mot de passe mis à jour avec succès pour l'utilisateur: {user_id}")
-        return jsonify({
-            "success": True,
-            "message": "Mot de passe mis à jour avec succès"
-        }), 200
-        
+            return jsonify({"error": "Aucune modification effectuée"}), 400
+
+        return jsonify({"message": "Profil mis à jour avec succès"}), 200
+
     except Exception as e:
-        logger.error(f"Erreur lors du changement de mot de passe: {str(e)}", exc_info=True)
-        return jsonify({"error": "Erreur serveur", "details": str(e)}), 500
+        logger.error(f"Error updating recruiter profile: {str(e)}")
+        return jsonify({"error": "Erreur serveur lors de la mise à jour du profil"}), 500
+
+@profile_bp.route("/password", methods=["PUT"])
+@jwt_manager.require_auth(role="recruteur")
+def update_password(auth_payload):
+    """Update recruiter password."""
+    try:
+        data = request.get_json()
+        if not data or 'currentPassword' not in data or 'newPassword' not in data:
+            return jsonify({"error": "Mot de passe actuel et nouveau mot de passe requis"}), 400
+
+        db = current_app.mongo.db
+        recruiter_id = auth_payload['sub']
+
+        recruiter = db.utilisateurs.find_one({"_id": ObjectId(recruiter_id)})
+        if not recruiter:
+            return jsonify({"error": "Recruteur non trouvé"}), 404
+
+        if recruiter['password'] != data['currentPassword']:
+            return jsonify({"error": "Mot de passe actuel incorrect"}), 401
+
+        result = db.utilisateurs.update_one(
+            {"_id": ObjectId(recruiter_id)},
+            {"$set": {"password": data['newPassword']}}
+        )
+
+        if result.modified_count == 0:
+            return jsonify({"error": "Aucune modification effectuée"}), 400
+
+        return jsonify({"message": "Mot de passe mis à jour avec succès"}), 200
+
+    except Exception as e:
+        logger.error(f"Error updating password: {str(e)}")
+        return jsonify({"error": "Erreur serveur lors de la mise à jour du mot de passe"}), 500
 
 @profile_bp.route("/entreprise", methods=["GET"])
 @cross_origin()
-@recruiter_only
-def get_entreprise():
+@jwt_manager.require_auth(role="recruteur")
+def get_entreprise(auth_payload):
     """
     Route pour récupérer les informations de l'entreprise du recruteur authentifié
     """
     try:
         # L'utilisateur est déjà authentifié via le décorateur recruiter_only
-        user_id = request.user['id']
+        user_id = auth_payload['sub']
         
         # Récupérer l'utilisateur depuis la base de données
         user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(user_id)})
@@ -286,14 +216,14 @@ def get_entreprise():
 
 @profile_bp.route("/entreprise", methods=["PUT"])
 @cross_origin()
-@recruiter_only
-def update_entreprise():
+@jwt_manager.require_auth(role="recruteur")
+def update_entreprise(auth_payload):
     """
     Route pour mettre à jour les informations de l'entreprise du recruteur authentifié
     """
     try:
         # L'utilisateur est déjà authentifié via le décorateur recruiter_only
-        user_id = request.user['id']
+        user_id = auth_payload['sub']
         
         # Récupérer les données du corps de la requête
         data = request.get_json()
@@ -381,4 +311,70 @@ def update_entreprise():
             
     except Exception as e:
         logger.error(f"Erreur lors de la mise à jour de l'entreprise: {str(e)}", exc_info=True)
-        return jsonify({"error": "Erreur serveur", "details": str(e)}), 500 
+        return jsonify({"error": "Erreur serveur", "details": str(e)}), 500
+
+@profile_bp.route("/profile", methods=["GET"])
+def get_recruiter_profile(payload):
+    """Get recruiter profile with detailed information."""
+    try:
+        if payload["role"] != "recruteur":
+            logger.warning(f"Accès non autorisé: {payload['role']}")
+            return jsonify({"message": "Accès non autorisé"}), 403
+
+        user_id = payload["sub"]
+        user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(user_id)})
+        
+        if not user:
+            logger.warning(f"Utilisateur introuvable: {user_id}")
+            return jsonify({"message": "Utilisateur non trouvé"}), 404
+
+        recruteur = current_app.mongo.db.recruteurs.find_one({"utilisateur_id": ObjectId(user_id)})
+        if not recruteur:
+            logger.warning(f"Profil recruteur introuvable pour l'utilisateur: {user_id}")
+            return jsonify({"message": "Profil recruteur non trouvé"}), 404
+
+        entreprise = current_app.mongo.db.entreprises.find_one({"_id": recruteur.get("entreprise_id")})
+        if not entreprise:
+            logger.warning(f"Entreprise introuvable pour le recruteur: {user_id}")
+            return jsonify({"message": "Entreprise non trouvée"}), 404
+
+        # Get recruiter's job offers
+        offres = list(current_app.mongo.db.offres.find(
+            {"_id": {"$in": recruteur.get("offres_ids", [])}},
+            {"_id": 1, "titre": 1, "description": 1, "date_creation": 1, "status": 1}
+        ))
+
+        profile_data = {
+            "id": str(user["_id"]),
+            "nom": user["nom"],
+            "email": user["email"],
+            "telephone": user["telephone"],
+            "poste": recruteur.get("poste", "Recruteur"),
+            "entreprise": {
+                "id": str(entreprise["_id"]),
+                "nom": entreprise["nom"],
+                "secteur": entreprise.get("secteur", ""),
+                "taille": entreprise.get("taille", ""),
+                "description": entreprise.get("description", ""),
+                "adresse": entreprise.get("adresse", ""),
+                "site_web": entreprise.get("site_web", "")
+            },
+            "offres": [{
+                "id": str(offre["_id"]),
+                "titre": offre["titre"],
+                "description": offre["description"],
+                "date_creation": offre["date_creation"],
+                "status": offre["status"]
+            } for offre in offres],
+            "statistiques": {
+                "total_offres": len(offres),
+                "offres_actives": len([o for o in offres if o["status"] == "active"]),
+                "offres_cloturees": len([o for o in offres if o["status"] == "closed"])
+            }
+        }
+
+        return jsonify(profile_data), 200
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération du profil recruteur: {str(e)}")
+        return jsonify({"message": "Erreur serveur"}), 500 

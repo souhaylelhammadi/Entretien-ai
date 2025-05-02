@@ -4,30 +4,14 @@ export const addJob = createAsyncThunk(
   "addjob/addJob",
   async ({ jobData, token }, { rejectWithValue, dispatch }) => {
     try {
-      // Logs détaillés pour le débogage
-      console.log("=============== DÉBUT ADDJOBJOB THUNK ===============");
-      console.log("Type de token:", typeof token);
-      console.log(
-        "Valeur du token (10 premiers car.):",
-        token ? token.substring(0, 10) + "..." : "null/undefined"
-      );
-
+      console.log("=== ADDJOB THUNK ===");
       if (!token || typeof token !== "string" || token.trim() === "") {
-        console.error("Token invalide - Détails:", {
-          estNull: token === null,
-          estUndefined: token === undefined,
-          longueur: token ? token.length : 0,
-          estVide: token === "",
-          type: typeof token,
-        });
-        throw new Error("Aucun jeton d'authentification valide fourni");
+        console.error("Invalid token:", { type: typeof token, value: token });
+        throw new Error("No valid authentication token provided");
       }
 
-      // Vérification et validation du format des données
-      console.log("Structure de jobData:", Object.keys(jobData));
-      console.log("Données complètes à envoyer:", JSON.stringify(jobData));
+      console.log("Job data:", JSON.stringify(jobData, null, 2));
 
-      // Vérification des champs obligatoires selon le backend
       const requiredFields = [
         "titre",
         "description",
@@ -42,31 +26,23 @@ export const addJob = createAsyncThunk(
           !jobData[field] ||
           (typeof jobData[field] === "string" && !jobData[field].trim())
         ) {
-          console.error(`Champ obligatoire manquant: ${field}`);
-          throw new Error(`Le champ ${field} est obligatoire`);
+          console.error(`Missing required field: ${field}`);
+          throw new Error(`Field ${field} is required`);
         }
       }
 
-      // Vérification spécifique pour le tableau de compétences
       if (
         !Array.isArray(jobData.competences_requises) ||
         jobData.competences_requises.length === 0
       ) {
-        console.error("Compétences requises manquantes");
-        throw new Error("Au moins une compétence requise est nécessaire");
+        console.error("Missing required skills");
+        throw new Error("At least one required skill is needed");
       }
 
-      // Préparation du token pour la requête
       const formattedToken = token.startsWith("Bearer ")
         ? token
         : `Bearer ${token}`;
-      console.log(
-        "Token formaté (10 premiers car.):",
-        formattedToken.substring(0, 16) + "..."
-      );
 
-      // Configuration et envoi de la requête
-      console.log("Envoi de la requête à l'API...");
       const response = await fetch("http://localhost:5000/api/offres-emploi", {
         method: "POST",
         headers: {
@@ -76,34 +52,23 @@ export const addJob = createAsyncThunk(
         body: JSON.stringify(jobData),
       });
 
-      console.log("Statut de la réponse:", response.status);
-      console.log("Statut texte:", response.statusText);
-
       if (response.status === 401) {
-        console.error("Session expirée (401 Unauthorized)");
+        console.error("401: Session expired");
         dispatch({ type: "auth/logout" });
-        throw new Error("Session expirée. Veuillez vous reconnecter.");
+        throw new Error("Session expired. Please log in again.");
       }
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("Erreur reçue du serveur:", errorData);
-        throw new Error(
-          errorData.message || errorData.error || "Échec de l'ajout de l'offre"
-        );
+        console.error("Server error:", errorData);
+        throw new Error(errorData.error || "Failed to add job offer");
       }
 
       const responseData = await response.json();
-      console.log("Réponse du serveur:", responseData);
-      console.log("=============== FIN ADDJOBJOB THUNK ===============");
+      console.log("Server response:", responseData);
       return responseData;
     } catch (err) {
-      console.error("Erreur lors de l'ajout d'une offre:", err);
-      console.error("Message d'erreur:", err.message);
-      console.error("Stack d'erreur:", err.stack);
-      console.log(
-        "=============== FIN ADDJOBJOB THUNK (AVEC ERREUR) ==============="
-      );
+      console.error("Error in addJob:", err.message);
       return rejectWithValue(err.message);
     }
   }
@@ -113,67 +78,47 @@ export const editJob = createAsyncThunk(
   "addjob/editJob",
   async ({ jobId, jobData, token }, { rejectWithValue, dispatch }) => {
     try {
-      console.log("=============== DÉBUT EDITJOB THUNK ===============");
-
-      // Valider les paramètres
+      console.log("=== EDITJOB THUNK ===");
       if (!token || typeof token !== "string" || token.trim() === "") {
-        throw new Error("Aucun jeton d'authentification valide fourni");
+        console.error("Invalid token:", { type: typeof token, value: token });
+        throw new Error("No valid authentication token provided");
       }
 
-      // Vérification et conversion de l'ID de l'offre
-      if (jobId) {
-        // Convertir jobId en chaîne si ce n'est pas déjà le cas
-        jobId = String(jobId);
-      }
-
+      jobId = String(jobId);
       if (!jobId || jobId === "undefined" || jobId.trim() === "") {
-        console.error("ID d'offre invalide:", jobId);
-        throw new Error("Impossible de modifier l'offre: ID invalide");
+        console.error("Invalid job ID:", jobId);
+        throw new Error("Cannot edit job: Invalid ID");
       }
 
-      console.log("Données à mettre à jour:", JSON.stringify(jobData));
-      console.log("ID de l'offre:", jobId);
-      console.log("Type de l'ID:", typeof jobId);
-      console.log("Type de token:", typeof token);
-      console.log("Token (10 premiers car.):", token.substring(0, 10) + "...");
+      console.log("Job ID:", jobId, "Data:", JSON.stringify(jobData, null, 2));
 
-      // Vérification des champs obligatoires selon le backend pour la mise à jour
-      const requiredFieldsForUpdate = [
+      const requiredFields = [
         "titre",
         "description",
         "localisation",
         "departement",
       ];
-      for (const field of requiredFieldsForUpdate) {
+      for (const field of requiredFields) {
         if (
           !jobData[field] ||
           (typeof jobData[field] === "string" && !jobData[field].trim())
         ) {
-          console.error(
-            `Champ obligatoire manquant pour la mise à jour: ${field}`
-          );
-          throw new Error(
-            `Le champ ${field} est obligatoire pour la mise à jour`
-          );
+          console.error(`Missing required field: ${field}`);
+          throw new Error(`Field ${field} is required`);
         }
       }
 
-      // Vérification spécifique pour le tableau de compétences
       if (
         !Array.isArray(jobData.competences_requises) ||
         jobData.competences_requises.length === 0
       ) {
-        console.error("Compétences requises manquantes");
-        throw new Error("Au moins une compétence requise est nécessaire");
+        console.error("Missing required skills");
+        throw new Error("At least one required skill is needed");
       }
 
       const formattedToken = token.startsWith("Bearer ")
         ? token
         : `Bearer ${token}`;
-
-      console.log(
-        `Envoi de la requête PUT à http://localhost:5000/api/offres-emploi/${jobId}`
-      );
 
       const response = await fetch(
         `http://localhost:5000/api/offres-emploi/${jobId}`,
@@ -187,35 +132,23 @@ export const editJob = createAsyncThunk(
         }
       );
 
-      console.log("Statut de la réponse:", response.status);
-      console.log("Statut texte:", response.statusText);
-
       if (response.status === 401) {
+        console.error("401: Session expired");
         dispatch({ type: "auth/logout" });
-        throw new Error("Session expirée. Veuillez vous reconnecter.");
+        throw new Error("Session expired. Please log in again.");
       }
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("Erreur reçue du serveur:", errorData);
-        throw new Error(
-          errorData.message ||
-            errorData.error ||
-            "Échec de la modification de l'offre"
-        );
+        console.error("Server error:", errorData);
+        throw new Error(errorData.error || "Failed to edit job offer");
       }
 
       const responseData = await response.json();
-      console.log("Réponse du serveur:", responseData);
-      console.log("=============== FIN EDITJOB THUNK ===============");
+      console.log("Server response:", responseData);
       return responseData;
     } catch (err) {
-      console.error("Erreur lors de la modification d'une offre:", err);
-      console.error("Message d'erreur:", err.message);
-      console.error("Stack d'erreur:", err.stack);
-      console.log(
-        "=============== FIN EDITJOB THUNK (AVEC ERREUR) ==============="
-      );
+      console.error("Error in editJob:", err.message);
       return rejectWithValue(err.message);
     }
   }
@@ -225,46 +158,50 @@ export const deleteJob = createAsyncThunk(
   "addjob/deleteJob",
   async ({ jobId, token }, { rejectWithValue, dispatch }) => {
     try {
-      console.log("=============== DÉBUT DELETEJOB THUNK ===============");
-
-      // Valider token
+      console.log("=== DELETEJOB THUNK ===");
       if (!token || typeof token !== "string" || token.trim() === "") {
-        throw new Error("Aucun jeton d'authentification valide fourni");
+        console.error("Invalid token:", { type: typeof token, value: token });
+        throw new Error("No valid authentication token provided");
       }
 
-      // Valider ID
-      if (!jobId || typeof jobId !== "string" || jobId === "undefined") {
-        console.error("ID d'offre invalide pour suppression:", jobId);
-        throw new Error("Impossible de supprimer l'offre: ID invalide");
+      jobId = String(jobId);
+      if (!jobId || jobId === "undefined" || jobId.trim() === "") {
+        console.error("Invalid job ID:", jobId);
+        throw new Error("Cannot delete job: Invalid ID");
       }
 
-      console.log("Suppression de l'offre ID:", jobId);
+      console.log("Deleting job ID:", jobId);
+
+      const formattedToken = token.startsWith("Bearer ")
+        ? token
+        : `Bearer ${token}`;
 
       const response = await fetch(
         `http://localhost:5000/api/offres-emploi/${jobId}`,
         {
           method: "DELETE",
           headers: {
-            Authorization: token.startsWith("Bearer ")
-              ? token
-              : `Bearer ${token}`,
+            Authorization: formattedToken,
           },
         }
       );
+
       if (response.status === 401) {
+        console.error("401: Session expired");
         dispatch({ type: "auth/logout" });
-        throw new Error("Session expirée. Veuillez vous reconnecter.");
+        throw new Error("Session expired. Please log in again.");
       }
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.message ||
-            errorData.error ||
-            "Échec de la suppression de l'offre"
-        );
+        console.error("Server error:", errorData);
+        throw new Error(errorData.error || "Failed to delete job offer");
       }
+
+      console.log("Job deleted successfully");
       return jobId;
     } catch (err) {
+      console.error("Error in deleteJob:", err.message);
       return rejectWithValue(err.message);
     }
   }
@@ -277,15 +214,15 @@ const addjobsSlice = createSlice({
     isEditingJob: null,
     loading: false,
     newJob: {
-      title: "",
-      department: "",
-      location: "",
+      titre: "",
+      departement: "",
+      localisation: "",
       description: "",
-      requirements: [],
+      competences_requises: [],
       status: "open",
     },
     alert: { show: false, type: "", message: "" },
-    sortField: "title",
+    sortField: "titre",
     sortDirection: "asc",
   },
   reducers: {
@@ -294,24 +231,16 @@ const addjobsSlice = createSlice({
     },
     setIsEditingJob: (state, action) => {
       const { jobId, jobData } = action.payload || {};
-
-      // Vérifier et valider jobId
-      if (jobId && typeof jobId === "string" && jobId !== "undefined") {
-        state.isEditingJob = jobId;
-        console.log("ID d'offre stocké pour modification:", jobId);
-      } else {
-        state.isEditingJob = null;
-        console.log("Mode édition désactivé - ID invalide ou null:", jobId);
-      }
+      state.isEditingJob = jobId ? String(jobId) : null;
+      console.log("Edit mode:", state.isEditingJob);
 
       if (jobData) {
         state.newJob = {
-          title: jobData.title || jobData.titre || "",
-          department: jobData.department || jobData.departement || "",
-          location: jobData.location || jobData.localisation || "",
+          titre: jobData.titre || "",
+          departement: jobData.departement || "",
+          localisation: jobData.localisation || "",
           description: jobData.description || "",
-          requirements:
-            jobData.requirements || jobData.competences_requises || [],
+          competences_requises: jobData.competences_requises || [],
           status: jobData.status || "open",
         };
       }
@@ -320,14 +249,14 @@ const addjobsSlice = createSlice({
       state.newJob = { ...state.newJob, ...action.payload };
     },
     addRequirement: (state) => {
-      state.newJob.requirements.push("");
+      state.newJob.competences_requises.push("");
     },
     removeRequirement: (state, action) => {
-      state.newJob.requirements.splice(action.payload, 1);
+      state.newJob.competences_requises.splice(action.payload, 1);
     },
     updateRequirement: (state, action) => {
       const { index, value } = action.payload;
-      state.newJob.requirements[index] = value;
+      state.newJob.competences_requises[index] = value;
     },
     setSort: (state, action) => {
       state.sortField = action.payload.field;
@@ -349,11 +278,11 @@ const addjobsSlice = createSlice({
         state.isAddingJob = false;
         state.loading = false;
         state.newJob = {
-          title: "",
-          department: "",
-          location: "",
+          titre: "",
+          departement: "",
+          localisation: "",
           description: "",
-          requirements: [],
+          competences_requises: [],
           status: "open",
         };
       })
@@ -362,7 +291,7 @@ const addjobsSlice = createSlice({
         state.alert = {
           show: true,
           type: "error",
-          message: action.payload,
+          message: action.payload || "Failed to add job offer",
         };
       })
       .addCase(editJob.pending, (state) => {
@@ -372,11 +301,11 @@ const addjobsSlice = createSlice({
         state.isEditingJob = null;
         state.loading = false;
         state.newJob = {
-          title: "",
-          department: "",
-          location: "",
+          titre: "",
+          departement: "",
+          localisation: "",
           description: "",
-          requirements: [],
+          competences_requises: [],
           status: "open",
         };
       })
@@ -385,7 +314,7 @@ const addjobsSlice = createSlice({
         state.alert = {
           show: true,
           type: "error",
-          message: action.payload,
+          message: action.payload || "Failed to edit job offer",
         };
       })
       .addCase(deleteJob.pending, (state) => {
@@ -399,7 +328,7 @@ const addjobsSlice = createSlice({
         state.alert = {
           show: true,
           type: "error",
-          message: action.payload,
+          message: action.payload || "Failed to delete job offer",
         };
       });
   },

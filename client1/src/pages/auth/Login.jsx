@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   loginUser,
   setEmail,
@@ -12,35 +12,39 @@ import { toast } from "react-toastify";
 const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { email, mot_de_passe, loading, authError, isAuthenticated, user } =
-    useSelector((state) => state.auth);
+  const { token, isAuthenticated, loading } = useSelector((state) => state.auth);
 
   const [formErrors, setFormErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     dispatch(clearForm());
   }, [dispatch]);
 
   useEffect(() => {
-    if (isAuthenticated && user) {
-      const redirectTo =
-        location.state?.from?.pathname ||
-        (user.role === "recruteur" ? "/recrutement" : "/");
-      console.log("Redirecting to:", redirectTo, "Role:", user.role);
-      navigate(redirectTo, { replace: true });
+    if (isAuthenticated && token) {
+      const redirectPath = localStorage.getItem('redirectAfterLogin');
+      if (redirectPath) {
+        localStorage.removeItem('redirectAfterLogin');
+        navigate(redirectPath);
+      } else {
+        navigate(token.role === "recruteur" ? "/recrutement" : "/");
+      }
     }
-  }, [isAuthenticated, user, navigate, location]);
+  }, [isAuthenticated, token, navigate]);
 
   const validateForm = () => {
     const errors = {};
-    if (!email.trim()) {
+    if (!token.email.trim()) {
       errors.email = "L'email est requis";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(token.email)) {
       errors.email = "L'email est invalide";
     }
-    if (!mot_de_passe) {
+    if (!token.mot_de_passe) {
       errors.mot_de_passe = "Le mot de passe est requis";
+    } else if (token.mot_de_passe.length < 8) {
+      errors.mot_de_passe =
+        "Le mot de passe doit contenir au moins 8 caractères";
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -55,17 +59,20 @@ const Login = () => {
     }
 
     try {
-      console.log("Attempting login with:", { email });
-      const result = await dispatch(loginUser({ email, mot_de_passe }));
-      console.log("Login result:", result);
-      if (loginUser.fulfilled.match(result)) {
+      console.log("Tentative de connexion avec:", { token: token.email });
+      const result = await dispatch(loginUser({ email: token.email, mot_de_passe: token.mot_de_passe }));
+      console.log("Résultat de la connexion:", result);
+
+      if (result.meta.requestStatus === "fulfilled") {
+        console.log("Connexion réussie, données reçues:", result.payload);
         toast.success("Connexion réussie");
         dispatch(clearForm());
-      } else if (loginUser.rejected.match(result)) {
+      } else {
+        console.error("Échec de la connexion:", result.payload);
         toast.error(result.payload || "Échec de la connexion");
       }
     } catch (err) {
-      console.error("Login error:", err);
+      console.error("Erreur lors de la connexion:", err);
       toast.error("Échec de la connexion. Veuillez réessayer.");
     }
   };
@@ -77,10 +84,6 @@ const Login = () => {
           <h1 className="text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl text-center">
             Connexion à votre compte
           </h1>
-
-          {authError && (
-            <p className="text-sm text-red-600 text-center">{authError}</p>
-          )}
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
@@ -94,22 +97,16 @@ const Login = () => {
                 type="email"
                 name="email"
                 id="email"
-                value={email}
+                value={token.email}
                 onChange={(e) => dispatch(setEmail(e.target.value))}
                 className={`bg-gray-50 border ${
-                  formErrors.email || authError
-                    ? "border-red-500"
-                    : "border-gray-300"
+                  formErrors.email ? "border-red-500" : "border-gray-300"
                 } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
                 placeholder="nom@entreprise.com"
                 required
-                aria-invalid={formErrors.email || authError ? "true" : "false"}
+                aria-invalid={formErrors.email ? "true" : "false"}
                 aria-describedby={
-                  formErrors.email
-                    ? "email-error"
-                    : authError
-                    ? "server-error"
-                    : undefined
+                  formErrors.email ? "email-error" : undefined
                 }
               />
               {formErrors.email && (
@@ -126,30 +123,65 @@ const Login = () => {
               >
                 Mot de passe
               </label>
-              <input
-                type="password"
-                name="mot_de_passe"
-                id="mot_de_passe"
-                value={mot_de_passe}
-                onChange={(e) => dispatch(setMotDePasse(e.target.value))}
-                className={`bg-gray-50 border ${
-                  formErrors.mot_de_passe || authError
-                    ? "border-red-500"
-                    : "border-gray-300"
-                } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
-                placeholder="••••••••"
-                required
-                aria-invalid={
-                  formErrors.mot_de_passe || authError ? "true" : "false"
-                }
-                aria-describedby={
-                  formErrors.mot_de_passe
-                    ? "mot_de_passe-error"
-                    : authError
-                    ? "server-error"
-                    : undefined
-                }
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="mot_de_passe"
+                  id="mot_de_passe"
+                  value={token.mot_de_passe}
+                  onChange={(e) => dispatch(setMotDePasse(e.target.value))}
+                  className={`bg-gray-50 border ${
+                    formErrors.mot_de_passe ? "border-red-500" : "border-gray-300"
+                  } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
+                  placeholder="••••••••"
+                  required
+                  aria-invalid={formErrors.mot_de_passe ? "true" : "false"}
+                  aria-describedby={
+                    formErrors.mot_de_passe ? "mot_de_passe-error" : undefined
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3"
+                >
+                  {showPassword ? (
+                    <svg
+                      className="h-5 w-5 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      className="h-5 w-5 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </svg>
+                  )}
+                </button>
+              </div>
               {formErrors.mot_de_passe && (
                 <p
                   id="mot_de_passe-error"

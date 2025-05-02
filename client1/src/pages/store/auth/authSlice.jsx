@@ -3,6 +3,13 @@ import axios from "axios";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
+// Validation de l'URL de l'API au démarrage
+if (!API_URL) {
+  console.error("Erreur: REACT_APP_API_URL n'est pas défini dans .env");
+} else {
+  console.log("API_URL configurée:", API_URL);
+}
+
 // Middleware pour valider les actions Redux
 export const validateActionMiddleware = () => (next) => (action) => {
   if (!action || !action.type) {
@@ -30,8 +37,44 @@ const retryRequest = async (fn, retries = 2, delay = 1000) => {
 
 // Nettoyer le jeton (supprimer "Bearer " si présent)
 const cleanToken = (token) => {
+  if (!token) {
+    console.warn("Token manquant dans cleanToken");
+    return null;
+  }
+  
+  // Convertir en string si nécessaire
+  const tokenStr = String(token).trim();
+  console.log("Token avant nettoyage:", tokenStr);
+  
+  // Supprimer "Bearer " si présent
+  let cleanedToken = tokenStr.startsWith("Bearer ") ? tokenStr.substring(7) : tokenStr;
+  
+  // Vérifier si le token commence par "EMAIL:"
+  if (!cleanedToken.startsWith("EMAIL:")) {
+    console.warn("Token ne commence pas par 'EMAIL:':", cleanedToken);
+    return null;
+  }
+  
+  console.log("Token après nettoyage:", cleanedToken);
+  return cleanedToken;
+};
+
+// Préparer le token pour l'envoi (ajouter "Bearer " si nécessaire)
+const prepareToken = (token) => {
   if (!token) return null;
-  return token.startsWith("Bearer ") ? token.substring(7) : token;
+  
+  // Vérifier si le token est déjà au bon format
+  if (token.startsWith("Bearer ")) {
+    return token;
+  }
+  
+  // Vérifier si le token commence par "EMAIL:"
+  if (!token.startsWith("EMAIL:")) {
+    console.warn("Token invalide dans prepareToken:", token);
+    return null;
+  }
+  
+  return `Bearer ${token}`;
 };
 
 // Thunk pour la connexion
@@ -46,35 +89,80 @@ export const loginUser = createAsyncThunk(
         throw new Error("Format d'email invalide");
       }
 
-      console.log("Tentative de connexion avec:", { email });
+      console.log("Envoi de la requête de connexion:", {
+        method: "POST",
+        url: `${API_URL}/api/auth/login`,
+        data: { email, mot_de_passe: "[masqué]" },
+      });
+
       const request = () =>
         axios.post(
           `${API_URL}/api/auth/login`,
           { email, mot_de_passe },
-          { timeout: 10000 }
+          { 
+            timeout: 10000,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          }
         );
 
       const response = await retryRequest(request);
-      console.log("Réponse de connexion:", response.data);
+      console.log("Réponse de connexion complète:", response);
+      console.log("Token brut reçu:", response.data.token);
+      console.log("Type du token:", typeof response.data.token);
+      console.log("Structure de la réponse:", {
+        message: response.data.message,
+        user: response.data.user,
+        token: response.data.token
+      });
+
+      // Vérifier que le token est bien présent dans la réponse
+      if (!response.data.token) {
+        console.error("Token manquant dans la réponse");
+        throw new Error("Jeton manquant dans la réponse");
+      }
 
       const token = cleanToken(response.data.token);
-      if (!token || token.split(".").length !== 3) {
+      console.log("Token nettoyé:", token);
+      
+      if (!token) {
+        console.error("Token manquant ou invalide");
         throw new Error("Jeton reçu invalide");
       }
+      
+      // Vérifier que le token contient bien l'email
+      const emailFromToken = token.substring(6); // Supprimer "EMAIL:"
+      if (emailFromToken !== email) {
+        console.error("Email dans le token ne correspond pas à l'email de connexion");
+        throw new Error("Jeton reçu invalide");
+      }
+      
       console.log(
         "Jeton reçu (premiers caractères):",
         token.substring(0, 10) + "..."
       );
 
       localStorage.setItem("token", token);
-      console.log("Jeton stocké dans localStorage:", token);
+      console.log("Jeton stocké dans localStorage");
 
       return {
         ...response.data,
         token: token,
       };
     } catch (err) {
-      console.error("Erreur de connexion:", err.message, err.response?.data);
+      console.error("Erreur dans loginUser:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        headers: err.response?.headers,
+        config: {
+          url: err.config?.url,
+          method: err.config?.method,
+          headers: err.config?.headers
+        }
+      });
       const message =
         err.response?.data?.message ||
         (err.code === "ECONNABORTED"
@@ -126,7 +214,11 @@ export const registerUser = createAsyncThunk(
         throw new Error("Vous devez accepter les conditions");
       }
 
-      console.log("Tentative d'inscription avec:", userData);
+      console.log("Envoi de la requête d'inscription:", {
+        method: "POST",
+        url: `${API_URL}/api/auth/register`,
+        data: { ...userData, mot_de_passe: "[masqué]" },
+      });
       const request = () =>
         axios.post(`${API_URL}/api/auth/register`, userData, {
           timeout: 10000,
@@ -136,14 +228,20 @@ export const registerUser = createAsyncThunk(
       console.log("Réponse d'inscription:", response.data);
 
       const token = cleanToken(response.data.token);
-      if (!token || token.split(".").length !== 3) {
+      if (!token || !token.startsWith("EMAIL:")) {
         throw new Error("Jeton reçu invalide");
       }
 
       localStorage.setItem("token", token);
+      console.log("Jeton stocké dans localStorage pour l'inscription");
+
       return response.data;
     } catch (err) {
-      console.error("Erreur d'inscription:", err.message, err.response?.data);
+      console.error("Erreur dans registerUser:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
       const message =
         err.response?.data?.message ||
         (err.code === "ECONNABORTED"
@@ -178,7 +276,11 @@ export const updateUser = createAsyncThunk(
         throw new Error("Format d'email invalide");
       }
 
-      console.log("Tentative de mise à jour de l'utilisateur avec:", userData);
+      console.log("Envoi de la requête de mise à jour:", {
+        method: "PUT",
+        url: `${API_URL}/api/auth/update`,
+        data: userData,
+      });
       const request = () =>
         axios.put(`${API_URL}/api/auth/update`, userData, {
           headers: { Authorization: `Bearer ${token}` },
@@ -190,7 +292,11 @@ export const updateUser = createAsyncThunk(
 
       return response.data.user;
     } catch (err) {
-      console.error("Erreur de mise à jour:", err.message, err.response?.data);
+      console.error("Erreur dans updateUser:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
       const message =
         err.response?.data?.message ||
         (err.code === "ECONNABORTED"
@@ -212,19 +318,20 @@ export const checkAuthStatus = createAsyncThunk(
       if (!token) {
         throw new Error("Aucun jeton trouvé");
       }
-      if (token.split(".").length !== 3) {
+      if (!token.startsWith("EMAIL:")) {
         localStorage.removeItem("token");
         throw new Error("Jeton malformé");
       }
 
-      console.log(
-        "Vérification du jeton (premiers caractères):",
-        token.substring(0, 10) + "..."
-      );
+      console.log("Envoi de la requête de vérification d'authentification:", {
+        method: "GET",
+        url: `${API_URL}/api/auth/me`,
+        token: token.substring(0, 10) + "...",
+      });
 
       const config = {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: prepareToken(token),
         },
       };
 
@@ -238,11 +345,11 @@ export const checkAuthStatus = createAsyncThunk(
         token: token,
       };
     } catch (err) {
-      console.error(
-        "Erreur de vérification d'authentification:",
-        err.message,
-        err.response?.data
-      );
+      console.error("Erreur dans checkAuthStatus:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
 
       if (err.response?.status === 401 || err.message === "Jeton malformé") {
         console.log(
@@ -270,18 +377,21 @@ export const logoutUser = createAsyncThunk(
       if (!token) {
         throw new Error("Aucun jeton trouvé");
       }
-      if (token.split(".").length !== 3) {
+      if (!token.startsWith("EMAIL:")) {
         localStorage.removeItem("token");
         throw new Error("Jeton malformé");
       }
 
-      console.log("Tentative de déconnexion");
+      console.log("Envoi de la requête de déconnexion:", {
+        method: "POST",
+        url: `${API_URL}/api/auth/logout`,
+      });
       const request = () =>
         axios.post(
           `${API_URL}/api/auth/logout`,
           {},
           {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: prepareToken(token) },
             timeout: 10000,
           }
         );
@@ -292,7 +402,11 @@ export const logoutUser = createAsyncThunk(
       localStorage.removeItem("token");
       return response.data;
     } catch (err) {
-      console.error("Erreur de déconnexion:", err.message, err.response?.data);
+      console.error("Erreur dans logoutUser:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
       localStorage.removeItem("token");
       const message =
         err.response?.data?.message ||

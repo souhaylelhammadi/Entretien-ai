@@ -1,6 +1,6 @@
 from flask import request, jsonify, current_app
 from functools import wraps
-from .auth import verify_token
+from auth.jwt_manager import jwt_manager
 import logging
 from bson import ObjectId
 
@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        
         token = request.headers.get("Authorization")
         if not token:
             logger.warning("Jeton manquant")
@@ -18,22 +19,22 @@ def require_auth(f):
             if token.startswith("Bearer "):
                 token = token.split(" ")[1]
 
-            data = verify_token(token)
+            data = jwt_manager.verify_token(token)
             if not data:
                 logger.warning("Jeton invalide ou expiré")
                 return jsonify({"error": "Jeton invalide ou expiré"}), 401
 
-            request.user = {"id": data["id"], "role": data["role"]}
+            request.user = {"id": data["sub"], "role": data["role"]}
 
             if data["role"] == "recruteur":
-                user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(data["id"])})
+                user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(data["sub"])})
                 if not user:
-                    logger.warning(f"Utilisateur introuvable: {data['id']}")
+                    logger.warning(f"Utilisateur introuvable: {data['sub']}")
                     return jsonify({"error": "Compte utilisateur non trouvé"}), 401
 
-                recruteur = current_app.mongo.db.recruteurs.find_one({"utilisateur_id": ObjectId(data["id"])})
+                recruteur = current_app.mongo.db.recruteurs.find_one({"utilisateur_id": ObjectId(data["sub"])})
                 if not recruteur:
-                    logger.warning(f"Profil recruteur introuvable: {data['id']}")
+                    logger.warning(f"Profil recruteur introuvable: {data['sub']}")
                     return jsonify({"error": "Profil recruteur non trouvé"}), 403
 
                 request.user["data"] = user
@@ -73,19 +74,19 @@ def recruiter_only(f):
             if token.startswith("Bearer "):
                 token = token.split(" ")[1]
 
-            data = verify_token(token)
+            data = jwt_manager.verify_token(token)
             if not data:
                 logger.warning("Jeton invalide ou expiré")
                 return jsonify({"error": "Jeton invalide ou expiré"}), 401
 
-            request.user = {"id": data["id"], "role": data["role"]}
+            request.user = {"id": data["sub"], "role": data["role"]}
             if request.user["role"] != "recruteur":
                 logger.warning(f"Accès refusé: {request.user['id']} avec rôle {request.user['role']}")
                 return jsonify({"error": "Accès réservé aux recruteurs"}), 403
 
-            user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(data["id"])})
+            user = current_app.mongo.db.utilisateurs.find_one({"_id": ObjectId(data["sub"])})
             if not user:
-                logger.warning(f"Utilisateur introuvable: {data['id']}")
+                logger.warning(f"Utilisateur introuvable: {data['sub']}")
                 return jsonify({"error": "Compte utilisateur non trouvé"}), 401
 
             request.user["data"] = user

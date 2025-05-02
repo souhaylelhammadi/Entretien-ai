@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   LogIn,
+  X,
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -20,6 +21,7 @@ import {
   submitCandidature,
   resetCandidatureStatus,
 } from "../store/offresEmploiSlice";
+import { loginUser, registerUser } from "../store/auth/authSlice";
 import { toast } from "react-toastify";
 
 function DetailsOffreEmploi() {
@@ -33,11 +35,21 @@ function DetailsOffreEmploi() {
     candidatureStatus,
     candidatureError,
   } = useSelector((state) => state.offresEmploi);
-  const { token } = useSelector((state) => state.auth);
+  const { token, loading: authLoading } = useSelector((state) => state.auth);
   const [cv, setCv] = useState(null);
   const [lettreMotivation, setLettreMotivation] = useState("");
   const [showApplicationForm, setShowApplicationForm] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isLogin, setIsLogin] = useState(true);
+  const [authData, setAuthData] = useState({
+    email: "",
+    mot_de_passe: "",
+    nom: "",
+    telephone: "",
+    role: "candidat",
+    acceptTerms: false,
+  });
 
   useEffect(() => {
     console.log("Fetching offer with ID:", id);
@@ -76,7 +88,7 @@ function DetailsOffreEmploi() {
     } else if (candidatureStatus === "failed") {
       toast.error(candidatureError || "Échec de l'envoi de la candidature");
     }
-  }, [candidatureStatus, candidatureError, navigate]);
+  }, [candidatureStatus, candidatureError, navigate, error, loading, offre]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -124,16 +136,148 @@ function DetailsOffreEmploi() {
     );
   };
 
-  const handleLoginRedirect = () => {
-    navigate("/login", { state: { from: `/offre/${id}` } });
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (isLogin) {
+        await dispatch(
+          loginUser({
+            email: authData.email,
+            mot_de_passe: authData.mot_de_passe,
+          })
+        );
+      } else {
+        await dispatch(registerUser(authData));
+      }
+      setShowAuthModal(false);
+    } catch (error) {
+      toast.error(error.message || "Une erreur est survenue");
+    }
   };
 
-  const handleResetForm = () => {
-    setCv(null);
-    setLettreMotivation("");
-    setSubmissionSuccess(false);
-    dispatch(resetCandidatureStatus());
-  };
+  const AuthModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">
+            {isLogin ? "Connexion" : "Inscription"}
+          </h2>
+          <button
+            onClick={() => setShowAuthModal(false)}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleAuthSubmit} className="space-y-4">
+          {!isLogin && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Nom complet
+                </label>
+                <input
+                  type="text"
+                  value={authData.nom}
+                  onChange={(e) =>
+                    setAuthData({ ...authData, nom: e.target.value })
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Téléphone
+                </label>
+                <input
+                  type="tel"
+                  value={authData.telephone}
+                  onChange={(e) =>
+                    setAuthData({ ...authData, telephone: e.target.value })
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+            </>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              type="email"
+              value={authData.email}
+              onChange={(e) =>
+                setAuthData({ ...authData, email: e.target.value })
+              }
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Mot de passe
+            </label>
+            <input
+              type="password"
+              value={authData.mot_de_passe}
+              onChange={(e) =>
+                setAuthData({ ...authData, mot_de_passe: e.target.value })
+              }
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              required
+            />
+          </div>
+
+          {!isLogin && (
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                checked={authData.acceptTerms}
+                onChange={(e) =>
+                  setAuthData({ ...authData, acceptTerms: e.target.checked })
+                }
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                required
+              />
+              <label className="ml-2 block text-sm text-gray-700">
+                J'accepte les conditions d'utilisation
+              </label>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={authLoading}
+            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          >
+            {authLoading ? (
+              <Loader2 className="animate-spin mx-auto" />
+            ) : isLogin ? (
+              "Se connecter"
+            ) : (
+              "S'inscrire"
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsLogin(!isLogin)}
+            className="text-sm text-indigo-600 hover:text-indigo-500"
+          >
+            {isLogin
+              ? "Pas encore de compte ? S'inscrire"
+              : "Déjà un compte ? Se connecter"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -169,6 +313,7 @@ function DetailsOffreEmploi() {
 
   return (
     <div className="bg-gradient-to-br from-gray-50 to-indigo-50 min-h-screen mt-16">
+      {showAuthModal && <AuthModal />}
       <div className="max-w-6xl mx-auto px-4 py-6">
         <button
           onClick={() => navigate("/offres")}
@@ -274,7 +419,7 @@ function DetailsOffreEmploi() {
                         Vous devez être connecté pour postuler à cette offre.
                       </p>
                       <button
-                        onClick={handleLoginRedirect}
+                        onClick={() => setShowAuthModal(true)}
                         className="w-full bg-indigo-600 text-white py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-md"
                       >
                         <LogIn className="mr-2 h-5 w-5" />

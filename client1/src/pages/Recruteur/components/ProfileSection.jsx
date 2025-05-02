@@ -21,8 +21,8 @@ const ProfileSection = () => {
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: profile?.firstName || user?.firstName || "Admin",
-    lastName: profile?.lastName || user?.lastName || "",
+    
+    nom: profile?.nom || user?.nom || "",
     email: profile?.email || user?.email || "admin@recrutement.ai",
     phone: profile?.phone || "",
     position: profile?.position || "",
@@ -35,8 +35,8 @@ const ProfileSection = () => {
   useEffect(() => {
     if (profile || user) {
       setFormData({
-        firstName: profile?.firstName || user?.firstName || "Admin",
-        lastName: profile?.lastName || user?.lastName || "",
+        nom: profile?.nom || user?.nom || "",
+
         email: profile?.email || user?.email || "admin@recrutement.ai",
         phone: profile?.phone || "",
         position: profile?.position || "",
@@ -62,8 +62,8 @@ const ProfileSection = () => {
     setIsEditing(!isEditing);
     if (isEditing) {
       setFormData({
-        firstName: profile?.firstName || user?.firstName || "Admin",
-        lastName: profile?.lastName || user?.lastName || "",
+        nom: profile?.nom || user?.nom || "",
+
         email: profile?.email || user?.email || "admin@recrutement.ai",
         phone: profile?.phone || "",
         position: profile?.position || "",
@@ -114,18 +114,11 @@ const ProfileSection = () => {
             <div className="flex-1">
               {isEditing ? (
                 <>
+                  
                   <input
                     type="text"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleInputChange}
-                    className="text-lg font-semibold text-gray-800 border rounded px-2 py-1 mb-2 w-full"
-                    placeholder="Prénom"
-                  />
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={formData.lastName}
+                    name="nom"
+                    value={formData.nom}
                     onChange={handleInputChange}
                     className="text-lg font-semibold text-gray-800 border rounded px-2 py-1 w-full"
                     placeholder="Nom"
@@ -133,7 +126,7 @@ const ProfileSection = () => {
                 </>
               ) : (
                 <p className="text-lg font-semibold text-gray-800">
-                  {formData.firstName} {formData.lastName}
+                  {formData.nom}
                 </p>
               )}
               <p className="text-sm text-gray-500">{formData.email}</p>

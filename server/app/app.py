@@ -1,136 +1,134 @@
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_pymongo import PyMongo
 import os
 from dotenv import load_dotenv
 from datetime import datetime
-import subprocess
-import sys
+import logging
+from config.database import initialize_database, get_mongo_client
 
-load_dotenv()  # Load environment variables from .env
+# Load environment variables
+load_dotenv()
 
-def setup_background_tasks(app):
-    """Setup tasks that should run once at application startup"""
-    # Clean up expired tokens
-    try:
-        # Tokens older than JWT_EXPIRES_IN_HOURS will be removed
-        # (MongoDB TTL index will handle this if set up correctly)
-        print("Configuration des tâches d'arrière-plan terminée")
-    except Exception as e:
-        print(f"Erreur lors de la configuration des tâches d'arrière-plan : {e}")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def initialize_database():
-    """Initialiser la base de données avec les données d'exemple"""
-    try:
-        print("Initialisation de la base de données avec les données d'exemple...")
-        # Chemin relatif vers le script insert_data.py depuis le répertoire actuel
-        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'insert_data.py')
-        
-        if not os.path.exists(script_path):
-            print(f"Erreur: Le script d'initialisation n'existe pas: {script_path}")
-            return False
-            
-        # Exécuter le script en tant que processus externe
-        process = subprocess.run([sys.executable, script_path], 
-                                 capture_output=True, 
-                                 text=True,
-                                 cwd=os.path.dirname(script_path))
-        
-        if process.returncode == 0:
-            print("Base de données initialisée avec succès!")
-            print(process.stdout)
-            return True
-        else:
-            print(f"Erreur lors de l'initialisation de la base de données: {process.stderr}")
-            return False
-    except Exception as e:
-        print(f"Exception lors de l'initialisation de la base de données: {str(e)}")
-        return False
+# Debug environment variables
+logger.info(f"JWT_SECRET_KEY: {os.getenv('JWT_SECRET_KEY')}")
+logger.info(f"MONGO_URI: {os.getenv('MONGO_URI')}")
 
 def create_app():
     app = Flask(__name__)
-    CORS(app, supports_credentials=True)
 
-    # Configuration - Utiliser le même nom de base de données que insert_data.py
-    app.config["MONGO_URI"] = "mongodb://localhost:27017/DB_entretien_ai"
-    app.config["JWT_SECRET"] = os.getenv("JWT_SECRET", "your-secret-key")
-    
-    # Security and feature flags
+    # Application configuration
+    app.config["MONGO_URI"] = os.getenv("MONGO_URI", "mongodb://localhost:27017/DB_entretien_ai")
+    app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "your_jwt_secret_key")
     app.config["MAINTENANCE_MODE"] = os.getenv("MAINTENANCE_MODE", "false").lower() == "true"
     app.config["TRACK_IP_CHANGES"] = os.getenv("TRACK_IP_CHANGES", "true").lower() == "true"
     app.config["MAX_LOGIN_ATTEMPTS"] = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
     app.config["LOCKOUT_TIME_MINUTES"] = int(os.getenv("LOCKOUT_TIME_MINUTES", "30"))
-    app.config["UPLOAD_FOLDER"] = os.getenv("UPLOAD_FOLDER", "uploads")
+    app.config["UPLOAD_FOLDER"] = os.getenv("UPLOAD_FOLDER", "Uploads")
     app.config["JWT_EXPIRES_IN_HOURS"] = int(os.getenv("JWT_EXPIRES_IN_HOURS", "24"))
-    
+
+    # Validate critical environment variables
     if not app.config["MONGO_URI"]:
-        raise ValueError("MONGODB_URI environment variable is not set")
+        raise ValueError("MONGO_URI environment variable is not set")
+    if not app.config["JWT_SECRET_KEY"]:
+        raise ValueError("JWT_SECRET_KEY environment variable is not set")
 
     # Initialize MongoDB
-    mongo = PyMongo(app)
-    app.mongo = mongo
-    
     try:
+        mongo = PyMongo(app, uri=app.config["MONGO_URI"])
+        app.mongo = mongo
         with app.app_context():
             mongo.db.command("ping")
-            print("Connexion à MongoDB établie")
-            
-            # Create indexes for better performance and security
-            # Utiliser les noms de collections en français
-            mongo.db.Utilisateurs.create_index("email", unique=True)
-            mongo.db.blacklist.create_index("token", unique=True)
-            mongo.db.blacklist.create_index("expires_at", expireAfterSeconds=0)
-            
-            # Run initialization tasks that would have been in before_first_request
-            setup_background_tasks(app)
-            
+            logger.info("Connexion à MongoDB établie")
+            # Create indexes
+            mongo.db.utilisateurs.create_index("email", unique=True)
+            mongo.db.blacklisted_tokens.create_index("token", unique=True)
+            mongo.db.blacklisted_tokens.create_index("exp", expireAfterSeconds=0)
+            mongo.db.candidats.create_index("utilisateur_id", unique=True)
+            mongo.db.recruteurs.create_index("utilisateur_id", unique=True)
+            mongo.db.user_sessions.create_index("user_id")
+            mongo.db.activities.create_index("user_id")
+            mongo.db.auth_logs.create_index("user_id")
     except Exception as e:
-        print(f"Échec de la connexion à MongoDB : {str(e)}")
+        logger.error(f"Échec de la connexion à MongoDB: {str(e)}")
         raise RuntimeError("Impossible d'initialiser la base de données MongoDB") from e
+
+    # Configure CORS
+    CORS(app,
+         resources={r"/api/*": {
+             "origins": os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+             "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
+             "expose_headers": ["Content-Type", "Authorization"],
+             "supports_credentials": True,
+             "max_age": 3600,
+             "automatic_options": True,
+             "vary_header": True
+         }},
+         supports_credentials=True,
+         automatic_options=True)
 
     # Register blueprints
     try:
-        from routes.recruteur.candidates import candidates_bp
-        from routes.recruteur.interview import interviews_bp
-        from routes.offres import offres_emploi_bp
-        from routes.accepted_offers import accepted_offers_bp
-        #from routes.recordings import recordings_bp
-        from auth import auth_bp  # Import the auth blueprint
-        from routes.recruteur.dashboard import dashboard_bp
-        from routes.recruteur.Offres import Offres_recruteur_bp
-        from routes.recruteur.profile import profile_bp  # Import the new profile blueprint
+        from auth.jwt_manager import jwt_manager
+        from auth.auth import auth_bp, init_auth
         
+        # Initialize auth module with jwt_manager
+        with app.app_context():
+            init_auth(jwt_manager)
+        
+        # Register blueprints
         app.register_blueprint(auth_bp)
-        app.register_blueprint(offres_emploi_bp, url_prefix="/api")
-        app.register_blueprint(candidates_bp, url_prefix="/api")
-        app.register_blueprint(interviews_bp, url_prefix="/api")
-        app.register_blueprint(accepted_offers_bp, url_prefix="/api")
-        app.register_blueprint(dashboard_bp)
-        app.register_blueprint(Offres_recruteur_bp)
-        app.register_blueprint(profile_bp)  # Register the profile blueprint
+        from routes.recruteur import recruteur_bp
+        app.register_blueprint(recruteur_bp)
+        # Temporarily comment out the candidat blueprint until it's created
+        # from routes.candidat import candidat_bp
+        # app.register_blueprint(candidat_bp)
+        #from routes.entreprise import entreprise_bp
+        #app.register_blueprint(entreprise_bp)
+        #from routes.admin import admin_bp
+        #app.register_blueprint(admin_bp)
         
-    except ImportError as e:
-        print(f"Erreur d'importation des blueprints : {e}")
-        raise
-        
-    # CLI command for running tasks (alternative to before_first_request)
-    @app.cli.command("init-app")
-    def init_app_command():
-        """Initialize application data and run startup tasks."""
-        setup_background_tasks(app)
-        initialize_database()
-        print("Application initialization complete")
+        logger.info("Blueprints enregistrés avec succès")
+    except Exception as e:
+        logger.error(f"Erreur lors de l'enregistrement des blueprints: {str(e)}")
+        raise RuntimeError("Impossible d'enregistrer les blueprints") from e
+
+    # Maintenance mode middleware
+    @app.before_request
+    def check_maintenance_mode():
+        if app.config["MAINTENANCE_MODE"] and request.path != "/api/maintenance":
+            return jsonify({"message": "Application en maintenance"}), 503
+
+    # Error handling for 404
+    @app.errorhandler(404)
+    def not_found(error):
+        return jsonify({"message": "Ressource non trouvée"}), 404
+
+    # Error handling for 500
+    @app.errorhandler(500)
+    def internal_error(error):
+        logger.error(f"Erreur serveur: {str(error)}", exc_info=True)
+        return jsonify({"message": "Erreur serveur interne"}), 500
+
+    # CLI command for initialization
+    @app.cli.command("init-db")
+    def init_db_command():
+        """Initialize the database with sample data."""
+        initialize_database(app)
+        logger.info("Initialisation de la base de données terminée")
+
     return app
 
 if __name__ == "__main__":
     app = create_app()
-    
-    # Vérifier si une initialisation de la base de données est demandée
     init_db = os.getenv("INIT_DB", "false").lower() in ('true', '1', 't')
     if init_db:
-        initialize_database()
-    
+        initialize_database(app)
     port = int(os.getenv("PORT", 5000))
-    print(f"Démarrage de l'application sur le port {port}...")
-    print(f"Pour initialiser la base de données, définissez la variable d'environnement INIT_DB=true")
+    logger.info(f"Démarrage de l'application sur le port {port}")
     app.run(host="0.0.0.0", port=port, debug=True)

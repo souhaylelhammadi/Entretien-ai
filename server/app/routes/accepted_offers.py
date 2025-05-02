@@ -3,7 +3,7 @@ from bson import ObjectId
 from datetime import datetime, timezone
 import logging
 from pymongo.errors import PyMongoError
-from auth import verify_token
+from auth.jwt_manager import jwt_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -17,7 +17,7 @@ def auth_required(f):
         token = request.headers.get("Authorization")
         if not token:
             return jsonify({"error": "Authentification requise"}), 401
-        decoded = verify_token(token)
+        decoded = jwt_manager.verify_token(token)
         if not decoded:
             return jsonify({"error": "Token invalide ou expiré"}), 401
         if decoded.get("role") != "candidat":
