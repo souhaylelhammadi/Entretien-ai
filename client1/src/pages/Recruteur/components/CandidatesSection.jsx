@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Building,
@@ -16,6 +16,8 @@ import {
 
 const CandidatesSection = () => {
   const dispatch = useDispatch();
+  const initialFetchDone = useRef(false);
+
   const {
     candidates = [],
     loading,
@@ -25,6 +27,7 @@ const CandidatesSection = () => {
     loading: state.dashboard.loading,
     error: state.dashboard.error,
   }));
+
   const pagination = useSelector(
     (state) =>
       state.dashboard.candidatesPagination || {
@@ -36,13 +39,18 @@ const CandidatesSection = () => {
   );
 
   useEffect(() => {
-    dispatch(
-      fetchCandidates({
-        page: pagination?.page || 1,
-        per_page: pagination?.per_page || 10,
-      })
-    );
-  }, [dispatch, pagination?.page, pagination?.per_page]);
+    // Charger les données une seule fois au montage du composant
+    // ou lorsque la page de pagination change explicitement
+    if (!initialFetchDone.current || pagination?.page !== 1) {
+      dispatch(
+        fetchCandidates({
+          page: pagination?.page || 1,
+          per_page: pagination?.per_page || 10,
+        })
+      );
+      initialFetchDone.current = true;
+    }
+  }, [dispatch, pagination?.page]);
 
   const handleDownloadCV = async (candidatureId, candidateName) => {
     try {

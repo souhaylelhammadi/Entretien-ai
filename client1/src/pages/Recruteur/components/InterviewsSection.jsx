@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Video,
@@ -26,6 +26,8 @@ import {
 
 const InterviewsSection = () => {
   const dispatch = useDispatch();
+  const initialFetchDone = useRef(false);
+  
   const {
     interviews = [],
     loading,
@@ -35,6 +37,7 @@ const InterviewsSection = () => {
     loading: state.dashboard.loading,
     error: state.dashboard.error,
   }));
+  
   const pagination = useSelector(
     (state) =>
       state.dashboard.interviewsPagination || {
@@ -44,18 +47,24 @@ const InterviewsSection = () => {
         pages: 0,
       }
   );
+  
   const { selectedInterview, showCard } = useSelector(
     (state) => state.interviews || { selectedInterview: null, showCard: false }
   );
 
   useEffect(() => {
-    dispatch(
-      fetchInterviews({
-        page: pagination?.page || 1,
-        per_page: pagination?.per_page || 10,
-      })
-    );
-  }, [dispatch, pagination?.page, pagination?.per_page]);
+    // Charger les données une seule fois au montage du composant
+    // ou lorsque la page de pagination change explicitement
+    if (!initialFetchDone.current || pagination?.page !== 1) {
+      dispatch(
+        fetchInterviews({
+          page: pagination?.page || 1,
+          per_page: pagination?.per_page || 10,
+        })
+      );
+      initialFetchDone.current = true;
+    }
+  }, [dispatch, pagination?.page]);
 
   const handlePageChange = (newPage) => {
     if (newPage > 0 && newPage <= (pagination?.pages || 1)) {

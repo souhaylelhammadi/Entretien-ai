@@ -130,21 +130,38 @@ def get_dashboard_data(auth_payload):
 
         db = current_app.mongo
 
+        # Utiliser les deux IDs possibles (user_id et recruteur_id)
         total_candidates = db[CANDIDATS_COLLECTION].count_documents({})
-        total_jobs = db[OFFRES_COLLECTION].count_documents({"recruteur_id": ObjectId(recruteur_id)})
-        total_interviews = db[ENTRETIENS_COLLECTION].count_documents({"recruteur_id": ObjectId(recruteur_id)})
+        total_jobs = db[OFFRES_COLLECTION].count_documents({
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ]
+        })
+        total_interviews = db[ENTRETIENS_COLLECTION].count_documents({
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ]
+        })
 
         new_candidates = db[CANDIDATS_COLLECTION].count_documents({
             "date_creation": {"$gte": start_date, "$lte": end_date}
         })
 
         active_jobs = db[OFFRES_COLLECTION].count_documents({
-            "recruteur_id": ObjectId(recruteur_id),
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ],
             "statut": "ouverte"
         })
 
         upcoming_interviews = db[ENTRETIENS_COLLECTION].count_documents({
-            "recruteur_id": ObjectId(recruteur_id),
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ],
             "date": {"$gte": datetime.utcnow()}
         })
 
@@ -164,7 +181,10 @@ def get_dashboard_data(auth_payload):
 
         interviews_by_date = db[ENTRETIENS_COLLECTION].aggregate([
             {"$match": {
-                "recruteur_id": ObjectId(recruteur_id),
+                "$or": [
+                    {"recruteur_id": ObjectId(recruteur_id)},
+                    {"recruteur_id": ObjectId(user_id)}
+                ],
                 "date": {"$gte": start_date, "$lte": end_date}
             }},
             {"$group": {
@@ -182,7 +202,12 @@ def get_dashboard_data(auth_payload):
         ])
 
         interview_status_distribution = db[ENTRETIENS_COLLECTION].aggregate([
-            {"$match": {"recruteur_id": ObjectId(recruteur_id)}},
+            {"$match": {
+                "$or": [
+                    {"recruteur_id": ObjectId(recruteur_id)},
+                    {"recruteur_id": ObjectId(user_id)}
+                ]
+            }},
             {"$group": {
                 "_id": "$statut",
                 "count": {"$sum": 1}
@@ -199,7 +224,13 @@ def get_dashboard_data(auth_payload):
             "date": {"$gte": datetime.utcnow()}
         }).sort("date", 1).limit(5)
 
-        offres = list(db[OFFRES_COLLECTION].find({"recruteur_id": ObjectId(recruteur_id)}))
+        # Récupérer les offres avec les deux ID possibles
+        offres = list(db[OFFRES_COLLECTION].find({
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ]
+        }))
         offres_list = []
         for offre in offres:
             date_creation = offre.get("date_creation", datetime.utcnow())
@@ -253,6 +284,259 @@ def get_dashboard_data(auth_payload):
         return jsonify({"error": "Erreur de base de données"}), 500
     except Exception as e:
         logger.error(f"Erreur dans /dashboard: {str(e)}")
+        return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500
+
+@Dashboard_recruteur_bp.route("/dashboard/init", methods=["GET"])
+@require_auth("recruteur")
+def get_initial_dashboard_data(auth_payload):
+    """
+    Fetch initial dashboard data for the connected recruiter.
+    Returns aggregated statistics and latest entries for each section.
+    """
+    try:
+        user_id = auth_payload["sub"]
+        recruteur_id = auth_payload["recruteur_id"]
+        logger.info(f"Récupération des données initiales pour le recruteur {recruteur_id}")
+        
+        db = current_app.mongo
+        
+        # Get period from request args with default value
+        period = request.args.get("period", "week")
+        
+        # Calculate date range based on period
+        end_date = datetime.utcnow()
+        if period == "week":
+            start_date = end_date - timedelta(days=7)
+        elif period == "month":
+            start_date = end_date - timedelta(days=30)
+        else:  # year
+            start_date = end_date - timedelta(days=365)
+            
+        # Get active job offers count - Vérifier avec les deux formats possibles d'ID
+        activeJobs = db[OFFRES_COLLECTION].count_documents({
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ],
+            "statut": "ouverte"
+        })
+        
+        # Get total job offers count - Vérifier avec les deux formats possibles d'ID
+        totalJobs = db[OFFRES_COLLECTION].count_documents({
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ]
+        })
+        
+        # Get new candidates count (for this recruiter's job offers)
+        # First get all offres for this recruiter - Vérifier avec les deux formats possibles d'ID
+        offres = list(db[OFFRES_COLLECTION].find({
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ]
+        }))
+        
+        # Debug - Afficher les IDs des offres trouvées
+        offre_ids = [offre["_id"] for offre in offres]
+        logger.info(f"Offres trouvées ({len(offres)}) pour les IDs {user_id} et {recruteur_id}: {[str(oid) for oid in offre_ids]}")
+        
+        newCandidates = db[CANDIDATURES_COLLECTION].count_documents({
+            "offre_id": {"$in": offre_ids},
+            "date_creation": {"$gte": start_date, "$lte": end_date}
+        })
+        
+        # Get total candidates count for this recruiter's offers
+        totalCandidates = db[CANDIDATURES_COLLECTION].count_documents({
+            "offre_id": {"$in": offre_ids}
+        })
+        
+        # Get total interviews count
+        totalInterviews = db[ENTRETIENS_COLLECTION].count_documents({
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ]
+        })
+        
+        # Get upcoming interviews count
+        upcomingInterviews = db[ENTRETIENS_COLLECTION].count_documents({
+            "$or": [
+                {"recruteur_id": ObjectId(recruteur_id)},
+                {"recruteur_id": ObjectId(user_id)}
+            ],
+            "date": {"$gte": datetime.utcnow()}
+        })
+        
+        # Calculate conversion rate
+        conversionRate = 0
+        if totalCandidates > 0:
+            acceptedCandidates = db[CANDIDATURES_COLLECTION].count_documents({
+                "offre_id": {"$in": offre_ids},
+                "status": "accepté"
+            })
+            conversionRate = (acceptedCandidates / totalCandidates) * 100
+            
+        # Get recent activity
+        recentActivity = list(db[ACTIVITIES_COLLECTION].find({
+            "user_id": recruteur_id,
+            "date": {"$gte": start_date}
+        }).sort("date", -1).limit(10))
+        
+        recentActivity_list = []
+        for activity in recentActivity:
+            recentActivity_list.append({
+                "id": str(activity["_id"]),
+                "type": activity.get("type", ""),
+                "message": activity.get("message", ""),
+                "date": activity.get("date", datetime.utcnow()).isoformat() + "Z"
+            })
+            
+        # Get latest offers
+        latest_offers = list(db[OFFRES_COLLECTION].find({
+            "recruteur_id": ObjectId(recruteur_id)
+        }).sort("date_creation", -1).limit(5))
+        
+        offres_list = []
+        for offre in latest_offers:
+            offres_list.append({
+                "id": str(offre["_id"]),
+                "titre": offre.get("titre", ""),
+                "description": offre.get("description", ""),
+                "localisation": offre.get("localisation", ""),
+                "departement": offre.get("departement", ""),
+                "statut": offre.get("statut", "ouverte"),
+                "date_creation": offre.get("date_creation", datetime.utcnow()).isoformat() + "Z"
+            })
+            
+        # Prepare graph data
+        # Candidates by date
+        candidates_date_range = {}
+        current = start_date
+        while current <= end_date:
+            date_str = current.strftime("%Y-%m-%d")
+            candidates_date_range[date_str] = 0
+            current += timedelta(days=1)
+            
+        # Interviews by date
+        interviews_date_range = candidates_date_range.copy()
+        
+        # Status distribution
+        status_distribution = {}
+        
+        # Query MongoDB for real data
+        candidate_stats = db[CANDIDATURES_COLLECTION].aggregate([
+            {"$match": {
+                "offre_id": {"$in": offre_ids},
+                "date_creation": {"$gte": start_date, "$lte": end_date}
+            }},
+            {"$group": {
+                "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date_creation"}},
+                "count": {"$sum": 1}
+            }}
+        ])
+        
+        for stat in candidate_stats:
+            date_str = stat["_id"]
+            if date_str in candidates_date_range:
+                candidates_date_range[date_str] = stat["count"]
+                
+        interview_stats = db[ENTRETIENS_COLLECTION].aggregate([
+            {"$match": {
+                "$or": [
+                    {"recruteur_id": ObjectId(recruteur_id)},
+                    {"recruteur_id": ObjectId(user_id)}
+                ],
+                "date": {"$gte": start_date, "$lte": end_date}
+            }},
+            {"$group": {
+                "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date"}},
+                "count": {"$sum": 1}
+            }}
+        ])
+        
+        for stat in interview_stats:
+            date_str = stat["_id"]
+            if date_str in interviews_date_range:
+                interviews_date_range[date_str] = stat["count"]
+                
+        status_stats = db[CANDIDATURES_COLLECTION].aggregate([
+            {"$match": {
+                "offre_id": {"$in": offre_ids}
+            }},
+            {"$group": {
+                "_id": "$status",
+                "count": {"$sum": 1}
+            }}
+        ])
+        
+        for stat in status_stats:
+            status = stat["_id"] or "Non défini"
+            status_distribution[status] = stat["count"]
+            
+        interview_status_stats = db[ENTRETIENS_COLLECTION].aggregate([
+            {"$match": {
+                "$or": [
+                    {"recruteur_id": ObjectId(recruteur_id)},
+                    {"recruteur_id": ObjectId(user_id)}
+                ]
+            }},
+            {"$group": {
+                "_id": "$statut",
+                "count": {"$sum": 1}
+            }}
+        ])
+        
+        interview_status_distribution = {}
+        for stat in interview_status_stats:
+            status = stat["_id"] or "Non défini"
+            interview_status_distribution[status] = stat["count"]
+            
+        # Get offers by department
+        offers_by_department = {}
+        dept_stats = db[OFFRES_COLLECTION].aggregate([
+            {"$match": {
+                "$or": [
+                    {"recruteur_id": ObjectId(recruteur_id)},
+                    {"recruteur_id": ObjectId(user_id)}
+                ]
+            }},
+            {"$group": {
+                "_id": "$departement",
+                "count": {"$sum": 1}
+            }}
+        ])
+        
+        for stat in dept_stats:
+            dept = stat["_id"] or "Non défini"
+            offers_by_department[dept] = stat["count"]
+            
+        # Assemble response data
+        response_data = {
+            "activeJobs": activeJobs,
+            "totalJobs": totalJobs,
+            "newCandidates": newCandidates,
+            "totalCandidates": totalCandidates,
+            "totalInterviews": totalInterviews,
+            "upcomingInterviews": upcomingInterviews,
+            "conversionRate": conversionRate,
+            "recentActivity": recentActivity_list,
+            "offres": offres_list,
+            "graphData": {
+                "candidatesByDate": candidates_date_range,
+                "interviewsByDate": interviews_date_range,
+                "statusDistribution": status_distribution,
+                "interviewStatusDistribution": interview_status_distribution,
+                "offresByDepartment": offers_by_department
+            }
+        }
+        
+        logger.info(f"Données initiales récupérées avec succès pour le recruteur {recruteur_id}")
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des données initiales: {str(e)}")
         return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500
 
 # Route pour récupérer les candidats pour les offres du recruteur

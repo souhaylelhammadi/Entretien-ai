@@ -17,11 +17,15 @@ export const fetchInitialData = createAsyncThunk(
         return rejectWithValue("Token non trouvé");
       }
 
-      const response = await api.get("/api/recruteur/dashboard", {
+      // Utilisation du nouvel endpoint qui retourne les données filtrées par recruteur
+      const response = await api.get("/api/recruteur/dashboard/init", {
         headers: { Authorization: token },
       });
+
+      console.log("Initial dashboard data received:", response.data);
       return response.data;
     } catch (error) {
+      console.error("Error fetchInitialData:", error);
       return rejectWithValue(
         error.response?.data?.error ||
           "Erreur lors de la récupération des données"
@@ -35,17 +39,48 @@ export const fetchGraphData = createAsyncThunk(
   "dashboard/fetchGraphData",
   async ({ period }, { rejectWithValue }) => {
     try {
+      console.log(`Fetching graph data for period: ${period}`);
       const token = getToken();
       if (!token) {
         return rejectWithValue("Token non trouvé");
       }
 
-      const response = await api.get("/api/recruteur/dashboard", {
+      // Utiliser également le nouvel endpoint avec le paramètre period
+      const response = await api.get("/api/recruteur/dashboard/init", {
         params: { period },
         headers: { Authorization: token },
       });
-      return response.data;
+
+      // Formatage des données reçues
+      const data = response.data;
+      console.log("Dashboard graph data received:", data);
+
+      // Structure de base pour les graphiques avec les données reçues
+      return {
+        activeJobs: data.activeJobs || 0,
+        newCandidates: data.newCandidates || 0,
+        totalJobs: data.totalJobs || 0,
+        totalCandidates: data.totalCandidates || 0,
+        totalInterviews: data.totalInterviews || 0,
+        upcomingInterviews: data.upcomingInterviews || 0,
+        conversionRate: data.conversionRate || 0,
+        recentActivity: data.recentActivity || [],
+        offres: data.offres || [],
+        graphData: {
+          // Utiliser directement les données formatées par l'API
+          candidatesByDate: data.graphData?.candidatesByDate || {},
+          interviewsByDate: data.graphData?.interviewsByDate || {},
+          statusDistribution: data.graphData?.statusDistribution || {
+            "Pas de données": 0,
+          },
+          interviewStatusDistribution: data.graphData
+            ?.interviewStatusDistribution || { "Pas de données": 0 },
+          offresByDepartment: data.graphData?.offresByDepartment || {},
+          candidatesByJob: data.graphData?.candidatesByJob || {},
+        },
+      };
     } catch (error) {
+      console.error("Erreur fetchGraphData:", error);
       return rejectWithValue(
         error.response?.data?.error ||
           "Erreur lors de la récupération des données"
@@ -191,7 +226,12 @@ const initialState = {
     offres: [],
     candidates: [],
     interviews: [],
-    graphData: {},
+    graphData: {
+      candidatesByDate: {},
+      interviewsByDate: {},
+      statusDistribution: { "Pas de données": 0 },
+      interviewStatusDistribution: { "Pas de données": 0 },
+    },
   },
   candidatesPagination: {
     page: 1,

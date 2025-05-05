@@ -119,29 +119,40 @@ const RecruiterDashboard = () => {
     }
   }, [isAuthenticated, token, navigate]);
 
+  // Effect to fetch dashboard data when switching to overview tab or changing period
+  useEffect(() => {
+    // Only load graph data when on overview tab and period changes or tab changes to overview
+    if (activeTab === "overview" && isAuthenticated && token) {
+      console.log("Fetching graph data for overview tab, period:", selectedPeriod);
+      dispatch(fetchGraphData({ period: selectedPeriod }));
+    }
+  }, [activeTab, selectedPeriod, dispatch, isAuthenticated, token]);
+
   // Charger les données du dashboard si l'utilisateur est authentifié
   useEffect(() => {
     const fetchData = async () => {
       if (isAuthenticated && token) {
         console.log("Chargement des données du dashboard");
-        console.log("Token:", token);
         try {
           // Ensure token is stored in localStorage
           if (!localStorage.getItem("token")) {
             localStorage.setItem("token", token);
           }
 
-          const result = await dispatch(
-            fetchInitialData({ page: 1, limit: 10 })
-          ).unwrap();
-          console.log("Initial data fetched:", result);
-          // Charger les données des graphiques après le chargement initial
-          dispatch(fetchGraphData({ period: selectedPeriod }));
+          // Charger les données initiales une seule fois au montage du composant
+          // Cette fonction récupère désormais les données filtrées par recruteur connecté
+          await dispatch(fetchInitialData()).unwrap();
+          console.log("Initial data fetched successfully");
+          
+          // Charger également les données de graphique appropriées pour la période sélectionnée
+          if (activeTab === "overview") {
+            dispatch(fetchGraphData({ period: selectedPeriod }));
+          }
         } catch (error) {
           console.error("Error fetching initial data:", error);
           if (
-            error.includes("Session expired") ||
-            error.includes("Authentication token not found")
+            error?.includes("Session expired") ||
+            error?.includes("Authentication token not found")
           ) {
             handleAuthError();
           }
@@ -150,7 +161,9 @@ const RecruiterDashboard = () => {
     };
 
     fetchData();
-  }, [dispatch, isAuthenticated, token, navigate, selectedPeriod]);
+    // Cet effet ne s'exécute qu'au montage du composant
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, isAuthenticated, token]);
 
   // Effect to fetch profile data when switching to profile tab
   useEffect(() => {
@@ -177,8 +190,10 @@ const RecruiterDashboard = () => {
   }, [activeTab, dispatch, isAuthenticated, token, profile, profileLoading]);
 
   const handlePeriodChange = (event) => {
-    dispatch(setSelectedPeriod(event.target.value));
-    dispatch(fetchGraphData({ period: event.target.value }));
+    const newPeriod = event.target.value;
+    console.log("Changement de période:", newPeriod);
+    dispatch(setSelectedPeriod(newPeriod));
+    // L'useEffect se chargera de mettre à jour les données pour la nouvelle période
   };
 
   const menuItems = [
@@ -231,25 +246,26 @@ const RecruiterDashboard = () => {
   const handleTabChange = (tab) => {
     // Éviter de recharger le même onglet
     if (tab === activeTab) {
+      console.log("Même onglet, pas de rechargement");
       return;
     }
 
+    console.log("Changement d'onglet vers:", tab);
     dispatch(setActiveTab(tab));
 
+    // Charger les données spécifiques à l'onglet
     if (tab === "profile") {
       if (!profile && !profileLoading) {
         dispatch(fetchProfile());
       }
-    } else if (tab === "overview") {
-      dispatch(fetchGraphData({ period: selectedPeriod }));
     } else if (tab === "jobs") {
       dispatch(fetchOffres());
     } else if (tab === "candidates") {
-      // Always fetch first page when switching to candidates tab
       dispatch(fetchCandidates({ page: 1, per_page: 10 }));
     } else if (tab === "interviews") {
       dispatch(fetchInterviews({ page: 1, per_page: 10 }));
     }
+    // Pas besoin de charger les graphiques ici pour "overview", l'useEffect s'en chargera
   };
 
   return (
