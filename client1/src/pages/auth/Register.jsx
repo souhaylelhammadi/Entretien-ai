@@ -94,7 +94,8 @@ const Register = () => {
     }
 
     if (role === "recruteur" && !nomEntreprise.trim()) {
-      errors.nomEntreprise = "Le nom de l'entreprise est requis";
+      errors.nomEntreprise =
+        "Le nom de l'entreprise est requis pour les recruteurs";
       isValid = false;
     }
 
@@ -115,24 +116,6 @@ const Register = () => {
       return;
     }
 
-    let entreprise_id;
-    if (role === "recruteur") {
-      try {
-        const response = await axios.post(`${API_URL}/api/auth/entreprise`, {
-          nom: nomEntreprise,
-        });
-        entreprise_id = response.data.entreprise_id;
-        console.log("Entreprise créée avec ID:", entreprise_id);
-      } catch (err) {
-        const errorMsg =
-          err.response?.data?.message || "Échec de la création de l'entreprise";
-        console.error("Erreur création entreprise:", errorMsg);
-        setFormErrors({ server: errorMsg });
-        toast.error(errorMsg);
-        return;
-      }
-    }
-
     const payload = {
       nom,
       email,
@@ -140,7 +123,7 @@ const Register = () => {
       telephone,
       acceptTerms,
       role,
-      ...(role === "recruteur" && { entreprise_id }),
+      ...(role === "recruteur" && { nomEntreprise }),
     };
 
     console.log("Payload d'inscription:", payload);
@@ -208,6 +191,12 @@ const Register = () => {
                   Recruteur
                 </button>
               </div>
+              {role === "recruteur" && (
+                <p className="mt-2 text-xs text-blue-600">
+                  En tant que recruteur, vous devez fournir les informations de
+                  votre entreprise.
+                </p>
+              )}
             </div>
 
             <div>
@@ -306,7 +295,7 @@ const Register = () => {
                   htmlFor="nomEntreprise"
                   className="block mb-2 text-sm font-medium text-gray-900"
                 >
-                  Nom de l'entreprise
+                  Nom de l'entreprise <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -319,7 +308,7 @@ const Register = () => {
                       ? "border-red-500"
                       : "border-gray-300"
                   } text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5`}
-                  placeholder="Tech Corp"
+                  placeholder="Nom de votre entreprise"
                   required
                   aria-invalid={formErrors.nomEntreprise ? "true" : "false"}
                   aria-describedby={

@@ -74,7 +74,7 @@ export const fetchOffreById = createAsyncThunk(
   async (id, { rejectWithValue }) => {
     try {
       if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
-        throw new Error("ID de l’offre invalide");
+        throw new Error("ID de l'offre invalide");
       }
 
       const request = () =>
@@ -86,7 +86,7 @@ export const fetchOffreById = createAsyncThunk(
       const offre = response.data;
       if (!offre || !offre.id) {
         console.error("Invalid offer data:", offre);
-        return rejectWithValue("Données de l’offre invalides");
+        return rejectWithValue("Données de l'offre invalides");
       }
 
       const dateCreation =
@@ -115,7 +115,7 @@ export const fetchOffreById = createAsyncThunk(
           ? "Délai d'attente dépassé. Vérifiez votre connexion."
           : error.message === "Network Error"
           ? "Erreur réseau. Vérifiez que le serveur est accessible."
-          : "Erreur lors de la récupération de l’offre");
+          : "Erreur lors de la récupération de l'offre");
       return rejectWithValue(message);
     }
   }
@@ -268,7 +268,7 @@ const offresEmploiSlice = createSlice({
       .addCase(fetchOffreById.rejected, (state, action) => {
         state.loading = false;
         state.error =
-          action.payload || "Erreur lors de la récupération de l’offre";
+          action.payload || "Erreur lors de la récupération de l'offre";
       })
       .addCase(submitCandidature.pending, (state) => {
         state.candidatureStatus = "pending";

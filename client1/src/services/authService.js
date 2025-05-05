@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:5000/api/auth";
+export const API_URL = "http://localhost:5000/api/auth";
 
 const authService = {
   login: async (credentials) => {
@@ -54,6 +54,28 @@ const authService = {
 
   isAuthenticated: () => {
     return !!localStorage.getItem("token");
+  },
+
+  checkUserStatus: async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return null;
+
+      const response = await axios.get(`${API_URL}/me`, {
+        headers: { Authorization: token },
+      });
+
+      return response.data.user;
+    } catch (error) {
+      // Si le token est invalide ou expiré, déconnecter l'utilisateur
+      if (
+        error.response &&
+        (error.response.status === 401 || error.response.status === 403)
+      ) {
+        authService.logout();
+      }
+      return null;
+    }
   },
 };
 

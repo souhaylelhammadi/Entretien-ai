@@ -1,14 +1,12 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import {
+  cleanToken,
+  getCleanToken,
+  removeToken,
+} from "../../../utils/tokenUtils";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
-
-// Validation de l'URL de l'API au démarrage
-if (!API_URL) {
-  console.error("Erreur: REACT_APP_API_URL n'est pas défini dans .env");
-} else {
-  console.log("API_URL configurée:", API_URL);
-}
+const API_URL = "http://localhost:5000/api/auth";
 
 // Middleware pour valider les actions Redux
 export const validateActionMiddleware = () => (next) => (action) => {
@@ -16,161 +14,35 @@ export const validateActionMiddleware = () => (next) => (action) => {
     console.warn("Action invalide détectée:", action);
     return;
   }
-  console.log("Dispatch action:", action.type);
   return next(action);
-};
-
-// Fonction pour réessayer les requêtes en cas d'échec (timeout ou erreur réseau)
-const retryRequest = async (fn, retries = 2, delay = 1000) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (i === retries - 1 || !err.code || err.code !== "ECONNABORTED") {
-        throw err;
-      }
-      console.warn(`Tentative ${i + 1}/${retries} après ${delay}ms`);
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
-};
-
-// Nettoyer le jeton (supprimer "Bearer " si présent)
-const cleanToken = (token) => {
-  if (!token) {
-    console.warn("Token manquant dans cleanToken");
-    return null;
-  }
-  
-  // Convertir en string si nécessaire
-  const tokenStr = String(token).trim();
-  console.log("Token avant nettoyage:", tokenStr);
-  
-  // Supprimer "Bearer " si présent
-  let cleanedToken = tokenStr.startsWith("Bearer ") ? tokenStr.substring(7) : tokenStr;
-  
-  // Vérifier si le token commence par "EMAIL:"
-  if (!cleanedToken.startsWith("EMAIL:")) {
-    console.warn("Token ne commence pas par 'EMAIL:':", cleanedToken);
-    return null;
-  }
-  
-  console.log("Token après nettoyage:", cleanedToken);
-  return cleanedToken;
-};
-
-// Préparer le token pour l'envoi (ajouter "Bearer " si nécessaire)
-const prepareToken = (token) => {
-  if (!token) return null;
-  
-  // Vérifier si le token est déjà au bon format
-  if (token.startsWith("Bearer ")) {
-    return token;
-  }
-  
-  // Vérifier si le token commence par "EMAIL:"
-  if (!token.startsWith("EMAIL:")) {
-    console.warn("Token invalide dans prepareToken:", token);
-    return null;
-  }
-  
-  return `Bearer ${token}`;
 };
 
 // Thunk pour la connexion
 export const loginUser = createAsyncThunk(
   "auth/loginUser",
-  async ({ email, mot_de_passe }, { rejectWithValue }) => {
+  async (credentials, { rejectWithValue }) => {
     try {
-      if (!email || !mot_de_passe) {
-        throw new Error("Email et mot de passe requis");
-      }
-      if (!/^\S+@\S+\.\S+$/.test(email)) {
-        throw new Error("Format d'email invalide");
-      }
-
-      console.log("Envoi de la requête de connexion:", {
-        method: "POST",
-        url: `${API_URL}/api/auth/login`,
-        data: { email, mot_de_passe: "[masqué]" },
+      const response = await axios.post(`${API_URL}/login`, {
+        email: credentials.email,
+        mot_de_passe: credentials.mot_de_passe,
       });
 
-      const request = () =>
-        axios.post(
-          `${API_URL}/api/auth/login`,
-          { email, mot_de_passe },
-          { 
-            timeout: 10000,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            }
-          }
-        );
-
-      const response = await retryRequest(request);
-      console.log("Réponse de connexion complète:", response);
-      console.log("Token brut reçu:", response.data.token);
-      console.log("Type du token:", typeof response.data.token);
-      console.log("Structure de la réponse:", {
-        message: response.data.message,
-        user: response.data.user,
-        token: response.data.token
-      });
-
-      // Vérifier que le token est bien présent dans la réponse
-      if (!response.data.token) {
-        console.error("Token manquant dans la réponse");
-        throw new Error("Jeton manquant dans la réponse");
-      }
-
-      const token = cleanToken(response.data.token);
-      console.log("Token nettoyé:", token);
-      
-      if (!token) {
-        console.error("Token manquant ou invalide");
-        throw new Error("Jeton reçu invalide");
-      }
-      
-      // Vérifier que le token contient bien l'email
-      const emailFromToken = token.substring(6); // Supprimer "EMAIL:"
-      if (emailFromToken !== email) {
-        console.error("Email dans le token ne correspond pas à l'email de connexion");
-        throw new Error("Jeton reçu invalide");
-      }
-      
-      console.log(
-        "Jeton reçu (premiers caractères):",
-        token.substring(0, 10) + "..."
-      );
-
-      localStorage.setItem("token", token);
-      console.log("Jeton stocké dans localStorage");
+      const { token, user } = response.data;
+      localStorage.setItem("token", `Bearer ${token}`);
+      localStorage.setItem("user", JSON.stringify(user));
 
       return {
-        ...response.data,
-        token: token,
+        token: {
+          value: `Bearer ${token}`,
+          role: user.role,
+          email: user.email,
+        },
+        user,
       };
-    } catch (err) {
-      console.error("Erreur dans loginUser:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-        headers: err.response?.headers,
-        config: {
-          url: err.config?.url,
-          method: err.config?.method,
-          headers: err.config?.headers
-        }
-      });
-      const message =
-        err.response?.data?.message ||
-        (err.code === "ECONNABORTED"
-          ? "Délai d'attente dépassé. Vérifiez votre connexion."
-          : err.message === "Network Error"
-          ? "Erreur réseau. Vérifiez que le serveur est accessible."
-          : err.message || "Échec de la connexion");
-      return rejectWithValue(message);
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Erreur lors de la connexion"
+      );
     }
   }
 );
@@ -180,76 +52,33 @@ export const registerUser = createAsyncThunk(
   "auth/registerUser",
   async (userData, { rejectWithValue }) => {
     try {
-      const requiredFields = [
-        "nom",
-        "email",
-        "mot_de_passe",
-        "telephone",
-        "role",
-      ];
-      if (!requiredFields.every((field) => userData[field])) {
-        throw new Error("Tous les champs obligatoires doivent être remplis");
-      }
-      if (!/^\S+@\S+\.\S+$/.test(userData.email)) {
-        throw new Error("Format d'email invalide");
-      }
-      if (userData.mot_de_passe.length < 8) {
-        throw new Error("Le mot de passe doit contenir au moins 8 caractères");
-      }
-      if (
-        !/[A-Z]/.test(userData.mot_de_passe) ||
-        !/[0-9]/.test(userData.mot_de_passe)
-      ) {
-        throw new Error(
-          "Le mot de passe doit inclure une majuscule et un chiffre"
-        );
-      }
-      if (!["candidat", "recruteur"].includes(userData.role)) {
-        throw new Error("Rôle invalide. Doit être 'candidat' ou 'recruteur'");
-      }
-      if (userData.role === "recruteur" && !userData.entreprise_id) {
-        throw new Error("L'ID de l'entreprise est requis pour les recruteurs");
-      }
-      if (!userData.acceptTerms) {
-        throw new Error("Vous devez accepter les conditions");
-      }
-
-      console.log("Envoi de la requête d'inscription:", {
-        method: "POST",
-        url: `${API_URL}/api/auth/register`,
-        data: { ...userData, mot_de_passe: "[masqué]" },
+      const response = await axios.post(`${API_URL}/register`, {
+        email: userData.email,
+        mot_de_passe: userData.mot_de_passe,
+        nom: userData.nom,
+        telephone: userData.telephone,
+        role: userData.role,
+        ...(userData.role === "recruteur" && {
+          nomEntreprise: userData.nomEntreprise,
+        }),
       });
-      const request = () =>
-        axios.post(`${API_URL}/api/auth/register`, userData, {
-          timeout: 10000,
-        });
 
-      const response = await retryRequest(request);
-      console.log("Réponse d'inscription:", response.data);
+      const { token, user } = response.data;
+      localStorage.setItem("token", `Bearer ${token}`);
+      localStorage.setItem("user", JSON.stringify(user));
 
-      const token = cleanToken(response.data.token);
-      if (!token || !token.startsWith("EMAIL:")) {
-        throw new Error("Jeton reçu invalide");
-      }
-
-      localStorage.setItem("token", token);
-      console.log("Jeton stocké dans localStorage pour l'inscription");
-
-      return response.data;
-    } catch (err) {
-      console.error("Erreur dans registerUser:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-      });
-      const message =
-        err.response?.data?.message ||
-        (err.code === "ECONNABORTED"
-          ? "Délai d'attente dépassé. Vérifiez votre connexion."
-          : err.message === "Network Error"
-          ? "Erreur réseau. Vérifiez que le serveur est accessible."
-          : err.message || "Échec de l'inscription");
-      return rejectWithValue(message);
+      return {
+        token: {
+          value: `Bearer ${token}`,
+          role: user.role,
+          email: user.email,
+        },
+        user,
+      };
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Erreur lors de l'inscription"
+      );
     }
   }
 );
@@ -260,13 +89,12 @@ export const updateUser = createAsyncThunk(
   async (userData, { rejectWithValue, getState }) => {
     try {
       const { auth } = getState();
-      const token = auth.token;
+      let token = auth.token?.value;
+
+      // Nettoyer et valider le token
+      token = cleanToken(token);
       if (!token) {
-        throw new Error("Aucun jeton trouvé");
-      }
-      if (token.split(".").length !== 3) {
-        localStorage.removeItem("token");
-        throw new Error("Jeton malformé");
+        throw new Error("Aucun jeton valide trouvé");
       }
 
       if (!userData.nom || !userData.email || !userData.telephone) {
@@ -276,34 +104,17 @@ export const updateUser = createAsyncThunk(
         throw new Error("Format d'email invalide");
       }
 
-      console.log("Envoi de la requête de mise à jour:", {
-        method: "PUT",
-        url: `${API_URL}/api/auth/update`,
-        data: userData,
+      const response = await axios.put(`${API_URL}/update`, userData, {
+        headers: { Authorization: token },
+        timeout: 10000,
       });
-      const request = () =>
-        axios.put(`${API_URL}/api/auth/update`, userData, {
-          headers: { Authorization: `Bearer ${token}` },
-          timeout: 10000,
-        });
-
-      const response = await retryRequest(request);
-      console.log("Réponse de mise à jour:", response.data);
 
       return response.data.user;
-    } catch (err) {
-      console.error("Erreur dans updateUser:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-      });
+    } catch (error) {
       const message =
-        err.response?.data?.message ||
-        (err.code === "ECONNABORTED"
-          ? "Délai d'attente dépassé. Vérifiez votre connexion."
-          : err.message === "Network Error"
-          ? "Erreur réseau. Vérifiez que le serveur est accessible."
-          : err.message || "Échec de la mise à jour du profil");
+        error.response?.data?.message ||
+        error.message ||
+        "Échec de la mise à jour du profil";
       return rejectWithValue(message);
     }
   }
@@ -314,55 +125,37 @@ export const checkAuthStatus = createAsyncThunk(
   "auth/checkAuthStatus",
   async (_, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem("token");
+      // Utiliser getCleanToken qui gère automatiquement le nettoyage et la mise à jour du localStorage
+      const token = getCleanToken();
       if (!token) {
-        throw new Error("Aucun jeton trouvé");
-      }
-      if (!token.startsWith("EMAIL:")) {
-        localStorage.removeItem("token");
-        throw new Error("Jeton malformé");
+        return null;
       }
 
-      console.log("Envoi de la requête de vérification d'authentification:", {
-        method: "GET",
-        url: `${API_URL}/api/auth/me`,
-        token: token.substring(0, 10) + "...",
+      const response = await axios.get(`${API_URL}/me`, {
+        headers: { Authorization: token },
       });
 
-      const config = {
-        headers: {
-          Authorization: prepareToken(token),
+      const user = response.data.user;
+      return {
+        user,
+        token: {
+          value: token,
+          role: user.role,
+          email: user.email,
         },
       };
-
-      const response = await retryRequest(() =>
-        axios.get(`${API_URL}/api/auth/me`, config)
-      );
-      console.log("Réponse de vérification d'authentification:", response.data);
-
-      return {
-        ...response.data,
-        token: token,
-      };
-    } catch (err) {
-      console.error("Erreur dans checkAuthStatus:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-      });
-
-      if (err.response?.status === 401 || err.message === "Jeton malformé") {
-        console.log(
-          "Suppression du jeton en raison d'échec d'authentification"
-        );
-        localStorage.removeItem("token");
+    } catch (error) {
+      if (
+        error.response &&
+        (error.response.status === 401 || error.response.status === 403)
+      ) {
+        // Si le token est expiré ou invalide, nettoyer le local storage
+        removeToken();
       }
 
-      const message =
-        err.response?.data?.message ||
-        err.message ||
-        "Échec de la vérification de l'authentification";
-      return rejectWithValue(message);
+      return rejectWithValue(
+        error.response?.data?.message || "Erreur lors de la vérification"
+      );
     }
   }
 );
@@ -370,51 +163,30 @@ export const checkAuthStatus = createAsyncThunk(
 // Thunk pour la déconnexion
 export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
-  async (_, { rejectWithValue, getState }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const { auth } = getState();
-      const token = auth.token;
+      const token = getCleanToken();
       if (!token) {
         throw new Error("Aucun jeton trouvé");
       }
-      if (!token.startsWith("EMAIL:")) {
-        localStorage.removeItem("token");
-        throw new Error("Jeton malformé");
-      }
 
-      console.log("Envoi de la requête de déconnexion:", {
-        method: "POST",
-        url: `${API_URL}/api/auth/logout`,
-      });
-      const request = () =>
-        axios.post(
-          `${API_URL}/api/auth/logout`,
-          {},
-          {
-            headers: { Authorization: prepareToken(token) },
-            timeout: 10000,
-          }
-        );
+      await axios.post(
+        `${API_URL}/logout`,
+        {},
+        {
+          headers: { Authorization: token },
+          timeout: 10000,
+        }
+      );
 
-      const response = await retryRequest(request);
-      console.log("Réponse de déconnexion:", response.data);
-
-      localStorage.removeItem("token");
-      return response.data;
-    } catch (err) {
-      console.error("Erreur dans logoutUser:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-      });
-      localStorage.removeItem("token");
+      removeToken();
+      return { message: "Déconnexion réussie" };
+    } catch (error) {
+      removeToken();
       const message =
-        err.response?.data?.message ||
-        (err.code === "ECONNABORTED"
-          ? "Délai d'attente dépassé. Vérifiez votre connexion."
-          : err.message === "Network Error"
-          ? "Erreur réseau. Vérifiez que le serveur est accessible."
-          : err.message || "Échec de la déconnexion");
+        error.response?.data?.message ||
+        error.message ||
+        "Échec de la déconnexion";
       return rejectWithValue(message);
     }
   }
@@ -425,7 +197,12 @@ const authSlice = createSlice({
   name: "auth",
   initialState: {
     user: null,
-    token: null,
+    token: {
+      value: null,
+      role: "candidat",
+      email: "",
+      mot_de_passe: "",
+    },
     isAuthenticated: false,
     role: "candidat",
     email: "",
@@ -441,9 +218,11 @@ const authSlice = createSlice({
   reducers: {
     setEmail: (state, action) => {
       state.email = action.payload;
+      state.token.email = action.payload;
     },
     setMotDePasse: (state, action) => {
       state.mot_de_passe = action.payload;
+      state.token.mot_de_passe = action.payload;
     },
     setConfirmMotDePasse: (state, action) => {
       state.confirmMotDePasse = action.payload;
@@ -457,23 +236,32 @@ const authSlice = createSlice({
     setNomEntreprise: (state, action) => {
       state.nomEntreprise = action.payload;
     },
+    setDescriptionEntreprise: (state, action) => {
+      state.entreprise.description = action.payload;
+    },
+    setSecteurActivite: (state, action) => {
+      state.entreprise.secteurActivite = action.payload;
+    },
+    setTailleEntreprise: (state, action) => {
+      state.entreprise.taille = action.payload;
+    },
     setRole: (state, action) => {
       const validRoles = ["candidat", "recruteur"];
-      if (!validRoles.includes(action.payload)) {
-        console.warn(
-          "Tentative de définition d'un rôle invalide:",
-          action.payload
-        );
-        state.authError = "Rôle invalide. Doit être 'candidat' ou 'recruteur'";
-      } else {
+      if (validRoles.includes(action.payload)) {
         state.role = action.payload;
-        state.authError = "";
+      } else {
+        state.authError = "Rôle invalide. Doit être 'candidat' ou 'recruteur'";
       }
     },
     setAcceptTerms: (state, action) => {
       state.acceptTerms = action.payload;
     },
+    setAuthError: (state, action) => {
+      state.authError = action.payload;
+    },
     clearForm: (state) => {
+      state.token.email = "";
+      state.token.mot_de_passe = "";
       state.email = "";
       state.mot_de_passe = "";
       state.confirmMotDePasse = "";
@@ -485,7 +273,12 @@ const authSlice = createSlice({
     },
     resetAuthState: (state) => {
       state.user = null;
-      state.token = null;
+      state.token = {
+        value: null,
+        role: "candidat",
+        email: "",
+        mot_de_passe: "",
+      };
       state.isAuthenticated = false;
       state.role = "candidat";
       state.email = "";
@@ -497,6 +290,9 @@ const authSlice = createSlice({
       state.acceptTerms = false;
       state.authError = "";
       state.loading = false;
+    },
+    clearError: (state) => {
+      state.authError = "";
     },
   },
   extraReducers: (builder) => {
@@ -516,6 +312,9 @@ const authSlice = createSlice({
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
         state.authError = action.payload;
+        state.isAuthenticated = false;
+        state.user = null;
+        state.token.value = null;
       })
       // Inscription
       .addCase(registerUser.pending, (state) => {
@@ -554,16 +353,18 @@ const authSlice = createSlice({
       })
       .addCase(checkAuthStatus.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-        state.isAuthenticated = true;
+        if (action.payload) {
+          state.user = action.payload.user;
+          state.token = action.payload.token;
+          state.isAuthenticated = true;
+        }
         state.authError = "";
       })
       .addCase(checkAuthStatus.rejected, (state, action) => {
         state.loading = false;
         state.isAuthenticated = false;
         state.user = null;
-        state.token = null;
+        state.token.value = null;
         state.authError = action.payload;
       })
       // Déconnexion
@@ -574,27 +375,30 @@ const authSlice = createSlice({
       .addCase(logoutUser.fulfilled, (state) => {
         state.loading = false;
         state.user = null;
-        state.token = null;
+        state.token = {
+          value: null,
+          role: "candidat",
+          email: "",
+          mot_de_passe: "",
+        };
         state.isAuthenticated = false;
         state.authError = "";
       })
       .addCase(logoutUser.rejected, (state, action) => {
         state.loading = false;
         state.user = null;
-        state.token = null;
+        state.token = {
+          value: null,
+          role: "candidat",
+          email: "",
+          mot_de_passe: "",
+        };
         state.isAuthenticated = false;
         state.authError = action.payload;
-      })
-      // Gestion des cas par défaut pour éviter les erreurs silencieuses
-      .addDefaultCase((state, action) => {
-        if (!action || !action.type) {
-          console.warn("Action invalide reçue:", action);
-        }
       });
   },
 });
 
-// Export des actions
 export const {
   setEmail,
   setMotDePasse,
@@ -604,9 +408,10 @@ export const {
   setNomEntreprise,
   setRole,
   setAcceptTerms,
+  setAuthError,
   clearForm,
   resetAuthState,
+  clearError,
 } = authSlice.actions;
 
-// Export du réducteur
 export default authSlice.reducer;

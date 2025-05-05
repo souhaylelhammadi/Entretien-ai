@@ -81,47 +81,50 @@ export const updateCandidateStatus = createAsyncThunk(
     try {
       const { auth } = getState();
       let token = auth.token || localStorage.getItem("token");
-      const userId = auth.user?._id || auth.user?.id || localStorage.getItem("userId");
-      
+      const userId =
+        auth.user?._id || auth.user?.id || localStorage.getItem("userId");
+
       if (!token) {
         throw new Error("Aucun jeton d'authentification trouvé");
       }
-      
+
       if (!userId) {
         throw new Error("ID utilisateur non trouvé, veuillez vous reconnecter");
       }
-      
+
       console.log("========== UPDATE CANDIDATE STATUS ==========");
       console.log("Mise à jour candidat ID:", candidateId);
       console.log("Nouveau statut:", status);
       console.log("Recruteur ID:", userId);
-      
+
       const response = await fetch(
         `http://localhost:5000/api/candidates/${candidateId}`,
         {
           method: "PUT",
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
-            "Authorization": token 
+            Authorization: token,
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             statut: status,
-            recruteur_id: userId // Ajouter l'ID du recruteur pour la vérification côté serveur
+            recruteur_id: userId, // Ajouter l'ID du recruteur pour la vérification côté serveur
           }),
         }
       );
-      
+
       console.log("Statut réponse mise à jour:", response.status);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error("Erreur mise à jour candidat:", errorData);
-        throw new Error(`Échec de mise à jour du statut: ${response.statusText}`);
+        throw new Error(
+          `Échec de mise à jour du statut: ${response.statusText}`
+        );
       }
-      
+
       console.log("Mise à jour réussie du candidat");
       console.log("========== FIN UPDATE CANDIDATE STATUS ==========");
-      
+
       return { candidateId, status };
     } catch (err) {
       console.error("Error updating candidate status:", err);
@@ -139,7 +142,7 @@ export const selectCandidatesData = createSelector(
     pagination: candidatesState.pagination || {
       currentPage: 1,
       itemsPerPage: 10,
-      total: 0, // Ensure total is initialized
+      total: 0,
     },
     viewDocument: candidatesState.viewDocument || {
       isOpen: false,
@@ -157,7 +160,7 @@ const candidatesSlice = createSlice({
   name: "candidates",
   initialState: {
     candidates: [],
-    pagination: { currentPage: 1, itemsPerPage: 10, total: 0 }, // Ensure total is initialized
+    pagination: { currentPage: 1, itemsPerPage: 10, total: 0 },
     viewDocument: {
       isOpen: false,
       type: "",
@@ -167,7 +170,7 @@ const candidatesSlice = createSlice({
     },
     loading: false,
     error: null,
-    status: "idle", // idle | loading | succeeded | failed
+    status: "idle",
   },
   reducers: {
     setPagination: (state, action) => {
@@ -197,7 +200,7 @@ const candidatesSlice = createSlice({
         state.status = "succeeded";
         state.loading = false;
         state.candidates = action.payload;
-        state.pagination.total = action.payload.length; // Update total based on fetched candidates
+        state.pagination.total = action.payload.length;
         console.log("Updated candidates state:", action.payload);
       })
       .addCase(fetchCandidates.rejected, (state, action) => {

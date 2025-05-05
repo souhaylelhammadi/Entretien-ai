@@ -1,4 +1,3 @@
-// src/components/ProfileSection.jsx
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -8,9 +7,12 @@ import {
   Phone,
   Briefcase,
   FileText,
+  CheckCircle2,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import logoutUser from "../../store/auth/authSlice";
+import { logoutUser } from "../../store/auth/authSlice";
 import { updateProfileAsync } from "../../store/recruteur/profileSlice";
 
 const ProfileSection = () => {
@@ -20,29 +22,36 @@ const ProfileSection = () => {
   const { user, authError } = useSelector((state) => state.auth);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [alert, setAlert] = useState({ show: false, type: "", message: "" });
   const [formData, setFormData] = useState({
-    
-    nom: profile?.nom || user?.nom || "",
-    email: profile?.email || user?.email || "admin@recrutement.ai",
-    phone: profile?.phone || "",
-    position: profile?.position || "",
-    department: profile?.department || "",
-    bio: profile?.bio || "",
-    linkedin: profile?.linkedin || "",
+    nom: "",
+    email: "admin@recrutement.ai",
+    phone: "",
+    position: "",
+    department: "",
+    bio: "",
+    linkedin: "",
+    entreprise: "",
+    secteur_activite: "",
+    description_entreprise: "",
+    taille_entreprise: "",
   });
 
-  // Update form data if profile changes
+  // Update form data if profile or user changes
   useEffect(() => {
     if (profile || user) {
       setFormData({
         nom: profile?.nom || user?.nom || "",
-
         email: profile?.email || user?.email || "admin@recrutement.ai",
         phone: profile?.phone || "",
         position: profile?.position || "",
         department: profile?.department || "",
         bio: profile?.bio || "",
         linkedin: profile?.linkedin || "",
+        entreprise: profile?.entreprise || "",
+        secteur_activite: profile?.secteur_activite || "",
+        description_entreprise: profile?.description_entreprise || "",
+        taille_entreprise: profile?.taille_entreprise || "",
       });
     }
   }, [profile, user]);
@@ -51,6 +60,7 @@ const ProfileSection = () => {
   const handleLogout = async () => {
     try {
       await dispatch(logoutUser()).unwrap();
+      localStorage.removeItem("userId");
       navigate("/login");
     } catch (err) {
       console.error("Logout failed:", err);
@@ -63,13 +73,16 @@ const ProfileSection = () => {
     if (isEditing) {
       setFormData({
         nom: profile?.nom || user?.nom || "",
-
         email: profile?.email || user?.email || "admin@recrutement.ai",
         phone: profile?.phone || "",
         position: profile?.position || "",
         department: profile?.department || "",
         bio: profile?.bio || "",
         linkedin: profile?.linkedin || "",
+        entreprise: profile?.entreprise || "",
+        secteur_activite: profile?.secteur_activite || "",
+        description_entreprise: profile?.description_entreprise || "",
+        taille_entreprise: profile?.taille_entreprise || "",
       });
     }
   };
@@ -83,18 +96,91 @@ const ProfileSection = () => {
   // Handle profile update
   const handleSave = async () => {
     try {
-      await dispatch(updateProfileAsync(formData)).unwrap();
+      console.log("Saving profile data:", formData);
+
+      // Vérification des champs obligatoires pour un recruteur
+      if (user.role === "recruteur") {
+        const requiredFields = {
+          entreprise: "Nom de l'entreprise",
+          secteur_activite: "Secteur d'activité",
+          description_entreprise: "Description de l'entreprise",
+          taille_entreprise: "Taille de l'entreprise",
+        };
+
+        const missingFields = Object.entries(requiredFields)
+          .filter(([field]) => !formData[field]?.trim())
+          .map(([_, label]) => label);
+
+        if (missingFields.length > 0) {
+          setAlert({
+            show: true,
+            type: "error",
+            message: `Champs obligatoires manquants :\n• ${missingFields.join("\n• ")}`,
+          });
+          return;
+        }
+      }
+
+      const response = await dispatch(updateProfileAsync(formData)).unwrap();
+      console.log("Profile update response:", response);
+
+      setAlert({
+        show: true,
+        type: "success",
+        message: "Profil mis à jour avec succès",
+      });
+
       setIsEditing(false);
     } catch (err) {
       console.error("Update error:", err);
+      setAlert({
+        show: true,
+        type: "error",
+        message: err.message || "Erreur lors de la mise à jour du profil",
+      });
     }
   };
 
+  // Clear alert after 5 seconds
+  useEffect(() => {
+    if (alert.show) {
+      const timer = setTimeout(() => {
+        setAlert({ show: false, type: "", message: "" });
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert.show]);
+
   return (
     <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">
-        Profil Recruteur
-      </h2>
+      {alert.show && (
+        <div
+          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center space-x-3 ${
+            alert.type === "success"
+              ? "bg-green-100 text-green-800 border border-green-200"
+              : "bg-red-100 text-red-800 border border-red-200"
+          }`}
+        >
+          {alert.type === "success" ? (
+            <CheckCircle2 className="h-5 w-5" />
+          ) : (
+            <AlertCircle className="h-5 w-5" />
+          )}
+          <div className="flex-1">
+            <p className="text-sm font-medium whitespace-pre-line">
+              {alert.message}
+            </p>
+          </div>
+          <button
+            onClick={() => setAlert({ show: false, type: "", message: "" })}
+            className="p-1 hover:bg-opacity-20 rounded-full"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">Profil Recruteur</h2>
 
       {loading ? (
         <div className="flex justify-center items-center h-64">
@@ -103,6 +189,14 @@ const ProfileSection = () => {
       ) : error || authError ? (
         <div className="bg-red-100 text-red-700 p-4 rounded-lg">
           Erreur: {error || authError}
+          {error?.includes("Session expirée") && (
+            <button
+              onClick={handleLogout}
+              className="ml-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Se reconnecter
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
@@ -113,20 +207,17 @@ const ProfileSection = () => {
             </div>
             <div className="flex-1">
               {isEditing ? (
-                <>
-                  
-                  <input
-                    type="text"
-                    name="nom"
-                    value={formData.nom}
-                    onChange={handleInputChange}
-                    className="text-lg font-semibold text-gray-800 border rounded px-2 py-1 w-full"
-                    placeholder="Nom"
-                  />
-                </>
+                <input
+                  type="text"
+                  name="nom"
+                  value={formData.nom}
+                  onChange={handleInputChange}
+                  className="text-lg font-semibold text-gray-800 border rounded px-2 py-1 w-full"
+                  placeholder="Nom"
+                />
               ) : (
                 <p className="text-lg font-semibold text-gray-800">
-                  {formData.nom}
+                  {formData.nom || "Non spécifié"}
                 </p>
               )}
               <p className="text-sm text-gray-500">{formData.email}</p>
@@ -149,6 +240,72 @@ const ProfileSection = () => {
             <div className="space-y-4">
               {isEditing ? (
                 <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">
+                        Nom de l'entreprise *
+                      </label>
+                      <input
+                        type="text"
+                        name="entreprise"
+                        value={formData.entreprise}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        placeholder="Ex: Tech Corp"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">
+                        Secteur d'activité *
+                      </label>
+                      <input
+                        type="text"
+                        name="secteur_activite"
+                        value={formData.secteur_activite}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        placeholder="Ex: Informatique"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Description de l'entreprise *
+                    </label>
+                    <textarea
+                      name="description_entreprise"
+                      value={formData.description_entreprise}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      rows="3"
+                      placeholder="Décrivez votre entreprise..."
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Taille de l'entreprise *
+                    </label>
+                    <select
+                      name="taille_entreprise"
+                      value={formData.taille_entreprise}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      required
+                    >
+                      <option value="">Sélectionnez une taille</option>
+                      <option value="1-10">1-10 employés</option>
+                      <option value="11-50">11-50 employés</option>
+                      <option value="51-200">51-200 employés</option>
+                      <option value="201-500">201-500 employés</option>
+                      <option value="500+">Plus de 500 employés</option>
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">
@@ -177,73 +334,62 @@ const ProfileSection = () => {
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      Téléphone
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      placeholder="Ex: +33 6 12 34 56 78"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
-                      Profil LinkedIn
-                    </label>
-                    <input
-                      type="url"
-                      name="linkedin"
-                      value={formData.linkedin}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      placeholder="https://www.linkedin.com/in/votre-profil"
-                    />
-                  </div>
                 </>
               ) : (
-                <div className="space-y-2">
-                  {(formData.position || formData.department) && (
-                    <p className="text-gray-700 flex items-center">
-                      <Briefcase className="w-4 h-4 mr-2 text-blue-500" />
-                      {formData.position}
-                      {formData.department && ` - ${formData.department}`}
+                <>
+                  {user.entreprise ? (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-500">Entreprise</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {user.entreprise}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">
+                            Secteur d'activité
+                          </p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {user.secteur_activite || "Non spécifié"}
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Description</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {user.description_entreprise || "Non spécifiée"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Taille</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {user.taille_entreprise || "Non spécifiée"}
+                        </p>
+                      </div>
+                      {user.position && (
+                        <div>
+                          <p className="text-sm text-gray-500">Poste</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {user.position}
+                          </p>
+                        </div>
+                      )}
+                      {user.department && (
+                        <div>
+                          <p className="text-sm text-gray-500">Département</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {user.department}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">
+                      Aucune information professionnelle fournie
                     </p>
                   )}
-
-                  {formData.phone && (
-                    <p className="text-gray-700 flex items-center">
-                      <Phone className="w-4 h-4 mr-2 text-blue-500" />
-                      {formData.phone}
-                    </p>
-                  )}
-
-                  {formData.linkedin && (
-                    <p className="text-gray-700 flex items-center">
-                      <Linkedin className="w-4 h-4 mr-2 text-blue-500" />
-                      <a
-                        href={formData.linkedin}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
-                      >
-                        Profil LinkedIn
-                      </a>
-                    </p>
-                  )}
-
-                  {!formData.position &&
-                    !formData.department &&
-                    !formData.phone &&
-                    !formData.linkedin && (
-                      <p className="text-gray-500 italic">
-                        Aucune information professionnelle fournie
-                      </p>
-                    )}
-                </div>
+                </>
               )}
             </div>
           </div>

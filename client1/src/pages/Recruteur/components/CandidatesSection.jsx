@@ -1,82 +1,60 @@
-import React, { useEffect, useState } from "react";
-import { useSelector } from "react-redux";
-import { Building, Mail, Download } from "lucide-react";
+import React, { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  Building,
+  Mail,
+  Download,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import {
+  fetchCandidates,
+  downloadCV,
+  setCandidatesPage,
+} from "../../store/recruteur/dashboardSlice";
 
 const CandidatesSection = () => {
-  const { token } = useSelector((state) => state.auth);
-  const [candidates, setCandidates] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const dispatch = useDispatch();
+  const {
+    candidates = [],
+    loading,
+    error,
+  } = useSelector((state) => ({
+    candidates: state.dashboard.data?.candidates || [],
+    loading: state.dashboard.loading,
+    error: state.dashboard.error,
+  }));
+  const pagination = useSelector(
+    (state) =>
+      state.dashboard.candidatesPagination || {
+        page: 1,
+        per_page: 10,
+        total: 0,
+        pages: 0,
+      }
+  );
 
   useEffect(() => {
-    const fetchCandidates = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(
-          "http://localhost:5000/api/candidates?page=1&limit=10",
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+    dispatch(
+      fetchCandidates({
+        page: pagination?.page || 1,
+        per_page: pagination?.per_page || 10,
+      })
+    );
+  }, [dispatch, pagination?.page, pagination?.per_page]);
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log("Candidates reçus:", data);
-        setCandidates(data.candidates || []);
-      } catch (error) {
-        console.error("Erreur lors du chargement des candidats:", {
-          message: error.message,
-          name: error.name,
-          stack: error.stack,
-        });
-        setError("Échec du chargement des candidats. Veuillez réessayer.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (token) {
-      fetchCandidates();
-    } else {
-      setError("Veuillez vous reconnecter, session expirée.");
-    }
-  }, [token]);
-
-  const handleDownloadCV = async (candidateId, candidateName) => {
+  const handleDownloadCV = async (candidatureId, candidateName) => {
     try {
-      const response = await fetch(
-        `http://localhost:5000/api/cv/${candidateId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Échec du téléchargement du CV");
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `cv_${candidateName}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      await dispatch(downloadCV({ candidatureId })).unwrap();
     } catch (error) {
       console.error("Erreur lors du téléchargement du CV:", error);
-      setError("Échec du téléchargement du CV. Veuillez réessayer.");
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage > 0 && newPage <= (pagination?.pages || 1)) {
+      dispatch(setCandidatesPage(newPage));
     }
   };
 
@@ -97,7 +75,7 @@ const CandidatesSection = () => {
         <div className="text-center">
           <span className="inline-block h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></span>
         </div>
-      ) : candidates.length === 0 ? (
+      ) : !Array.isArray(candidates) || candidates.length === 0 ? (
         <div className="p-8 text-center bg-white rounded-xl shadow-md border border-gray-200">
           <Building className="h-12 w-12 mx-auto text-gray-300 mb-3" />
           <p className="text-gray-500 text-lg">Aucun candidat disponible</p>
@@ -113,6 +91,12 @@ const CandidatesSection = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Email
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Offre
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Statut
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -121,12 +105,12 @@ const CandidatesSection = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {candidates.map((candidate) => (
                 <tr
-                  key={candidate._id}
+                  key={candidate.id}
                   className="hover:bg-gray-50 transition-colors"
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm font-medium text-gray-900">
-                      {candidate.nom}
+                      {candidate.nom} {candidate.prenom}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -137,10 +121,34 @@ const CandidatesSection = () => {
                       </span>
                     </div>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <FileText className="h-5 w-5 text-green-500 mr-2" />
+                      <span className="text-sm text-gray-600">
+                        {candidate.offre_titre}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-2 py-1 text-xs rounded-full ${
+                        candidate.status === "accepté"
+                          ? "bg-green-100 text-green-800"
+                          : candidate.status === "refusé"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}
+                    >
+                      {candidate.status || "En attente"}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                       onClick={() =>
-                        handleDownloadCV(candidate._id, candidate.nom)
+                        handleDownloadCV(
+                          candidate.id,
+                          `${candidate.nom}_${candidate.prenom}`
+                        )
                       }
                       className="text-blue-600 hover:text-blue-800 bg-blue-50 p-2 rounded-lg transition-colors"
                       title="Télécharger le CV"
@@ -152,6 +160,44 @@ const CandidatesSection = () => {
               ))}
             </tbody>
           </table>
+
+          {/* Pagination */}
+          {pagination && pagination.pages > 1 && (
+            <div className="px-6 py-3 flex items-center justify-between border-t border-gray-200">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Affichage de{" "}
+                  <span className="font-medium">{candidates.length}</span>{" "}
+                  candidats sur{" "}
+                  <span className="font-medium">{pagination.total}</span>
+                </p>
+              </div>
+              <div className="flex-1 flex justify-end">
+                <button
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page === 1}
+                  className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${
+                    pagination.page === 1 ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Précédent
+                </button>
+                <button
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={pagination.page === pagination.pages}
+                  className={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${
+                    pagination.page === pagination.pages
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                >
+                  Suivant
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

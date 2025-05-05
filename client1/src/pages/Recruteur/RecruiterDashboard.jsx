@@ -13,18 +13,22 @@ import {
 import {
   fetchInitialData,
   fetchGraphData,
+  fetchOffres,
+  fetchProfile,
+  fetchCandidates,
+  fetchInterviews,
   setActiveTab,
   toggleSidebar,
   closeSidebar,
   clearDashboardError,
   setSelectedPeriod,
+  resetProfile,
 } from "../store/recruteur/dashboardSlice";
-import { fetchProfile } from "../store/recruteur/profileSlice";
 import { useNavigate } from "react-router-dom";
+import ProfileSection from "./components/ProfileSection";
 import JobsSection from "./components/JobsSection";
 import CandidatesSection from "./components/CandidatesSection";
 import InterviewsSection from "./components/InterviewsSection";
-import ProfileSection from "./components/ProfileSection";
 import { Bar, Line, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -37,7 +41,33 @@ import {
   PointElement,
   LineElement,
   ArcElement,
+  Filler,
 } from "chart.js";
+import { resetAuthState } from "../store/auth/authSlice";
+import {
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+  Alert,
+  Paper,
+  ThemeProvider,
+  createTheme,
+  Grid,
+  Card,
+  CardContent,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+} from "@mui/material";
+import {
+  People as PeopleIcon,
+  Work as WorkIcon,
+  Event as EventIcon,
+  TrendingUp as TrendingUpIcon,
+} from "@mui/icons-material";
+import DashboardGraphs from "./components/DashboardGraphs";
 
 // Register Chart.js components
 ChartJS.register(
@@ -49,10 +79,14 @@ ChartJS.register(
   Legend,
   PointElement,
   LineElement,
-  ArcElement
+  ArcElement,
+  Filler
 );
 
-const DashboardRecrutement = () => {
+// Créer un thème par défaut
+const defaultTheme = createTheme();
+
+const RecruiterDashboard = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const {
@@ -65,7 +99,8 @@ const DashboardRecrutement = () => {
     pagination,
     loading,
     error,
-    selectedPeriod,
+    selectedPeriod = "week",
+    data,
   } = useSelector((state) => state.dashboard);
   const { user, token, isAuthenticated } = useSelector((state) => state.auth);
   const {
@@ -86,46 +121,64 @@ const DashboardRecrutement = () => {
 
   // Charger les données du dashboard si l'utilisateur est authentifié
   useEffect(() => {
-    if (isAuthenticated && token) {
-      console.log(
-        "Chargement des données du dashboard avec token:",
-        token.substring(0, 15) + "..."
-      );
-      dispatch(fetchInitialData({ page: 1, limit: 10, token }));
+    const fetchData = async () => {
+      if (isAuthenticated && token) {
+        console.log("Chargement des données du dashboard");
+        console.log("Token:", token);
+        try {
+          // Ensure token is stored in localStorage
+          if (!localStorage.getItem("token")) {
+            localStorage.setItem("token", token);
+          }
 
-      // Load profile data
-      try {
-        dispatch(fetchProfile())
-          .unwrap()
-          .then(() => console.log("Profile loaded successfully"))
-          .catch((err) => console.error("Failed to load profile:", err));
-      } catch (error) {
-        console.error("Error dispatching profile fetch:", error);
+          const result = await dispatch(
+            fetchInitialData({ page: 1, limit: 10 })
+          ).unwrap();
+          console.log("Initial data fetched:", result);
+          // Charger les données des graphiques après le chargement initial
+          dispatch(fetchGraphData({ period: selectedPeriod }));
+        } catch (error) {
+          console.error("Error fetching initial data:", error);
+          if (
+            error.includes("Session expired") ||
+            error.includes("Authentication token not found")
+          ) {
+            handleAuthError();
+          }
+        }
       }
-    }
-  }, [dispatch, token, isAuthenticated]);
+    };
+
+    fetchData();
+  }, [dispatch, isAuthenticated, token, navigate, selectedPeriod]);
 
   // Effect to fetch profile data when switching to profile tab
   useEffect(() => {
-    if (activeTab === "profile" && isAuthenticated && token) {
-      console.log("ProfileTab active: Checking profile data availability");
-      if (!profile && !profileLoading) {
+    const fetchProfileData = async () => {
+      if (activeTab === "profile" && isAuthenticated && token) {
         console.log("Fetching profile data for profile tab");
-        dispatch(fetchProfile());
+        try {
+          if (!profile && !profileLoading) {
+            await dispatch(fetchProfile()).unwrap();
+          }
+        } catch (error) {
+          console.error("Error fetching profile:", error);
+          if (
+            error.includes("Session expired") ||
+            error.includes("Authentication token not found")
+          ) {
+            handleAuthError();
+          }
+        }
       }
-    }
+    };
+
+    fetchProfileData();
   }, [activeTab, dispatch, isAuthenticated, token, profile, profileLoading]);
 
-  // Log profile errors for debugging
-  useEffect(() => {
-    if (profileError) {
-      console.error("Profile error detected:", profileError);
-    }
-  }, [profileError]);
-
-  const handlePeriodChange = (period) => {
-    dispatch(setSelectedPeriod(period));
-    dispatch(fetchGraphData({ period, token }));
+  const handlePeriodChange = (event) => {
+    dispatch(setSelectedPeriod(event.target.value));
+    dispatch(fetchGraphData({ period: event.target.value }));
   };
 
   const menuItems = [
@@ -148,473 +201,184 @@ const DashboardRecrutement = () => {
     { tab: "profile", label: "Profil", icon: <User className="w-5 h-5" /> },
   ];
 
-  const handleRetry = () => {
-    dispatch(clearDashboardError());
-    dispatch(fetchInitialData({ page: 1, limit: 10, token }));
+  const handleRetry = async () => {
+    try {
+      dispatch(clearDashboardError());
+      const result = await dispatch(
+        fetchInitialData({ page: 1, limit: 10 })
+      ).unwrap();
+      console.log("Data fetched successfully:", result);
+      dispatch(fetchGraphData({ period: selectedPeriod }));
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      if (
+        error.includes("Session expired") ||
+        error.includes("Authentication token not found")
+      ) {
+        handleAuthError();
+      }
+    }
   };
 
-  // Fonction pour gérer la déconnexion ou les problèmes d'authentification
   const handleAuthError = () => {
     localStorage.removeItem("token");
-    dispatch({ type: "auth/logout" });
+    localStorage.removeItem("userId");
+    dispatch(resetAuthState());
     navigate("/login");
   };
 
-  // Prepare chart data from graphData
-  const chartData = useMemo(() => {
-    if (!graphData) {
-      return {
-        weekly: { labels: [], candidates: [], interviews: [], jobs: [] },
-        monthly: { labels: [], candidates: [], interviews: [] },
-        status: { labels: [], data: [], backgroundColor: [] },
-        interviewStatus: { labels: [], data: [], backgroundColor: [] },
-      };
+  // Handle tab change
+  const handleTabChange = (tab) => {
+    // Éviter de recharger le même onglet
+    if (tab === activeTab) {
+      return;
     }
 
-    const weeklyLabels =
-      selectedPeriod === "week" && graphData.candidates_by_date
-        ? Object.keys(graphData.candidates_by_date).sort()
-        : [];
-    const monthlyLabels =
-      selectedPeriod === "month" || selectedPeriod === "year"
-        ? Object.keys(graphData.candidates_by_date || {}).sort()
-        : [];
+    dispatch(setActiveTab(tab));
 
-    return {
-      weekly: {
-        labels: weeklyLabels,
-        candidates: weeklyLabels.map(
-          (date) => graphData.candidates_by_date[date] || 0
-        ),
-        interviews: weeklyLabels.map(
-          (date) => graphData.interviews_by_date[date] || 0
-        ),
-        jobs: weeklyLabels.map((date) => graphData.offers_by_date[date] || 0),
-      },
-      monthly: {
-        labels: monthlyLabels,
-        candidates: monthlyLabels.map(
-          (date) => graphData.candidates_by_date[date] || 0
-        ),
-        interviews: monthlyLabels.map(
-          (date) => graphData.interviews_by_date[date] || 0
-        ),
-      },
-      status: {
-        labels: Object.keys(graphData.status_distribution || {}),
-        data: Object.values(graphData.status_distribution || {}),
-        backgroundColor: [
-          "rgba(54, 162, 235, 0.7)",
-          "rgba(255, 206, 86, 0.7)",
-          "rgba(75, 192, 192, 0.7)",
-          "rgba(153, 102, 255, 0.7)",
-          "rgba(255, 99, 132, 0.7)",
-        ].slice(0, Object.keys(graphData.status_distribution || {}).length),
-      },
-      interviewStatus: {
-        labels: Object.keys(graphData.interview_status_distribution || {}),
-        data: Object.values(graphData.interview_status_distribution || {}),
-        backgroundColor: [
-          "rgba(54, 162, 235, 0.7)",
-          "rgba(255, 206, 86, 0.7)",
-          "rgba(75, 192, 192, 0.7)",
-          "rgba(153, 102, 255, 0.7)",
-          "rgba(255, 99, 132, 0.7)",
-        ].slice(
-          0,
-          Object.keys(graphData.interview_status_distribution || {}).length
-        ),
-      },
-    };
-  }, [graphData, selectedPeriod]);
-
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: "top",
-      },
-      tooltip: {
-        mode: "index",
-        intersect: false,
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        grid: {
-          color: "rgba(0, 0, 0, 0.05)",
-        },
-      },
-      x: {
-        grid: {
-          display: false,
-        },
-      },
-    },
-    maintainAspectRatio: false,
+    if (tab === "profile") {
+      if (!profile && !profileLoading) {
+        dispatch(fetchProfile());
+      }
+    } else if (tab === "overview") {
+      dispatch(fetchGraphData({ period: selectedPeriod }));
+    } else if (tab === "jobs") {
+      dispatch(fetchOffres());
+    } else if (tab === "candidates") {
+      // Always fetch first page when switching to candidates tab
+      dispatch(fetchCandidates({ page: 1, per_page: 10 }));
+    } else if (tab === "interviews") {
+      dispatch(fetchInterviews({ page: 1, per_page: 10 }));
+    }
   };
 
-  const renderContent = useMemo(() => {
-    if (loading) {
-      return (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-teal-600"></div>
-        </div>
-      );
-    }
-
-    if (error) {
-      const isAuthError =
-        error.includes("Unauthorized") || error.includes("Session expired");
-      return (
-        <div className="bg-red-100/90 backdrop-blur-md text-red-700 p-6 rounded-2xl shadow-sm animate-fadeIn">
-          <p>{error}</p>
-          <button
-            className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
-            onClick={isAuthError ? handleAuthError : handleRetry}
-          >
-            {isAuthError ? "Se reconnecter" : "Réessayer"}
-          </button>
-        </div>
-      );
-    }
-
-    switch (activeTab) {
-      case "overview":
-        return (
-          <div className="space-y-6 animate-fadeIn">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-800">
-                Vue d'ensemble
-              </h2>
-              <select
-                value={selectedPeriod}
-                onChange={(e) => handlePeriodChange(e.target.value)}
-                className="p-2 border rounded-lg"
-              >
-                <option value="week">Semaine</option>
-                <option value="month">Mois</option>
-                <option value="year">Année</option>
-                <option value="all">Tout</option>
-              </select>
-            </div>
-
-            {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-white/95 backdrop-blur-md p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  Offres Actives
-                </h3>
-                <p className="text-3xl font-bold text-teal-600">
-                  {graphData?.offers || 0}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  {graphData?.offers > 0
-                    ? "+5% vs période précédente"
-                    : "Aucune offre"}
-                </p>
-              </div>
-              <div className="bg-white/95 backdrop-blur-md p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  Candidatures
-                </h3>
-                <p className="text-3xl font-bold text-green-600">
-                  {graphData?.candidates || 0}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  {graphData?.candidates > 0
-                    ? "+12% vs période précédente"
-                    : "Aucune candidature"}
-                </p>
-              </div>
-              <div className="bg-white/95 backdrop-blur-md p-6 rounded-2xl shadow-md hover:shadow-lg transition-all duration-300">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  Entretiens Planifiés
-                </h3>
-                <p className="text-3xl font-bold text-blue-600">
-                  {graphData?.interviews || 0}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  {graphData?.interviews > 0
-                    ? "+8% vs période précédente"
-                    : "Aucun entretien"}
-                </p>
-              </div>
-            </div>
-
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Weekly/Monthly Activity */}
-              <div className="bg-white/95 backdrop-blur-md p-6 rounded-2xl shadow-md">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                  Activité{" "}
-                  {selectedPeriod === "week"
-                    ? "hebdomadaire"
-                    : selectedPeriod === "month"
-                    ? "mensuelle"
-                    : "annuelle"}
-                </h3>
-                <div className="h-64">
-                  <Line
-                    data={{
-                      labels: chartData.weekly.labels.length
-                        ? chartData.weekly.labels
-                        : chartData.monthly.labels,
-                      datasets: [
-                        {
-                          label: "Candidatures",
-                          data: chartData.weekly.labels.length
-                            ? chartData.weekly.candidates
-                            : chartData.monthly.candidates,
-                          borderColor: "rgba(16, 185, 129, 0.8)",
-                          backgroundColor: "rgba(16, 185, 129, 0.1)",
-                          tension: 0.3,
-                          fill: true,
-                        },
-                        {
-                          label: "Entretiens",
-                          data: chartData.weekly.labels.length
-                            ? chartData.weekly.interviews
-                            : chartData.monthly.interviews,
-                          borderColor: "rgba(59, 130, 246, 0.8)",
-                          backgroundColor: "rgba(59, 130, 246, 0.1)",
-                          tension: 0.3,
-                          fill: true,
-                        },
-                        selectedPeriod === "week"
-                          ? {
-                              label: "Offres",
-                              data: chartData.weekly.jobs,
-                              borderColor: "rgba(255, 99, 132, 0.8)",
-                              backgroundColor: "rgba(255, 99, 132, 0.1)",
-                              tension: 0.3,
-                              fill: true,
-                            }
-                          : null,
-                      ].filter(Boolean),
-                    }}
-                    options={chartOptions}
-                  />
-                </div>
-              </div>
-
-              {/* Candidate Status Distribution */}
-              <div className="bg-white/95 backdrop-blur-md p-6 rounded-2xl shadow-md">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                  Statut des candidats
-                </h3>
-                <div className="h-64">
-                  <Pie
-                    data={{
-                      labels: chartData.status.labels,
-                      datasets: [
-                        {
-                          data: chartData.status.data,
-                          backgroundColor: chartData.status.backgroundColor,
-                          borderWidth: 1,
-                        },
-                      ],
-                    }}
-                    options={{
-                      responsive: true,
-                      plugins: {
-                        legend: {
-                          position: "right",
-                        },
-                      },
-                      maintainAspectRatio: false,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Interview Status Distribution */}
-              <div className="bg-white/95 backdrop-blur-md p-6 rounded-2xl shadow-md">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                  Statut des entretiens
-                </h3>
-                <div className="h-64">
-                  <Pie
-                    data={{
-                      labels: chartData.interviewStatus.labels,
-                      datasets: [
-                        {
-                          data: chartData.interviewStatus.data,
-                          backgroundColor:
-                            chartData.interviewStatus.backgroundColor,
-                          borderWidth: 1,
-                        },
-                      ],
-                    }}
-                    options={{
-                      responsive: true,
-                      plugins: {
-                        legend: {
-                          position: "right",
-                        },
-                      },
-                      maintainAspectRatio: false,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Monthly Performance */}
-              {selectedPeriod !== "week" && (
-                <div className="bg-white/95 backdrop-blur-md p-6 rounded-2xl shadow-md lg:col-span-2">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                    Performance{" "}
-                    {selectedPeriod === "month" ? "mensuelle" : "annuelle"}
-                  </h3>
-                  <div className="h-80">
-                    <Bar
-                      data={{
-                        labels: chartData.monthly.labels,
-                        datasets: [
-                          {
-                            label: "Candidatures",
-                            data: chartData.monthly.candidates,
-                            backgroundColor: "rgba(16, 185, 129, 0.7)",
-                            borderRadius: 6,
-                          },
-                          {
-                            label: "Entretiens",
-                            data: chartData.monthly.interviews,
-                            backgroundColor: "rgba(59, 130, 246, 0.7)",
-                            borderRadius: 6,
-                          },
-                        ],
-                      }}
-                      options={{
-                        ...chartOptions,
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                            stacked: false,
-                            grid: {
-                              color: "rgba(0, 0, 0, 0.05)",
-                            },
-                          },
-                          x: {
-                            stacked: false,
-                            grid: {
-                              display: false,
-                            },
-                          },
-                        },
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      case "jobs":
-        return <JobsSection />;
-      case "candidates":
-        return <CandidatesSection />;
-      case "interviews":
-        return <InterviewsSection />;
-      case "profile":
-        return <ProfileSection />;
-      default:
-        return <div className="text-gray-700">Section non trouvée</div>;
-    }
-  }, [
-    activeTab,
-    loading,
-    error,
-    jobs,
-    candidates,
-    interviews,
-    graphData,
-    selectedPeriod,
-    pagination,
-  ]);
-
   return (
-    <div className="flex min-h-screen bg-gray-50 font-sans">
-      <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 transform transition-all duration-300 ease-in-out bg-white/95 backdrop-blur-md shadow-lg
-          ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          md:w-20 md:translate-x-0 md:hover:w-64 md:group`}
-      >
-        <div className="flex items-center justify-between p-4 border-b border-gray-100/50">
-          <h1 className="text-xl font-extrabold text-gray-900 whitespace-nowrap transition-all duration-300 md:group-hover:opacity-100 md:opacity-0 bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
-            Recrutement AI
-          </h1>
-          <button
-            className="p-2 rounded-full hover:bg-gray-100/50 md:hidden"
-            onClick={() => dispatch(closeSidebar())}
+    <ThemeProvider theme={defaultTheme}>
+      <Box sx={{ display: "flex", minHeight: "100vh" }}>
+        {/* Sidebar */}
+        <Box
+          sx={{
+            width: isSidebarOpen ? 240 : 0,
+            transition: "width 0.3s",
+            overflow: "hidden",
+            bgcolor: "background.paper",
+            borderRight: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <Box
+            sx={{
+              p: 2,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
-          </button>
-        </div>
-        <nav className="p-3 space-y-1">
-          {menuItems.map(({ tab, label, icon }) => (
-            <button
-              key={tab}
-              onClick={() => {
-                dispatch(setActiveTab(tab));
-                window.innerWidth < 768 && dispatch(closeSidebar());
+            <Typography variant="h6">Recrutement AI</Typography>
+            <Button onClick={() => dispatch(closeSidebar())}>
+              <ChevronLeft />
+            </Button>
+          </Box>
+          {menuItems.map((item) => (
+            <Button
+              key={item.tab}
+              onClick={() => handleTabChange(item.tab)}
+              sx={{
+                width: "100%",
+                justifyContent: "flex-start",
+                px: 3,
+                py: 1.5,
+                color:
+                  activeTab === item.tab ? "primary.main" : "text.secondary",
+                bgcolor:
+                  activeTab === item.tab ? "action.selected" : "transparent",
               }}
-              className={`flex items-center w-full px-4 py-3 text-gray-700 rounded-xl transition-all duration-200
-                hover:bg-teal-50 hover:text-teal-600 ${
-                  activeTab === tab
-                    ? "bg-teal-50 text-teal-600 font-semibold shadow-sm"
-                    : ""
-                }`}
             >
-              <span className="flex-shrink-0 mr-3">{icon}</span>
-              <span className="truncate transition-all duration-300 md:group-hover:opacity-100 ">
-                {label}
-              </span>
-            </button>
+              {item.icon}
+              <Typography sx={{ ml: 2 }}>{item.label}</Typography>
+            </Button>
           ))}
-        </nav>
-      </aside>
+        </Box>
 
-      <div
-        className={`flex-1 transition-all duration-300 w-full ${
-          isSidebarOpen ? "md:ml-0 ml-0" : "md:ml-20 ml-0"
-        }`}
-      >
-        <header className="bg-white/95 backdrop-blur-md shadow-sm p-4 flex items-center justify-between sticky top-0 z-20">
-          <div className="flex items-center space-x-4 w-full max-w-full">
-            <button
-              onClick={() => dispatch(toggleSidebar())}
-              className="text-gray-600 hover:text-teal-600 md:hidden"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <h1 className="text-2xl font-bold text-gray-800">
-              Dashboard de Recrutement
-            </h1>
-          </div>
-          <div className="flex items-center space-x-4">
-            <Bell className="text-gray-600 hover:text-teal-600 cursor-pointer w-5 h-5 sm:w-6 sm:h-6 transition-all duration-200" />
-            <div className="hidden sm:flex items-center space-x-2">
-              <User className="text-gray-600 w-5 h-5" />
-              <span className="text-gray-800 font-medium">
-                {user?.firstName || "Utilisateur"}
-              </span>
-            </div>
-          </div>
-        </header>
+        {/* Main content */}
+        <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          {/* Header */}
+          <Box
+            sx={{
+              p: 2,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              borderBottom: "1px solid",
+              borderColor: "divider",
+            }}
+          >
+            <Button onClick={() => dispatch(toggleSidebar())}>
+              <Menu />
+            </Button>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Bell />
+              <Typography>{user?.name || "Utilisateur"}</Typography>
+            </Box>
+          </Box>
 
-        <main className="p-6 sm:p-8">{renderContent}</main>
-      </div>
-
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 z-10 bg-black/30 md:hidden"
-          onClick={() => dispatch(closeSidebar())}
-        />
-      )}
-    </div>
+          {/* Content area */}
+          <Box sx={{ flex: 1, p: 3, overflow: "auto" }}>
+            {loading || profileLoading ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  minHeight: "50vh",
+                }}
+              >
+                <CircularProgress />
+              </Box>
+            ) : error || profileError ? (
+              <Alert
+                severity="error"
+                action={
+                  <Button color="inherit" size="small" onClick={handleRetry}>
+                    Réessayer
+                  </Button>
+                }
+              >
+                {error || profileError}
+              </Alert>
+            ) : (
+              <>
+                {activeTab === "overview" && (
+                  <Box>
+                    <FormControl sx={{ mb: 3, minWidth: 120 }}>
+                      <InputLabel>Période</InputLabel>
+                      <Select
+                        value={selectedPeriod || "week"}
+                        onChange={handlePeriodChange}
+                        label="Période"
+                      >
+                        <MenuItem value="week">7 derniers jours</MenuItem>
+                        <MenuItem value="month">30 derniers jours</MenuItem>
+                        <MenuItem value="year">12 derniers mois</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <DashboardGraphs
+                      data={data}
+                      period={selectedPeriod || "week"}
+                    />
+                  </Box>
+                )}
+                {activeTab === "jobs" && <JobsSection />}
+                {activeTab === "candidates" && <CandidatesSection />}
+                {activeTab === "interviews" && <InterviewsSection />}
+                {activeTab === "profile" && <ProfileSection />}
+              </>
+            )}
+          </Box>
+        </Box>
+      </Box>
+    </ThemeProvider>
   );
 };
 
-export default DashboardRecrutement;
+export default RecruiterDashboard;

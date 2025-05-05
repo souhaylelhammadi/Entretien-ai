@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import {
   Plus,
   Edit,
@@ -20,78 +21,88 @@ import {
   setIsAddingJob,
   setIsEditingJob,
   setNewJob,
+  fetchJobs,
+  resetNewJob,
   addRequirement,
   removeRequirement,
   updateRequirement,
   setSort,
-  showAlert,
   clearAlert,
-} from "../../store/recruteur/addjobsSlice";
-import { fetchInitialData } from "../../store/recruteur/dashboardSlice";
+  showAlert,
+} from "../../store/recruteur/jobsSlice";
 
 const JobsSection = () => {
   const dispatch = useDispatch();
-  const { jobs } = useSelector((state) => state.dashboard);
+  const navigate = useNavigate();
   const {
+    jobs,
+    loading,
     isAddingJob,
     isEditingJob,
-    alert,
+    editingJobId,
+    newJob,
+    alert = { show: false, type: "", message: "" },
     sortField,
     sortDirection,
-    newJob,
-    loading,
-  } = useSelector((state) => state.addjob);
-  const { user, token } = useSelector((state) => state.auth);
+  } = useSelector((state) => state.jobs);
+  const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    if (alert.show) {
+    if (!user) {
+      dispatch(
+        showAlert({
+          type: "error",
+          message: "Veuillez vous connecter pour accéder à cette page",
+        })
+      );
+      navigate("/login");
+      return;
+    }
+
+    dispatch(fetchJobs());
+  }, [dispatch, navigate, user]);
+
+  useEffect(() => {
+    if (alert?.show) {
       const timer = setTimeout(() => {
         dispatch(clearAlert());
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [alert.show, dispatch]);
-
-  useEffect(() => {
-    console.log("Received jobs:", jobs);
-    console.log("Token:", token);
-    console.log("User:", user);
-  }, [jobs, token, user]);
+  }, [alert?.show, dispatch]);
 
   const prepareJobData = () => {
-    const competences = newJob.competences_requises.filter((req) => req.trim());
     return {
       titre: newJob.titre.trim(),
       description: newJob.description.trim(),
       localisation: newJob.localisation.trim(),
       departement: newJob.departement.trim(),
-      competences_requises: competences,
-      status: newJob.status,
-      recruteur_id: String(user?._id || user?.id || ""),
-      entreprise_id: String(user?.entreprise_id || ""),
-      candidature_ids: [],
+      competences_requises: newJob.competences_requises
+        .filter((req) => req && req.trim())
+        .map((req) => req.trim()),
+      statut: newJob.statut,
       date_creation: new Date().toISOString(),
       date_maj: new Date().toISOString(),
     };
   };
 
   const validateJob = () => {
+    const errors = [];
+    if (!newJob.titre?.trim()) errors.push("Titre de l'offre");
+    if (!newJob.description?.trim()) errors.push("Description");
+    if (!newJob.localisation?.trim()) errors.push("Localisation");
+    if (!newJob.departement?.trim()) errors.push("Département");
     if (
-      !newJob.titre ||
-      !newJob.departement ||
-      !newJob.localisation ||
-      !newJob.description ||
-      newJob.competences_requises.length === 0 ||
-      newJob.competences_requises.every((req) => !req.trim()) ||
-      !["open", "closed"].includes(newJob.status) ||
-      !user?.entreprise_id ||
-      !user?.id
-    ) {
+      !newJob.competences_requises?.length ||
+      newJob.competences_requises.every((req) => !req?.trim())
+    )
+      errors.push("Compétences requises");
+
+    if (errors.length > 0) {
       dispatch(
         showAlert({
           type: "error",
-          message:
-            "Please fill all required fields (Title, Department, Location, Description, at least one skill) and check your connection",
+          message: `Champs obligatoires manquants :\n• ${errors.join("\n• ")}`,
         })
       );
       return false;
@@ -101,33 +112,18 @@ const JobsSection = () => {
 
   const handleAddJob = async () => {
     if (!validateJob()) return;
+
     try {
       const jobData = prepareJobData();
-      console.log("Data sent for addition:", jobData);
-
-      if (!token) {
-        const localToken = localStorage.getItem("token");
-        if (!localToken) {
-          throw new Error("Please log in again, session expired");
-        }
-        await dispatch(addJob({ jobData, token: localToken })).unwrap();
-      } else {
-        await dispatch(addJob({ jobData, token })).unwrap();
-      }
-
-      dispatch(fetchInitialData({ page: 1, limit: 10, token }));
-      dispatch(
-        showAlert({
-          type: "success",
-          message: "Job offer added successfully",
-        })
-      );
+      await dispatch(addJob(jobData)).unwrap();
+      await dispatch(fetchJobs());
+      dispatch(resetNewJob());
+      dispatch(setIsAddingJob(false));
     } catch (error) {
-      console.error("Error during addition:", error);
       dispatch(
         showAlert({
           type: "error",
-          message: error.message || "Failed to add job offer",
+          message: error.message || "Échec de la création de l'offre",
         })
       );
     }
@@ -135,35 +131,29 @@ const JobsSection = () => {
 
   const handleEditJob = async (jobId) => {
     if (!validateJob()) return;
+
     try {
       jobId = String(jobId);
       if (!jobId || jobId === "undefined") {
         dispatch(
           showAlert({
             type: "error",
-            message: "Cannot edit job offer: Invalid ID",
+            message: "Impossible de modifier l'offre : ID invalide",
           })
         );
         return;
       }
 
       const jobData = prepareJobData();
-      console.log("Data sent for modification:", jobData);
-
-      await dispatch(editJob({ jobId, jobData, token })).unwrap();
-      dispatch(fetchInitialData({ page: 1, limit: 10, token }));
-      dispatch(
-        showAlert({
-          type: "success",
-          message: "Job offer updated successfully",
-        })
-      );
+      await dispatch(editJob({ jobId, jobData })).unwrap();
+      await dispatch(fetchJobs());
+      dispatch(resetNewJob());
+      dispatch(setIsEditingJob({ isEditing: false, jobId: null }));
     } catch (error) {
-      console.error("Error during modification:", error);
       dispatch(
         showAlert({
           type: "error",
-          message: error.message || "Failed to edit job offer",
+          message: error.message || "Échec de la modification de l'offre",
         })
       );
     }
@@ -175,105 +165,69 @@ const JobsSection = () => {
       dispatch(
         showAlert({
           type: "error",
-          message: "Cannot delete job offer: Invalid ID",
+          message: "Impossible de supprimer l'offre : ID invalide",
         })
       );
       return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this job offer?"))
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette offre ?"))
       return;
 
     try {
-      console.log("Deleting job ID:", jobId);
-      await dispatch(deleteJob({ jobId, token })).unwrap();
-      dispatch(fetchInitialData({ page: 1, limit: 10, token }));
-      dispatch(
-        showAlert({
-          type: "success",
-          message: "Job offer deleted successfully",
-        })
-      );
+      await dispatch(deleteJob(jobId)).unwrap();
+      await dispatch(fetchJobs());
     } catch (error) {
-      console.error("Error during deletion:", error);
       dispatch(
         showAlert({
           type: "error",
-          message: error.message || "Failed to delete job offer",
+          message: error.message || "Échec de la suppression de l'offre",
         })
       );
     }
   };
-
-  const normalizeJobs = (jobs) => {
-    if (!jobs) return [];
-
-    if (Array.isArray(jobs)) {
-      return jobs.map((job) => ({
-        id: String(job.id),
-        titre: job.titre || "",
-        description: job.description || "",
-        entreprise_id: String(job.entreprise_id || ""),
-        recruteur_id: String(job.recruteur_id || ""),
-        localisation: job.localisation || "",
-        departement: job.departement || "",
-        competences_requises: job.competences_requises || [],
-        candidature_ids: job.candidature_ids || [],
-        date_creation: job.date_creation || new Date().toISOString(),
-        date_maj: job.date_maj || new Date().toISOString(),
-        status: job.status || "open",
-      }));
-    }
-
-    if (jobs.offres && Array.isArray(jobs.offres)) {
-      return jobs.offres.map((job) => ({
-        id: String(job.id),
-        titre: job.titre || "",
-        description: job.description || "",
-        entreprise_id: String(job.entreprise_id || ""),
-        recruteur_id: String(job.recruteur_id || ""),
-        localisation: job.localisation || "",
-        departement: job.departement || "",
-        competences_requises: job.competences_requises || [],
-        candidature_ids: job.candidature_ids || [],
-        date_creation: job.date_creation || new Date().toISOString(),
-        date_maj: job.date_maj || new Date().toISOString(),
-        status: job.status || "open",
-      }));
-    }
-
-    return [];
-  };
-
-  const sortedJobs = useMemo(() => {
-    const normalizedJobs = normalizeJobs(jobs);
-    console.log("Normalized jobs:", normalizedJobs);
-
-    return [...normalizedJobs].sort((a, b) => {
-      const aValue = a[sortField] || "";
-      const bValue = b[sortField] || "";
-      const direction = sortDirection === "asc" ? 1 : -1;
-
-      if (sortField === "date_creation") {
-        return direction * (new Date(aValue) - new Date(bValue));
-      }
-
-      if (typeof aValue === "string") {
-        return (
-          direction *
-          aValue.localeCompare(bValue, undefined, { sensitivity: "base" })
-        );
-      }
-
-      return direction * (aValue - bValue);
-    });
-  }, [jobs, sortField, sortDirection]);
 
   const handleSort = (field) => {
     const newDirection =
       sortField === field && sortDirection === "asc" ? "desc" : "asc";
     dispatch(setSort({ field, direction: newDirection }));
   };
+
+  const handleEditClick = (job) => {
+    dispatch(
+      setIsEditingJob({
+        isEditing: true,
+        jobId: job.id,
+        jobData: {
+          titre: job.titre,
+          description: job.description,
+          localisation: job.localisation,
+          departement: job.departement,
+          competences_requises: job.competences_requises,
+          statut: job.statut,
+        },
+      })
+    );
+  };
+
+  const sortedJobs = [...jobs].sort((a, b) => {
+    const aValue = a[sortField] || "";
+    const bValue = b[sortField] || "";
+    const direction = sortDirection === "asc" ? 1 : -1;
+
+    if (sortField === "date_creation") {
+      return direction * (new Date(aValue) - new Date(bValue));
+    }
+
+    if (typeof aValue === "string") {
+      return (
+        direction *
+        aValue.localeCompare(bValue, undefined, { sensitivity: "base" })
+      );
+    }
+
+    return direction * (aValue - bValue);
+  });
 
   return (
     <div className="space-y-6">
@@ -301,7 +255,7 @@ const JobsSection = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900 flex items-center">
           <Building className="w-6 h-6 mr-2 text-blue-600" />
-          Job Offer Management
+          Gestion des Offres d'Emploi
         </h2>
         <button
           onClick={() => dispatch(setIsAddingJob(true))}
@@ -309,7 +263,7 @@ const JobsSection = () => {
           disabled={loading}
         >
           <Plus className="w-5 h-5 mr-2" />
-          New Offer
+          Nouvelle Offre
         </button>
       </div>
 
@@ -321,29 +275,20 @@ const JobsSection = () => {
                 {isEditingJob ? (
                   <>
                     <Edit className="w-6 h-6 mr-3 text-blue-600" />
-                    Edit Job Offer
+                    Modifier l'Offre d'Emploi
                   </>
                 ) : (
                   <>
                     <Plus className="w-6 h-6 mr-3 text-blue-600" />
-                    New Job Offer
+                    Nouvelle Offre d'Emploi
                   </>
                 )}
               </h3>
               <button
                 onClick={() => {
                   dispatch(setIsAddingJob(false));
-                  dispatch(setIsEditingJob({ jobId: null }));
-                  dispatch(
-                    setNewJob({
-                      titre: "",
-                      departement: "",
-                      localisation: "",
-                      description: "",
-                      competences_requises: [],
-                      status: "open",
-                    })
-                  );
+                  dispatch(setIsEditingJob({ isEditing: false, jobId: null }));
+                  dispatch(resetNewJob());
                 }}
                 className="p-2 rounded-full hover:bg-gray-100"
               >
@@ -356,30 +301,30 @@ const JobsSection = () => {
                 <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
                   <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                     <Building className="w-5 h-5 mr-2 text-blue-600" />
-                    Main Information
+                    Informations Principales
                   </h4>
 
                   <div className="space-y-4">
                     <InputField
-                      label="Job Title *"
+                      label="Titre de l'Offre *"
                       value={newJob.titre}
                       onChange={(e) =>
                         dispatch(setNewJob({ titre: e.target.value }))
                       }
-                      placeholder="Ex: Full Stack Developer"
+                      placeholder="Ex: Développeur Full Stack"
                     />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <InputField
-                        label="Department *"
+                        label="Département *"
                         value={newJob.departement}
                         onChange={(e) =>
                           dispatch(setNewJob({ departement: e.target.value }))
                         }
-                        placeholder="Ex: IT"
+                        placeholder="Ex: Informatique"
                       />
                       <InputField
-                        label="Location *"
+                        label="Localisation *"
                         value={newJob.localisation}
                         onChange={(e) =>
                           dispatch(setNewJob({ localisation: e.target.value }))
@@ -387,18 +332,34 @@ const JobsSection = () => {
                         placeholder="Ex: Paris"
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Statut *
+                      </label>
+                      <select
+                        value={newJob.statut}
+                        onChange={(e) =>
+                          dispatch(setNewJob({ statut: e.target.value }))
+                        }
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors"
+                      >
+                        <option value="ouverte">Ouverte</option>
+                        <option value="fermée">Fermée</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
                 <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
                   <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                     <MapPin className="w-5 h-5 mr-2 text-green-600" />
-                    Job Description
+                    Description de l'Offre
                   </h4>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Job Details *
+                      Détails de l'Offre *
                     </label>
                     <textarea
                       value={newJob.description}
@@ -407,7 +368,7 @@ const JobsSection = () => {
                       }
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors"
                       rows="5"
-                      placeholder="Describe the responsibilities, missions, and other important job information..."
+                      placeholder="Décrivez les responsabilités, missions et autres informations importantes de l'offre..."
                     />
                   </div>
                 </div>
@@ -416,14 +377,14 @@ const JobsSection = () => {
                   <div className="flex justify-between items-center mb-4">
                     <h4 className="text-lg font-semibold text-gray-800 flex items-center">
                       <CheckCircle2 className="w-5 h-5 mr-2 text-blue-600" />
-                      Required Skills
+                      Compétences Requises
                     </h4>
                     <button
                       onClick={() => dispatch(addRequirement())}
                       className="text-blue-600 hover:text-blue-800 flex items-center bg-blue-50 px-3 py-2 rounded-lg transition-colors border border-blue-100 hover:border-blue-200"
                     >
                       <Plus className="w-4 h-4 mr-2" />
-                      Add Skill
+                      Ajouter une Compétence
                     </button>
                   </div>
 
@@ -432,7 +393,7 @@ const JobsSection = () => {
                       <div className="bg-white p-4 rounded-lg border border-dashed border-gray-300 text-center">
                         <MapPin className="w-6 h-6 text-gray-400 mx-auto mb-2" />
                         <p className="text-gray-500 text-sm">
-                          Add at least one required skill for this position
+                          Ajoutez au moins une compétence requise pour ce poste
                         </p>
                       </div>
                     )}
@@ -454,12 +415,12 @@ const JobsSection = () => {
                             )
                           }
                           className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                          placeholder="Ex: React.js, Python, Management..."
+                          placeholder="Ex: React.js, Python, Gestion..."
                         />
                         <button
                           onClick={() => dispatch(removeRequirement(index))}
                           className="text-red-600 hover:text-red-800 bg-red-50 p-2 rounded-lg hover:bg-red-100 transition-colors"
-                          title="Remove this skill"
+                          title="Supprimer cette compétence"
                         >
                           <XCircle className="h-5 w-5" />
                         </button>
@@ -474,34 +435,20 @@ const JobsSection = () => {
               <button
                 onClick={() => {
                   dispatch(setIsAddingJob(false));
-                  dispatch(setIsEditingJob({ jobId: null }));
-                  dispatch(
-                    setNewJob({
-                      titre: "",
-                      departement: "",
-                      localisation: "",
-                      description: "",
-                      competences_requises: [],
-                      status: "open",
-                    })
-                  );
+                  dispatch(setIsEditingJob({ isEditing: false, jobId: null }));
+                  dispatch(resetNewJob());
                 }}
                 className="py-2 px-4 text-gray-700 bg-white hover:bg-gray-100 rounded-lg transition-colors flex justify-center items-center border border-gray-300"
                 disabled={loading}
               >
                 <XCircle className="w-5 h-5 mr-2" />
-                Cancel
+                Annuler
               </button>
 
               <button
-                onClick={() => {
-                  if (isEditingJob) {
-                    console.log("Edit mode, ID:", isEditingJob);
-                    handleEditJob(isEditingJob);
-                  } else {
-                    handleAddJob();
-                  }
-                }}
+                onClick={() =>
+                  isEditingJob ? handleEditJob(editingJobId) : handleAddJob()
+                }
                 className={`py-2 px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center shadow-sm ${
                   loading ? "opacity-70 cursor-not-allowed" : ""
                 }`}
@@ -514,7 +461,7 @@ const JobsSection = () => {
                 ) : (
                   <Plus className="w-5 h-5 mr-2" />
                 )}
-                {isEditingJob ? "Update Offer" : "Publish Offer"}
+                {isEditingJob ? "Mettre à Jour l'Offre" : "Publier l'Offre"}
               </button>
             </div>
           </div>
@@ -522,12 +469,14 @@ const JobsSection = () => {
       )}
 
       <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
-        {sortedJobs.length === 0 ? (
+        {jobs.length === 0 ? (
           <div className="p-8 text-center">
             <Building className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-            <p className="text-gray-500 text-lg">No job offers available</p>
+            <p className="text-gray-500 text-lg">
+              Aucune offre d'emploi disponible
+            </p>
             <p className="text-gray-400 mt-1">
-              Click "New Offer" to create your first offer
+              Cliquez sur "Nouvelle Offre" pour créer votre première offre
             </p>
           </div>
         ) : (
@@ -535,11 +484,11 @@ const JobsSection = () => {
             <thead className="bg-gray-50">
               <tr>
                 {[
-                  { id: "titre", label: "Title" },
-                  { id: "departement", label: "Department" },
-                  { id: "localisation", label: "Location" },
-                  { id: "date_creation", label: "Creation Date" },
-                  { id: "status", label: "Status" },
+                  { id: "titre", label: "Titre" },
+                  { id: "departement", label: "Département" },
+                  { id: "localisation", label: "Localisation" },
+                  { id: "date_creation", label: "Date de Création" },
+                  { id: "statut", label: "Statut" },
                 ].map((field) => (
                   <th
                     key={field.id}
@@ -597,38 +546,29 @@ const JobsSection = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        job.status === "open"
+                        job.statut === "ouverte"
                           ? "bg-green-100 text-green-800"
                           : "bg-red-100 text-red-800"
                       }`}
                     >
-                      {job.status === "open" ? "Open" : "Closed"}
+                      {job.statut === "ouverte" ? "Ouverte" : "Fermée"}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end space-x-3">
                       <button
-                        onClick={() => {
-                          const jobId = String(job.id);
-                          dispatch(
-                            setIsEditingJob({
-                              jobId,
-                              jobData: job,
-                            })
-                          );
-                        }}
+                        onClick={() => handleEditClick(job)}
                         className="text-blue-600 hover:text-blue-800 bg-blue-50 p-2 rounded-lg transition-colors"
                         disabled={loading}
-                        title="Edit this offer"
+                        title="Modifier cette offre"
                       >
                         <Edit className="h-5 w-5" />
-                        {job.id}
                       </button>
                       <button
-                        onClick={() => handleDeleteJob(job.id)}
+                        onClick={() => handleDeleteJob(String(job.id))}
                         className="text-red-600 hover:text-red-800 bg-red-50 p-2 rounded-lg transition-colors"
                         disabled={loading}
-                        title="Delete this offer"
+                        title="Supprimer cette offre"
                       >
                         <Trash2 className="h-5 w-5" />
                       </button>

@@ -1,253 +1,228 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import api from "../../../services/api";
+import { getCleanToken } from "../../../utils/tokenUtils";
 
+// Fonction utilitaire pour obtenir le token
+const getToken = () => {
+  return getCleanToken();
+};
+
+// Thunk pour récupérer les données initiales
 export const fetchInitialData = createAsyncThunk(
   "dashboard/fetchInitialData",
-  async ({ page = 1, limit = 10 }, { rejectWithValue, getState }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const { auth } = getState();
-      let token = auth.token || localStorage.getItem("token");
-      const userId =
-        auth.user?._id || auth.user?.id || localStorage.getItem("userId");
-
+      const token = getToken();
       if (!token) {
-        throw new Error("Aucun jeton d'authentification trouvé");
+        return rejectWithValue("Token non trouvé");
       }
 
-      if (!userId) {
-        console.error(
-          "ID utilisateur non trouvé dans l'état auth ou localStorage"
-        );
-        throw new Error("ID utilisateur non trouvé, veuillez vous reconnecter");
-      }
-
-      console.log("========== FETCH INITIAL DATA ==========");
-      console.log("Recruteur ID utilisé:", userId);
-      console.log("Token (20 premiers car.):", token.substring(0, 20) + "...");
-
-      // Endpoints avec filtrage par recruteur_id explicite
-      const endpoints = [
-        `http://localhost:5000/api/offres-emploi?page=${page}&limit=${limit}&recruteur_id=${userId}`,
-        `http://localhost:5000/api/candidates?page=${page}&limit=${limit}&recruteur_id=${userId}`,
-        `http://localhost:5000/api/candidatures?page=${page}&limit=${limit}&recruteur_id=${userId}`,
-        `http://localhost:5000/api/offres-emploi?period=month&recruteur_id=${userId}`,
-      ];
-
-      // Log des URLs pour débogage
-      endpoints.forEach((url, index) => {
-        console.log(`Endpoint ${index + 1}:`, url);
+      const response = await api.get("/api/recruteur/dashboard", {
+        headers: { Authorization: token },
       });
-
-      const responses = await Promise.all(
-        endpoints.map((url, index) =>
-          fetch(url, {
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          })
-            .then((response) => {
-              console.log(
-                `Statut réponse endpoint ${index + 1}:`,
-                response.status
-              );
-              return response;
-            })
-            .catch((error) => {
-              console.error(`Erreur lors de l'appel à ${url}:`, error);
-              // Retourner un objet mock qui simule une réponse en échec
-              return {
-                ok: false,
-                json: async () => ({
-                  error: `Erreur de connexion: ${error.message}`,
-                }),
-              };
-            })
-        )
-      );
-
-      // Préparer les données par défaut en cas d'échec
-      let jobsData = { offres: [], total: 0, page: 1, limit };
-      let candidatesData = { candidates: [], total: 0, page: 1, limit };
-      let interviewsData = { interviews: [], total: 0, page: 1, limit };
-      let graphData = { labels: [], datasets: [] };
-
-      // Traiter les réponses individuellement
-      if (responses[0].ok) {
-        jobsData = await responses[0].json();
-        console.log("Données offres reçues:", jobsData);
-        console.log(`Nombre d'offres reçues: ${jobsData.offres?.length || 0}`);
-      } else {
-        console.error(
-          "Échec de récupération des offres d'emploi:",
-          await responses[0].json().catch(() => ({}))
-        );
-      }
-
-      if (responses[1].ok) {
-        candidatesData = await responses[1].json();
-        console.log(
-          `Nombre de candidats reçus: ${candidatesData.candidates?.length || 0}`
-        );
-      } else {
-        console.error("Échec de récupération des candidats");
-      }
-
-      if (responses[2].ok) {
-        interviewsData = await responses[2].json();
-        console.log(
-          `Nombre d'entretiens reçus: ${interviewsData.interviews?.length || 0}`
-        );
-      } else {
-        console.error("Échec de récupération des entretiens");
-      }
-
-      if (responses[3].ok) {
-        graphData = await responses[3].json();
-        console.log("Données graphiques reçues:", graphData);
-      } else {
-        console.error("Échec de récupération des données graphiques");
-      }
-
-      console.log("========== FIN FETCH INITIAL DATA ==========");
-
-      return {
-        jobs: (jobsData.offres || []).map((job) => ({
-          ...job,
-          id: job._id,
-          title: job.titre || job.title,
-          requirements: job.competences_requises || job.requirements || [],
-          status: job.status || "open",
-        })),
-        candidates: (candidatesData.candidates || []).map((candidate) => ({
-          ...candidate,
-          id: candidate._id || candidate.id,
-          offreEmploi: candidate.offreEmploi
-            ? {
-                ...candidate.offreEmploi,
-                id: candidate.offreEmploi._id || candidate.offreEmploi.id,
-                titre:
-                  candidate.offreEmploi.titre || candidate.offreEmploi.title,
-              }
-            : null,
-        })),
-        interviews: (interviewsData.interviews || []).map((interview) => ({
-          ...interview,
-          id: interview._id || interview.id,
-        })),
-        graphData,
-        pagination: {
-          jobs: {
-            total: jobsData.total || 0,
-            currentPage: jobsData.page || 1,
-            itemsPerPage: jobsData.limit || limit,
-          },
-          candidates: {
-            total: candidatesData.total || 0,
-            currentPage: candidatesData.page || 1,
-            itemsPerPage: candidatesData.limit || limit,
-          },
-          interviews: {
-            total: interviewsData.total || 0,
-            currentPage: interviewsData.page || 1,
-            itemsPerPage: interviewsData.limit || limit,
-          },
-        },
-      };
-    } catch (err) {
-      console.error("Erreur dans fetchInitialData:", err);
+      return response.data;
+    } catch (error) {
       return rejectWithValue(
-        err.message || "Erreur lors du chargement des données"
+        error.response?.data?.error ||
+          "Erreur lors de la récupération des données"
       );
     }
   }
 );
 
+// Thunk pour récupérer les données du graphique
 export const fetchGraphData = createAsyncThunk(
   "dashboard/fetchGraphData",
-  async ({ period }, { rejectWithValue, getState }) => {
+  async ({ period }, { rejectWithValue }) => {
     try {
-      const { auth } = getState();
-      let token = auth.token || localStorage.getItem("token");
-      const userId =
-        auth.user?._id || auth.user?.id || localStorage.getItem("userId");
-
+      const token = getToken();
       if (!token) {
-        throw new Error("Aucun jeton d'authentification trouvé");
+        return rejectWithValue("Token non trouvé");
       }
 
-      if (!userId) {
-        console.error(
-          "ID utilisateur non trouvé dans l'état auth ou localStorage"
-        );
-        throw new Error("ID utilisateur non trouvé, veuillez vous reconnecter");
-      }
-
-      console.log("========== FETCH GRAPH DATA ==========");
-      console.log("Période:", period);
-      console.log("Recruteur ID utilisé:", userId);
-      console.log("Token (20 premiers car.):", token.substring(0, 20) + "...");
-
-      // Ajouter recruteur_id pour filtrer les données par recruteur
-      const url = `http://localhost:5000/api/offres-emploi?period=${period}&recruteur_id=${userId}`;
-      console.log("URL appel graphique:", url);
-
-      const response = await fetch(url, {
-        headers: {
-          Authorization: token,
-          "Content-Type": "application/json",
-        },
-      }).catch((error) => {
-        console.error(
-          `Erreur lors de l'appel à l'API pour les données graphiques:`,
-          error
-        );
-        throw new Error(`Erreur de connexion: ${error.message}`);
+      const response = await api.get("/api/recruteur/dashboard", {
+        params: { period },
+        headers: { Authorization: token },
       });
-
-      console.log("Statut réponse graphique:", response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Erreur données graphiques:", errorData);
-        throw new Error(
-          errorData.error || "Erreur lors du chargement des données graphiques"
-        );
-      }
-
-      const graphData = await response.json();
-      console.log("Données graphiques reçues:", graphData);
-      console.log("========== FIN FETCH GRAPH DATA ==========");
-
-      return graphData;
-    } catch (err) {
-      console.error("Erreur dans fetchGraphData:", err);
+      return response.data;
+    } catch (error) {
       return rejectWithValue(
-        err.message || "Erreur lors du chargement des données graphiques"
+        error.response?.data?.error ||
+          "Erreur lors de la récupération des données"
       );
     }
   }
 );
+
+// Thunk pour récupérer les offres
+export const fetchOffres = createAsyncThunk(
+  "dashboard/fetchOffres",
+  async (_, { rejectWithValue }) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        return rejectWithValue("Token non trouvé");
+      }
+
+      const response = await api.get("/api/recruteur/offres-emploi", {
+        headers: { Authorization: token },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.error ||
+          "Erreur lors de la récupération des offres"
+      );
+    }
+  }
+);
+
+// Thunk pour récupérer le profil
+export const fetchProfile = createAsyncThunk(
+  "dashboard/fetchProfile",
+  async (_, { rejectWithValue }) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        return rejectWithValue("Token non trouvé");
+      }
+
+      const response = await api.get("/api/recruteur/profile", {
+        headers: { Authorization: token },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.error ||
+          "Erreur lors de la récupération du profil"
+      );
+    }
+  }
+);
+
+// Thunk pour récupérer les candidats
+export const fetchCandidates = createAsyncThunk(
+  "dashboard/fetchCandidates",
+  async ({ page = 1, per_page = 10 }, { rejectWithValue }) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        return rejectWithValue("Token non trouvé");
+      }
+
+      const response = await api.get("/api/recruteur/candidates", {
+        params: { page, per_page },
+        headers: { Authorization: token },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.error ||
+          "Erreur lors de la récupération des candidats"
+      );
+    }
+  }
+);
+
+// Thunk pour récupérer les entretiens
+export const fetchInterviews = createAsyncThunk(
+  "dashboard/fetchInterviews",
+  async ({ page = 1, per_page = 10 }, { rejectWithValue }) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        return rejectWithValue("Token non trouvé");
+      }
+
+      const response = await api.get("/api/recruteur/interviews", {
+        params: { page, per_page },
+        headers: { Authorization: token },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.error ||
+          "Erreur lors de la récupération des entretiens"
+      );
+    }
+  }
+);
+
+// Thunk pour télécharger un CV
+export const downloadCV = createAsyncThunk(
+  "dashboard/downloadCV",
+  async ({ candidatureId }, { rejectWithValue }) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        return rejectWithValue("Token non trouvé");
+      }
+
+      const response = await api.get(`/api/recruteur/cv/${candidatureId}`, {
+        headers: { Authorization: token },
+        responseType: "blob",
+      });
+
+      // Créer un blob URL et télécharger le fichier
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `cv_${candidatureId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      return { success: true };
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.error || "Erreur lors du téléchargement du CV"
+      );
+    }
+  }
+);
+
+const initialState = {
+  loading: false,
+  error: null,
+  data: {
+    activeJobs: 0,
+    newCandidates: 0,
+    conversionRate: 0,
+    offres: [],
+    candidates: [],
+    interviews: [],
+    graphData: {},
+  },
+  candidatesPagination: {
+    page: 1,
+    per_page: 10,
+    total: 0,
+    pages: 0,
+  },
+  interviewsPagination: {
+    page: 1,
+    per_page: 10,
+    total: 0,
+    pages: 0,
+  },
+  selectedPeriod: "week",
+  activeTab: "overview",
+  isSidebarOpen: true,
+};
 
 const dashboardSlice = createSlice({
   name: "dashboard",
-  initialState: {
-    activeTab: "overview",
-    isSidebarOpen: false,
-    jobs: [],
-    candidates: [],
-    interviews: [],
-    graphData: null,
-    loading: false,
-    error: null,
-    lastFetch: null,
-    pagination: {
-      jobs: { currentPage: 1, itemsPerPage: 10, total: 0 },
-      candidates: { currentPage: 1, itemsPerPage: 10, total: 0 },
-      interviews: { currentPage: 1, itemsPerPage: 10, total: 0 },
-    },
-    selectedPeriod: "month",
-  },
+  initialState,
   reducers: {
+    clearError: (state) => {
+      state.error = null;
+    },
+    clearDashboardError: (state) => {
+      state.error = null;
+    },
+    setSelectedPeriod: (state, action) => {
+      state.selectedPeriod = action.payload;
+    },
     setActiveTab: (state, action) => {
       state.activeTab = action.payload;
     },
@@ -257,55 +232,104 @@ const dashboardSlice = createSlice({
     closeSidebar: (state) => {
       state.isSidebarOpen = false;
     },
-    clearDashboardError: (state) => {
-      state.error = null;
+    setCandidatesPage: (state, action) => {
+      state.candidatesPagination.page = action.payload;
     },
-    resetDashboard: (state) => {
-      state.jobs = [];
-      state.candidates = [];
-      state.interviews = [];
-      state.graphData = null;
-      state.loading = false;
-      state.error = null;
-    },
-    setSelectedPeriod: (state, action) => {
-      state.selectedPeriod = action.payload;
+    setInterviewsPage: (state, action) => {
+      state.interviewsPagination.page = action.payload;
     },
   },
   extraReducers: (builder) => {
     builder
+      // fetchInitialData
       .addCase(fetchInitialData.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchInitialData.fulfilled, (state, action) => {
         state.loading = false;
-        state.jobs = action.payload.jobs;
-        state.candidates = action.payload.candidates;
-        state.interviews = action.payload.interviews;
-        state.graphData = action.payload.graphData;
-        state.lastFetch = new Date().toISOString();
-        state.error = null;
-        state.pagination = action.payload.pagination;
+        state.data = action.payload;
       })
       .addCase(fetchInitialData.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        state.jobs = state.jobs || [];
-        state.candidates = state.candidates || [];
-        state.interviews = state.interviews || [];
-        state.graphData = state.graphData || null;
       })
+      // fetchGraphData
       .addCase(fetchGraphData.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchGraphData.fulfilled, (state, action) => {
         state.loading = false;
-        state.graphData = action.payload;
-        state.error = null;
+        state.data.graphData = action.payload.graphData;
       })
       .addCase(fetchGraphData.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // fetchOffres
+      .addCase(fetchOffres.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchOffres.fulfilled, (state, action) => {
+        state.loading = false;
+        state.data.offres = action.payload.offres || [];
+      })
+      .addCase(fetchOffres.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // fetchProfile
+      .addCase(fetchProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.data.profile = action.payload;
+      })
+      .addCase(fetchProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // fetchCandidates
+      .addCase(fetchCandidates.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchCandidates.fulfilled, (state, action) => {
+        state.loading = false;
+        state.data.candidates = action.payload.candidates || [];
+        state.candidatesPagination = action.payload.pagination;
+      })
+      .addCase(fetchCandidates.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // fetchInterviews
+      .addCase(fetchInterviews.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchInterviews.fulfilled, (state, action) => {
+        state.loading = false;
+        state.data.interviews = action.payload.interviews || [];
+        state.interviewsPagination = action.payload.pagination;
+      })
+      .addCase(fetchInterviews.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // downloadCV
+      .addCase(downloadCV.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(downloadCV.fulfilled, (state) => {
+        state.loading = false;
+      })
+      .addCase(downloadCV.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });
@@ -313,12 +337,14 @@ const dashboardSlice = createSlice({
 });
 
 export const {
+  clearError,
+  clearDashboardError,
+  setSelectedPeriod,
   setActiveTab,
   toggleSidebar,
   closeSidebar,
-  clearDashboardError,
-  resetDashboard,
-  setSelectedPeriod,
+  setCandidatesPage,
+  setInterviewsPage,
 } = dashboardSlice.actions;
 
 export default dashboardSlice.reducer;

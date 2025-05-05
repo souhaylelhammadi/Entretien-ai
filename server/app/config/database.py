@@ -1,37 +1,27 @@
-from flask_pymongo import PyMongo
-from datetime import datetime
-from bcrypt import hashpw, gensalt
-import logging
 
-logger = logging.getLogger(__name__)
+from flask import current_app
+from pymongo import MongoClient
+from bson.binary import Binary
 
-def get_mongo_client(app):
-    """Initialize MongoDB client for the Flask app."""
-    try:
-        mongo = PyMongo(app)
-        return mongo
-    except Exception as e:
-        logger.error(f"Erreur lors de l'initialisation de MongoDB: {str(e)}")
-        raise
+client = MongoClient('mongodb://localhost:27017')
+db = client['Entretien_ai']  
+collection = db['utilisateurs']
 
-def initialize_database(app):
-    """Initialize the database with sample data if empty."""
-    try:
-        with app.app_context():
-            db = app.mongo.db
-            if not db.utilisateurs.count_documents({}):
-                db.utilisateurs.insert_one({
-                    "nom": "Admin User",
-                    "email": "admin@example.com",
-                    "mot_de_passe": hashpw("Admin123".encode("utf-8"), gensalt()),
-                    "telephone": "1234567890",
-                    "role": "admin",
-                    "acceptTerms": True,
-                    "date_creation": datetime.utcnow(),
-                    "date_maj": datetime.utcnow()
-                })
-                logger.info("Base de données initialisée avec un utilisateur admin.")
-            return True
-    except Exception as e:
-        logger.error(f"Erreur lors de l'initialisation de la base de données: {str(e)}")
-        return False
+for user in collection.find():
+    if isinstance(user['email'], Binary):
+        collection.update_one(
+            {'_id': user['_id']},
+            {'$set': {'email': user['email'].decode('utf-8')}}
+        )
+    if isinstance(user['mot_de_passe'], Binary):
+        collection.update_one(
+            {'_id': user['_id']},
+            {'$set': {'mot_de_passe': user['mot_de_passe'].decode('utf-8')}}
+        )
+def get_db():
+    """
+    Retourne l'objet base de données MongoDB depuis l'application Flask courante.
+    """
+    client = MongoClient(current_app.config["MONGODB_URI"])
+    db = client.get_database()  # Récupère le nom de la base depuis l'URI
+    return db

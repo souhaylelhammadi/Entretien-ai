@@ -8,7 +8,7 @@ import candidatesReducer from "./recruteur/dashcandidatesSlice";
 import interviewsReducer from "./recruteur/candidatesinterviewsSlice";
 import profileReducer from "./recruteur/profileSlice";
 import addjobsReducer from "./recruteur/addjobsSlice";
-import { validateActionMiddleware } from "./auth/authSlice";
+import jobsReducer from "./recruteur/jobsSlice";
 
 const reducer = {
   auth: authReducer,
@@ -20,6 +20,7 @@ const reducer = {
   interviews: interviewsReducer,
   profile: profileReducer,
   addjob: addjobsReducer,
+  jobs: jobsReducer,
 };
 
 export const store = configureStore({
@@ -30,6 +31,6 @@ export const store = configureStore({
         ignoredActions: ["offresEmploi/submitCandidature"],
         ignoredPaths: ["offresEmploi.cv", "offresEmploi.lettreMotivation"],
       },
-    }).concat(validateActionMiddleware),
+    }),
   devTools: process.env.NODE_ENV !== "production",
 });
