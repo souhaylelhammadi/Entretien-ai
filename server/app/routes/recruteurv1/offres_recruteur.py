@@ -18,6 +18,7 @@ offres_recruteur_bp = Blueprint('offres_recruteur', __name__)
 OFFRES_COLLECTION = 'offres'
 USERS_COLLECTION = 'utilisateurs'
 CANDIDATURES_COLLECTION = 'candidatures'
+RECRUTEURS_COLLECTION = 'recruteurs'
 
 # Configure CORS
 CORS(offres_recruteur_bp, 
@@ -89,15 +90,31 @@ def format_offre(offre):
 def get_offres_emploi(auth_payload):
     try:
         user_id = auth_payload["user_id"]
+        logger.info(f"User ID: {user_id}")
         
         db = current_app.mongo
-        offres_collection = db[OFFRES_COLLECTION]
+        # D'abord, récupérer l'utilisateur
+        user = db[USERS_COLLECTION].find_one({"_id": ObjectId(str(user_id))})
+        if not user:
+            logger.error(f"Utilisateur non trouvé pour l'ID: {user_id}")
+            return jsonify({"error": "Utilisateur non trouvé", "code": "USER_NOT_FOUND"}), 404
+            
+        # Ensuite, chercher le recruteur correspondant
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(str(user_id))})
+        if not recruteur:
+            logger.error(f"Recruteur non trouvé pour l'utilisateur: {user_id}")
+            return jsonify({"error": "Recruteur non trouvé", "code": "RECRUITER_NOT_FOUND"}), 404
+            
+        recruteur_id = recruteur["_id"]
+        logger.info(f"Recruteur ID: {recruteur_id}")
         
         # Filtrer les offres par recruteur connecté
-        offres = list(offres_collection.find({"recruteur_id": ObjectId(user_id)}))
+        offres_collection = db[OFFRES_COLLECTION]
+        offres = list(offres_collection.find({"recruteur_id": ObjectId(recruteur_id)}))
+        logger.info(f"Nombre d'offres trouvées: {len(offres)}")
         
         formatted_offres = [format_offre(offre) for offre in offres]
-        logger.info(f"Retour de {len(formatted_offres)} offres d'emploi pour le recruteur {user_id}")
+        logger.info(f"Retour de {len(formatted_offres)} offres d'emploi pour le recruteur {recruteur_id}")
         return jsonify({"offres": formatted_offres}), 200
 
     except PyMongoError as e:
@@ -113,22 +130,36 @@ def get_offres_emploi(auth_payload):
 def get_offre_by_id(auth_payload, id):
     try:
         user_id = auth_payload["user_id"]
+        logger.info(f"User ID: {user_id}")
         
         if not ObjectId.is_valid(id):
             logger.warning(f"ID invalide fourni: {id}")
             return jsonify({"error": "ID de l'offre invalide"}), 400
 
         db = current_app.mongo
-        offres_collection = db[OFFRES_COLLECTION]
+        # D'abord, récupérer l'utilisateur
+        user = db[USERS_COLLECTION].find_one({"_id": ObjectId(str(user_id))})
+        if not user:
+            logger.error(f"Utilisateur non trouvé pour l'ID: {user_id}")
+            return jsonify({"error": "Utilisateur non trouvé", "code": "USER_NOT_FOUND"}), 404
+            
+        # Ensuite, chercher le recruteur correspondant
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(str(user_id))})
+        if not recruteur:
+            logger.error(f"Recruteur non trouvé pour l'utilisateur: {user_id}")
+            return jsonify({"error": "Recruteur non trouvé", "code": "RECRUITER_NOT_FOUND"}), 404
+            
+        recruteur_id = recruteur["_id"]
+        logger.info(f"Recruteur ID: {recruteur_id}")
         
-        # Rechercher l'offre avec l'ID spécifié et appartenant au recruteur connecté
+        offres_collection = db[OFFRES_COLLECTION]
         offre = offres_collection.find_one({
             "_id": ObjectId(id),
-            "recruteur_id": ObjectId(user_id)
+            "recruteur_id": ObjectId(recruteur_id)
         })
         
         if not offre:
-            logger.info(f"Offre non trouvée pour ID: {id} ou n'appartient pas au recruteur: {user_id}")
+            logger.info(f"Offre non trouvée pour ID: {id} ou n'appartient pas au recruteur: {recruteur_id}")
             return jsonify({"error": "Offre non trouvée ou accès non autorisé"}), 404
 
         formatted_offre = format_offre(offre)
@@ -229,27 +260,42 @@ def submit_candidature():
 def create_offre(auth_payload):
     try:
         user_id = auth_payload["user_id"]
-        email = auth_payload["email"]
+        logger.info(f"User ID: {user_id}")
+        
+        db = current_app.mongo
+        # D'abord, récupérer l'utilisateur
+        user = db[USERS_COLLECTION].find_one({"_id": ObjectId(str(user_id))})
+        if not user:
+            logger.error(f"Utilisateur non trouvé pour l'ID: {user_id}")
+            return jsonify({"error": "Utilisateur non trouvé", "code": "USER_NOT_FOUND"}), 404
+            
+        # Ensuite, chercher le recruteur correspondant
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(str(user_id))})
+        if not recruteur:
+            logger.error(f"Recruteur non trouvé pour l'utilisateur: {user_id}")
+            return jsonify({"error": "Recruteur non trouvé", "code": "RECRUITER_NOT_FOUND"}), 404
+            
+        recruteur_id = recruteur["_id"]
+        logger.info(f"Recruteur ID: {recruteur_id}")
+        
+        email = user.get("email", "")
         entreprise = email.split("@")[1].split(".")[0] if "@" in email else ""
         
-        # Récupérer les données JSON du corps de la requête
         data = request.json
         if not data:
             return jsonify({"error": "Aucune donnée fournie"}), 400
             
-        # Valider les champs obligatoires
         required_fields = ["titre", "description", "localisation", "departement"]
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": f"Champ obligatoire manquant: {field}"}), 400
                 
-        # Créer l'objet offre avec les données reçues, en ajoutant le recruteur_id
         offre = {
             "titre": data["titre"],
             "description": data["description"],
             "localisation": data["localisation"],
             "departement": data["departement"],
-            "recruteur_id": ObjectId(user_id),
+            "recruteur_id": ObjectId(recruteur_id),
             "entreprise": auth_payload.get("entreprise", entreprise),
             "date_creation": datetime.datetime.utcnow(),
             "date_maj": datetime.datetime.utcnow(),
@@ -259,19 +305,14 @@ def create_offre(auth_payload):
             "candidature_ids": []
         }
         
-        # Insérer l'offre dans la base de données
-        db = current_app.mongo
         offres_collection = db[OFFRES_COLLECTION]
         result = offres_collection.insert_one(offre)
-        
-        # Récupérer l'ID de l'offre créée
         offre_id = result.inserted_id
         
-        # Formater et retourner l'offre créée
         created_offre = offres_collection.find_one({"_id": offre_id})
         formatted_offre = format_offre(created_offre)
         
-        logger.info(f"Nouvelle offre créée: {offre_id} par recruteur {user_id}")
+        logger.info(f"Nouvelle offre créée: {offre_id} par recruteur {recruteur_id}")
         
         return jsonify({
             "success": True,
@@ -292,30 +333,42 @@ def create_offre(auth_payload):
 def update_offre(auth_payload, id):
     try:
         user_id = auth_payload["user_id"]
+        logger.info(f"User ID: {user_id}")
         
         if not ObjectId.is_valid(id):
             logger.warning(f"ID invalide fourni: {id}")
             return jsonify({"error": "ID de l'offre invalide"}), 400
             
-        # Récupérer les données JSON du corps de la requête
+        db = current_app.mongo
+        # D'abord, récupérer l'utilisateur
+        user = db[USERS_COLLECTION].find_one({"_id": ObjectId(str(user_id))})
+        if not user:
+            logger.error(f"Utilisateur non trouvé pour l'ID: {user_id}")
+            return jsonify({"error": "Utilisateur non trouvé", "code": "USER_NOT_FOUND"}), 404
+            
+        # Ensuite, chercher le recruteur correspondant
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(str(user_id))})
+        if not recruteur:
+            logger.error(f"Recruteur non trouvé pour l'utilisateur: {user_id}")
+            return jsonify({"error": "Recruteur non trouvé", "code": "RECRUITER_NOT_FOUND"}), 404
+            
+        recruteur_id = recruteur["_id"]
+        logger.info(f"Recruteur ID: {recruteur_id}")
+        
         data = request.json
         if not data:
             return jsonify({"error": "Aucune donnée fournie"}), 400
             
-        db = current_app.mongo
         offres_collection = db[OFFRES_COLLECTION]
-        
-        # Vérifier si l'offre existe et appartient au recruteur
         existing_offre = offres_collection.find_one({
             "_id": ObjectId(id),
-            "recruteur_id": ObjectId(user_id)
+            "recruteur_id": ObjectId(recruteur_id)
         })
         
         if not existing_offre:
-            logger.info(f"Offre non trouvée pour ID: {id} ou n'appartient pas au recruteur: {user_id}")
+            logger.info(f"Offre non trouvée pour ID: {id} ou n'appartient pas au recruteur: {recruteur_id}")
             return jsonify({"error": "Offre non trouvée ou accès non autorisé"}), 404
             
-        # Préparer les données à mettre à jour
         update_data = {}
         allowed_fields = ["titre", "description", "localisation", "departement", 
                          "statut", "competences_requises"]
@@ -324,24 +377,20 @@ def update_offre(auth_payload, id):
             if field in data:
                 update_data[field] = data[field]
                 
-        # Ajouter la date de mise à jour
         update_data["date_maj"] = datetime.datetime.utcnow()
         
-        # Ne pas permettre de modifier l'entreprise ou le recruteur_id
         if "entreprise" in data or "recruteur_id" in data:
             logger.warning(f"Tentative de modification de l'entreprise ou du recruteur_id pour l'offre {id}")
             
-        # Effectuer la mise à jour
         offres_collection.update_one(
             {"_id": ObjectId(id)},
             {"$set": update_data}
         )
         
-        # Récupérer l'offre mise à jour
         updated_offre = offres_collection.find_one({"_id": ObjectId(id)})
         formatted_offre = format_offre(updated_offre)
 
-        logger.info(f"Offre mise à jour: {id} par recruteur {user_id}")
+        logger.info(f"Offre mise à jour: {id} par recruteur {recruteur_id}")
         
         return jsonify({
             "success": True,
@@ -362,35 +411,48 @@ def update_offre(auth_payload, id):
 def delete_offre(auth_payload, id):
     try:
         user_id = auth_payload["user_id"]
+        logger.info(f"User ID: {user_id}")
         
         if not ObjectId.is_valid(id):
             logger.warning(f"ID invalide fourni: {id}")
             return jsonify({"error": "ID de l'offre invalide"}), 400
 
         db = current_app.mongo
-        offres_collection = db[OFFRES_COLLECTION]
+        # D'abord, récupérer l'utilisateur
+        user = db[USERS_COLLECTION].find_one({"_id": ObjectId(str(user_id))})
+        if not user:
+            logger.error(f"Utilisateur non trouvé pour l'ID: {user_id}")
+            return jsonify({"error": "Utilisateur non trouvé", "code": "USER_NOT_FOUND"}), 404
+            
+        # Ensuite, chercher le recruteur correspondant
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(str(user_id))})
+        if not recruteur:
+            logger.error(f"Recruteur non trouvé pour l'utilisateur: {user_id}")
+            return jsonify({"error": "Recruteur non trouvé", "code": "RECRUITER_NOT_FOUND"}), 404
+            
+        recruteur_id = recruteur["_id"]
+        logger.info(f"Recruteur ID: {recruteur_id}")
         
-        # Vérifier si l'offre existe et appartient au recruteur
+        offres_collection = db[OFFRES_COLLECTION]
         existing_offre = offres_collection.find_one({
             "_id": ObjectId(id),
-            "recruteur_id": ObjectId(user_id)
+            "recruteur_id": ObjectId(recruteur_id)
         })
         
         if not existing_offre:
-            logger.info(f"Offre non trouvée pour ID: {id} ou n'appartient pas au recruteur: {user_id}")
+            logger.info(f"Offre non trouvée pour ID: {id} ou n'appartient pas au recruteur: {recruteur_id}")
             return jsonify({"error": "Offre non trouvée ou accès non autorisé"}), 404
             
-        # Supprimer l'offre
         result = offres_collection.delete_one({
             "_id": ObjectId(id),
-            "recruteur_id": ObjectId(user_id)
+            "recruteur_id": ObjectId(recruteur_id)
         })
         
         if result.deleted_count == 0:
             logger.warning(f"Échec de la suppression de l'offre: {id}")
             return jsonify({"error": "Erreur lors de la suppression de l'offre"}), 500
             
-        logger.info(f"Offre supprimée: {id} par recruteur {user_id}")
+        logger.info(f"Offre supprimée: {id} par recruteur {recruteur_id}")
         
         return jsonify({
             "success": True,
@@ -410,16 +472,29 @@ def delete_offre(auth_payload, id):
 def get_offres_recruteur(auth_payload):
     try:
         user_id = auth_payload["user_id"]
+        logger.info(f"User ID: {user_id}")
         
-        # Récupérer toutes les offres du recruteur
         db = current_app.mongo
-        offres_collection = db[OFFRES_COLLECTION]
-        offres = list(offres_collection.find({"recruteur_id": ObjectId(user_id)}))
+        # D'abord, récupérer l'utilisateur
+        user = db[USERS_COLLECTION].find_one({"_id": ObjectId(str(user_id))})
+        if not user:
+            logger.error(f"Utilisateur non trouvé pour l'ID: {user_id}")
+            return jsonify({"error": "Utilisateur non trouvé", "code": "USER_NOT_FOUND"}), 404
+            
+        # Ensuite, chercher le recruteur correspondant
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(str(user_id))})
+        if not recruteur:
+            logger.error(f"Recruteur non trouvé pour l'utilisateur: {user_id}")
+            return jsonify({"error": "Recruteur non trouvé", "code": "RECRUITER_NOT_FOUND"}), 404
+            
+        recruteur_id = recruteur["_id"]
+        logger.info(f"Recruteur ID: {recruteur_id}")
         
-        # Formater les offres
+        offres_collection = db[OFFRES_COLLECTION]
+        offres = list(offres_collection.find({"recruteur_id": ObjectId(recruteur_id)}))
         formatted_offres = [format_offre(offre) for offre in offres]
         
-        logger.info(f"Retour de {len(formatted_offres)} offres pour le recruteur {user_id}")
+        logger.info(f"Retour de {len(formatted_offres)} offres pour le recruteur {recruteur_id}")
         return jsonify({"offres": formatted_offres}), 200
 
     except PyMongoError as e:

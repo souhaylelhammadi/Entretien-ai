@@ -1,4 +1,8 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import {
+  createSlice,
+  createAsyncThunk,
+  createSelector,
+} from "@reduxjs/toolkit";
 import api from "../../../services/api";
 import { getCleanToken } from "../../../utils/tokenUtils";
 
@@ -7,22 +11,63 @@ const getToken = () => {
   return getCleanToken();
 };
 
+// Sélecteurs memoïsés pour éviter les références inutiles
+export const selectDashboardCandidates = createSelector(
+  [(state) => state.dashboard.data?.candidates],
+  (candidates) => {
+    if (!candidates) return [];
+    return candidates.map((c) => ({
+      id: c.id || `unknown-${Math.random().toString(36).substr(2, 9)}`,
+      nom: c.nom || "Nom inconnu",
+      prenom: c.prenom || "",
+      email: c.email || "email@inconnu.com",
+      offre_titre: c.offre_titre || "Offre inconnue",
+      status: c.status || "En attente",
+      ...c,
+    }));
+  }
+);
+
+export const selectCandidatesPagination = createSelector(
+  [(state) => state.dashboard.candidatesPagination],
+  (pagination) => {
+    return pagination || { page: 1, per_page: 10, total: 0, pages: 0 };
+  }
+);
+
+export const selectDashboardLoading = (state) => state.dashboard.loading;
+export const selectDashboardError = (state) => state.dashboard.error;
+
 // Thunk pour récupérer les données initiales
 export const fetchInitialData = createAsyncThunk(
   "dashboard/fetchInitialData",
-  async (_, { rejectWithValue }) => {
+  async (_, { rejectWithValue, getState }) => {
     try {
       const token = getToken();
       if (!token) {
-        return rejectWithValue("Token non trouvé");
+        throw new Error("Token non trouvé");
       }
 
-      // Utilisation du nouvel endpoint qui retourne les données filtrées par recruteur
+      const { auth } = getState();
+      const userId =
+        auth.user?._id || auth.user?.id || localStorage.getItem("userId");
+
+      if (!userId) {
+        throw new Error("ID utilisateur non trouvé");
+      }
+
+      console.log("========== FETCH INITIAL DATA ==========");
+      console.log("Recruteur ID:", userId);
+      console.log("Token (20 premiers car.):", token.substring(0, 20) + "...");
+
       const response = await api.get("/api/recruteur/dashboard/init", {
         headers: { Authorization: token },
+        params: { recruteur_id: userId },
       });
 
       console.log("Initial dashboard data received:", response.data);
+      console.log("========== FIN FETCH INITIAL DATA ==========");
+
       return response.data;
     } catch (error) {
       console.error("Error fetchInitialData:", error);
@@ -138,19 +183,47 @@ export const fetchProfile = createAsyncThunk(
 // Thunk pour récupérer les candidats
 export const fetchCandidates = createAsyncThunk(
   "dashboard/fetchCandidates",
-  async ({ page = 1, per_page = 10 }, { rejectWithValue }) => {
+  async ({ page = 1, per_page = 10 }, { rejectWithValue, getState }) => {
     try {
       const token = getToken();
       if (!token) {
-        return rejectWithValue("Token non trouvé");
+        throw new Error("Token non trouvé");
       }
 
+      const { auth } = getState();
+      const userId = auth.user?._id || auth.user?.id;
+
+      if (!userId) {
+        throw new Error("ID utilisateur non trouvé");
+      }
+
+      console.log("========== FETCH CANDIDATES ==========");
+      console.log("Page:", page, "Per page:", per_page);
+      console.log("Recruteur ID:", userId);
+
       const response = await api.get("/api/recruteur/candidates", {
-        params: { page, per_page },
         headers: { Authorization: token },
+        params: {
+          page,
+          per_page,
+          recruteur_id: userId,
+        },
       });
-      return response.data;
+
+      console.log("Candidates response:", response.data);
+      console.log("========== FIN FETCH CANDIDATES ==========");
+
+      return {
+        candidates: response.data.candidates || [],
+        pagination: response.data.pagination || {
+          page,
+          per_page,
+          total: 0,
+          pages: 0,
+        },
+      };
     } catch (error) {
+      console.error("Error fetching candidates:", error);
       return rejectWithValue(
         error.response?.data?.error ||
           "Erreur lors de la récupération des candidats"
@@ -211,6 +284,53 @@ export const downloadCV = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.error || "Erreur lors du téléchargement du CV"
+      );
+    }
+  }
+);
+
+// Thunk pour mettre à jour le statut d'un candidat
+export const updateCandidateStatus = createAsyncThunk(
+  "dashboard/updateCandidateStatus",
+  async ({ candidateId, status }, { rejectWithValue, getState }) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        throw new Error("Token non trouvé");
+      }
+
+      const { auth } = getState();
+      const userId =
+        auth.user?._id || auth.user?.id || localStorage.getItem("userId");
+
+      if (!userId) {
+        throw new Error("ID utilisateur non trouvé");
+      }
+
+      console.log("========== UPDATE CANDIDATE STATUS ==========");
+      console.log("Candidate ID:", candidateId);
+      console.log("New status:", status);
+      console.log("Recruteur ID:", userId);
+
+      const response = await api.put(
+        `/api/recruteur/candidates/${candidateId}`,
+        {
+          status,
+          recruteur_id: userId,
+        },
+        {
+          headers: { Authorization: token },
+        }
+      );
+
+      console.log("Update response:", response.data);
+      console.log("========== FIN UPDATE CANDIDATE STATUS ==========");
+
+      return { candidateId, status };
+    } catch (error) {
+      console.error("Error updating candidate status:", error);
+      return rejectWithValue(
+        error.response?.data?.error || "Erreur lors de la mise à jour du statut"
       );
     }
   }
@@ -340,7 +460,7 @@ const dashboardSlice = createSlice({
       })
       .addCase(fetchCandidates.fulfilled, (state, action) => {
         state.loading = false;
-        state.data.candidates = action.payload.candidates || [];
+        state.data.candidates = action.payload.candidates;
         state.candidatesPagination = action.payload.pagination;
       })
       .addCase(fetchCandidates.rejected, (state, action) => {
@@ -370,6 +490,25 @@ const dashboardSlice = createSlice({
         state.loading = false;
       })
       .addCase(downloadCV.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // updateCandidateStatus
+      .addCase(updateCandidateStatus.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateCandidateStatus.fulfilled, (state, action) => {
+        state.loading = false;
+        const { candidateId, status } = action.payload;
+        const candidate = state.data.candidates.find(
+          (c) => c.id === candidateId
+        );
+        if (candidate) {
+          candidate.status = status;
+        }
+      })
+      .addCase(updateCandidateStatus.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

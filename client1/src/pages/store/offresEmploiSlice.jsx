@@ -133,7 +133,7 @@ export const submitCandidature = createAsyncThunk(
       }
 
       const { auth } = getState();
-      const token = auth.token;
+      const token = auth.token?.value;
       if (!token) {
         return rejectWithValue("Vous devez être connecté pour postuler");
       }
@@ -153,7 +153,7 @@ export const submitCandidature = createAsyncThunk(
         axios.post(`${API_URL}/api/candidatures`, formData, {
           headers: {
             "Content-Type": "multipart/form-data",
-            Authorization: `Bearer ${token}`,
+            Authorization: token,
           },
           timeout: 15000,
         });

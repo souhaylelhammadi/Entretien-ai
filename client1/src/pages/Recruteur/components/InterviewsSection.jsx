@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Video,
@@ -13,12 +13,11 @@ import {
   Star,
   ChevronLeft,
   ChevronRight,
-  MessageSquare,
 } from "lucide-react";
 import {
   setSelectedInterview,
   closeCard,
-} from "../../store/recruteur/candidatesinterviewsSlice";
+} from "../../store/recruteur/interviewsSlice";
 import {
   fetchInterviews,
   setInterviewsPage,
@@ -27,50 +26,75 @@ import {
 const InterviewsSection = () => {
   const dispatch = useDispatch();
   const initialFetchDone = useRef(false);
-  
+  const fetchTimeoutRef = useRef(null);
+
+  const dashboardState = useSelector((state) => state.dashboard);
+
   const {
-    interviews = [],
+    interviews,
     loading,
     error,
-  } = useSelector((state) => ({
-    interviews: state.dashboard.data?.interviews || [],
-    loading: state.dashboard.loading,
-    error: state.dashboard.error,
-  }));
-  
-  const pagination = useSelector(
-    (state) =>
-      state.dashboard.interviewsPagination || {
+    interviewsPagination: pagination,
+  } = useMemo(
+    () => ({
+      interviews: dashboardState.data?.interviews || [],
+      loading: dashboardState.loading,
+      error: dashboardState.error,
+      interviewsPagination: dashboardState.interviewsPagination || {
         page: 1,
         per_page: 10,
         total: 0,
         pages: 0,
-      }
+      },
+    }),
+    [dashboardState]
   );
-  
+
   const { selectedInterview, showCard } = useSelector(
     (state) => state.interviews || { selectedInterview: null, showCard: false }
   );
 
+  const fetchInterviewsData = useCallback(async () => {
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
+    }
+
+    fetchTimeoutRef.current = setTimeout(async () => {
+      try {
+        await dispatch(
+          fetchInterviews({
+            page: pagination.page,
+            per_page: pagination.per_page,
+          })
+        ).unwrap();
+      } catch (error) {
+        console.error("Error fetching interviews:", error);
+      }
+    }, 300); // 300ms debounce
+  }, [dispatch, pagination.page, pagination.per_page]);
+
   useEffect(() => {
-    // Charger les données une seule fois au montage du composant
-    // ou lorsque la page de pagination change explicitement
-    if (!initialFetchDone.current || pagination?.page !== 1) {
-      dispatch(
-        fetchInterviews({
-          page: pagination?.page || 1,
-          per_page: pagination?.per_page || 10,
-        })
-      );
+    if (!initialFetchDone.current) {
+      fetchInterviewsData();
       initialFetchDone.current = true;
     }
-  }, [dispatch, pagination?.page]);
 
-  const handlePageChange = (newPage) => {
-    if (newPage > 0 && newPage <= (pagination?.pages || 1)) {
-      dispatch(setInterviewsPage(newPage));
-    }
-  };
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
+  }, [fetchInterviewsData]);
+
+  const handlePageChange = useCallback(
+    (newPage) => {
+      if (newPage > 0 && newPage <= pagination.pages) {
+        dispatch(setInterviewsPage(newPage));
+        fetchInterviewsData();
+      }
+    },
+    [dispatch, pagination.pages, fetchInterviewsData]
+  );
 
   const renderStars = (rating) => {
     const stars = [];
@@ -123,12 +147,12 @@ const InterviewsSection = () => {
           <tr>
             {["Candidat", "Poste", "Date", "Statut", "Actions"].map(
               (header) => (
-                <th
-                  key={header}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                >
-                  {header}
-                </th>
+              <th
+                key={header}
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+              >
+                {header}
+              </th>
               )
             )}
           </tr>
@@ -136,44 +160,57 @@ const InterviewsSection = () => {
         <tbody className="divide-y">
           {interviews.map((interview) => (
             <tr key={interview.id} className="hover:bg-gray-50">
-              <td className="px-6 py-4 text-sm font-medium">
-                <div className="flex items-center">
-                  <User className="h-4 w-4 mr-2" />
+                <td className="px-6 py-4 text-sm font-medium">
+                  <div className="flex items-center">
+                    <User className="h-4 w-4 mr-2" />
                   {interview.candidateName || "Inconnu"}
-                </div>
-              </td>
-              <td className="px-6 py-4 text-sm">{interview.position}</td>
-              <td className="px-6 py-4 text-sm">
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm">{interview.position}</td>
+                <td className="px-6 py-4 text-sm">
                 {interview.date
                   ? new Date(interview.date).toLocaleString()
                   : "Non définie"}
-              </td>
-              <td className="px-6 py-4">
-                <span
-                  className={`px-2 py-1 text-xs rounded-full ${
-                    interview.status === "Terminé"
-                      ? "bg-green-100 text-green-800"
-                      : interview.status === "Annulé"
-                      ? "bg-red-100 text-red-800"
-                      : "bg-blue-100 text-blue-800"
-                  }`}
-                >
-                  {interview.status || "En attente"}
-                </span>
-              </td>
-              <td className="px-6 py-4">
-                <div className="flex space-x-2">
-                  <button
-                    className="flex items-center text-blue-600 hover:text-blue-800"
-                    title="Voir les détails"
-                    onClick={() => dispatch(setSelectedInterview(interview))}
+                </td>
+                <td className="px-6 py-4">
+                  <span
+                    className={`px-2 py-1 text-xs rounded-full ${
+                      interview.status === "Terminé"
+                        ? "bg-green-100 text-green-800"
+                        : interview.status === "Annulé"
+                        ? "bg-red-100 text-red-800"
+                        : "bg-blue-100 text-blue-800"
+                    }`}
                   >
-                    <Eye className="h-5 w-5 mr-1" />
-                    <span className="text-xs">Détails</span>
-                  </button>
-                </div>
-              </td>
-            </tr>
+                  {interview.status || "En attente"}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex space-x-2">
+                    <button
+                      className="flex items-center text-blue-600 hover:text-blue-800"
+                      title="Voir les détails"
+                      onClick={() => dispatch(setSelectedInterview(interview))}
+                    >
+                      <Eye className="h-5 w-5 mr-1" />
+                      <span className="text-xs">Détails</span>
+                    </button>
+                  {interview.status !== "Terminé" &&
+                    interview.status !== "Annulé" && (
+                      <button
+                        className="flex items-center text-red-600 hover:text-red-800"
+                        title="Annuler l'entretien"
+                        onClick={() =>
+                          console.log("Annuler entretien", interview.id)
+                        }
+                      >
+                        <X className="h-5 w-5 mr-1" />
+                        <span className="text-xs">Annuler</span>
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
           ))}
         </tbody>
       </table>
@@ -223,7 +260,7 @@ const InterviewsSection = () => {
               <div className="flex justify-between items-center p-4">
                 <div className="flex items-center">
                   <span className="text-xs text-blue-600">
-                    Interview Summary
+                    Résumé de l'entretien
                   </span>
                 </div>
                 <button
@@ -238,12 +275,18 @@ const InterviewsSection = () => {
             <div className="p-6">
               <h3 className="font-semibold text-lg mb-4">
                 Informations sur l'entretien
-              </h3>
+                </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Candidat</p>
                   <p className="font-medium">
                     {selectedInterview.candidateName || "Non défini"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Email</p>
+                  <p className="font-medium">
+                    {selectedInterview.candidateEmail || "Non défini"}
                   </p>
                 </div>
                 <div>
@@ -290,28 +333,28 @@ const InterviewsSection = () => {
                   <h4 className="font-medium text-md mb-2">Évaluation</h4>
                   <div className="flex">
                     {renderStars(selectedInterview.rating)}
-                  </div>
+            </div>
                 </div>
               )}
 
               {selectedInterview.recording_url && (
                 <div className="mb-6">
                   <h4 className="font-medium text-md mb-2">Enregistrement</h4>
-                  <div className="relative bg-gray-800 rounded-lg overflow-hidden">
-                    <div className="aspect-w-16 aspect-h-9">
-                      <img
-                        src="/api/placeholder/400/300"
-                        alt="Interview recording preview"
-                        className="w-full h-64 object-cover"
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center">
+                <div className="relative bg-gray-800 rounded-lg overflow-hidden">
+                  <div className="aspect-w-16 aspect-h-9">
+                    <img
+                      src="/api/placeholder/400/300"
+                      alt="Interview recording preview"
+                      className="w-full h-64 object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
                         <a
                           href={selectedInterview.recording_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-3"
                         >
-                          <Video className="h-6 w-6 text-blue-600" />
+                        <Video className="h-6 w-6 text-blue-600" />
                         </a>
                       </div>
                     </div>

@@ -46,7 +46,11 @@ const Register = () => {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      navigate(user.role === "recruteur" ? "/recrutement" : "/");
+      if (user.role === "recruteur") {
+        navigate("/recrutement");
+      } else if (user.role === "candidat") {
+        navigate("/");
+      }
     }
   }, [isAuthenticated, user, navigate]);
 

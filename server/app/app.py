@@ -4,11 +4,10 @@ from auth import auth_bp
 from routes.offres import offres_emploi_bp
 from routes.accepted_offers import accepted_offers_bp
 from routes.recruteurv1.candidates import candidates_bp
-
 from routes.recruteurv1.profile import profile_bp
 from routes.recruteurv1.dashboard_recruteur import Dashboard_recruteur_bp
 from routes.recruteurv1 import recruteurv1_bp
-
+from routes.recruteurv1.entretiens import entretiens_bp
 
 from pymongo import MongoClient
 import logging
@@ -99,22 +98,18 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(offres_emploi_bp, url_prefix='/api')
     app.register_blueprint(accepted_offers_bp, url_prefix='/api')
-
     
     # Routes spécifiques aux recruteurs
     app.register_blueprint(profile_bp, url_prefix='/api/recruteur')
     app.register_blueprint(Dashboard_recruteur_bp, url_prefix='/api/recruteur')
     app.register_blueprint(recruteurv1_bp, url_prefix='/api/recruteur')
-    app.register_blueprint(candidates_bp, url_prefix='/api/recruteur')
-    
-    # Routes spécifiques aux candidats
-    
-    
+    app.register_blueprint(candidates_bp, url_prefix='/api/candidates')
+    app.register_blueprint(entretiens_bp, url_prefix='/api/recruteur')
+        
     # Log des routes enregistrées
     logger.info("Routes enregistrées:")
-    for rule in app.url_map.iter_rules():
-        logger.info(f"Route: {rule.endpoint} - {rule.methods} - {rule}")
-
+    #for rule in app.url_map.iter_rules():
+            #logger.info(f"Route: {rule.endpoint} - {rule.methods} - {rule}")
     return app
 
 if __name__ == "__main__":

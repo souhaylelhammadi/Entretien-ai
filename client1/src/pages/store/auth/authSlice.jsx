@@ -28,8 +28,17 @@ export const loginUser = createAsyncThunk(
       });
 
       const { token, user } = response.data;
+
+      // Stocker le token et l'utilisateur dans le localStorage
       localStorage.setItem("token", `Bearer ${token}`);
       localStorage.setItem("user", JSON.stringify(user));
+
+      // Vérifier que le rôle est présent dans l'objet user
+      if (!user || !user.role) {
+        throw new Error("Rôle utilisateur non défini");
+      }
+
+      console.log("Login successful - User role:", user.role);
 
       return {
         token: {
@@ -40,6 +49,7 @@ export const loginUser = createAsyncThunk(
         user,
       };
     } catch (error) {
+      console.error("Login error:", error);
       return rejectWithValue(
         error.response?.data?.message || "Erreur lors de la connexion"
       );
@@ -64,8 +74,17 @@ export const registerUser = createAsyncThunk(
       });
 
       const { token, user } = response.data;
+
+      // Stocker le token et l'utilisateur dans le localStorage
       localStorage.setItem("token", `Bearer ${token}`);
       localStorage.setItem("user", JSON.stringify(user));
+
+      // Vérifier que le rôle est présent dans l'objet user
+      if (!user || !user.role) {
+        throw new Error("Rôle utilisateur non défini");
+      }
+
+      console.log("Registration successful - User role:", user.role);
 
       return {
         token: {
@@ -76,6 +95,7 @@ export const registerUser = createAsyncThunk(
         user,
       };
     } catch (error) {
+      console.error("Registration error:", error);
       return rejectWithValue(
         error.response?.data?.message || "Erreur lors de l'inscription"
       );
@@ -125,7 +145,6 @@ export const checkAuthStatus = createAsyncThunk(
   "auth/checkAuthStatus",
   async (_, { rejectWithValue }) => {
     try {
-      // Utiliser getCleanToken qui gère automatiquement le nettoyage et la mise à jour du localStorage
       const token = getCleanToken();
       if (!token) {
         return null;
@@ -136,6 +155,14 @@ export const checkAuthStatus = createAsyncThunk(
       });
 
       const user = response.data.user;
+
+      // Vérifier que le rôle est présent dans l'objet user
+      if (!user || !user.role) {
+        throw new Error("Rôle utilisateur non défini");
+      }
+
+      console.log("Auth check successful - User role:", user.role);
+
       return {
         user,
         token: {
@@ -149,7 +176,6 @@ export const checkAuthStatus = createAsyncThunk(
         error.response &&
         (error.response.status === 401 || error.response.status === 403)
       ) {
-        // Si le token est expiré ou invalide, nettoyer le local storage
         removeToken();
       }
 
@@ -199,12 +225,12 @@ const authSlice = createSlice({
     user: null,
     token: {
       value: null,
-      role: "candidat",
+      role: null,
       email: "",
       mot_de_passe: "",
     },
     isAuthenticated: false,
-    role: "candidat",
+    role: null,
     email: "",
     mot_de_passe: "",
     confirmMotDePasse: "",
@@ -236,15 +262,6 @@ const authSlice = createSlice({
     setNomEntreprise: (state, action) => {
       state.nomEntreprise = action.payload;
     },
-    setDescriptionEntreprise: (state, action) => {
-      state.entreprise.description = action.payload;
-    },
-    setSecteurActivite: (state, action) => {
-      state.entreprise.secteurActivite = action.payload;
-    },
-    setTailleEntreprise: (state, action) => {
-      state.entreprise.taille = action.payload;
-    },
     setRole: (state, action) => {
       const validRoles = ["candidat", "recruteur"];
       if (validRoles.includes(action.payload)) {
@@ -275,12 +292,12 @@ const authSlice = createSlice({
       state.user = null;
       state.token = {
         value: null,
-        role: "candidat",
+        role: null,
         email: "",
         mot_de_passe: "",
       };
       state.isAuthenticated = false;
-      state.role = "candidat";
+      state.role = null;
       state.email = "";
       state.mot_de_passe = "";
       state.confirmMotDePasse = "";
@@ -307,7 +324,9 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.token;
         state.isAuthenticated = true;
+        state.role = action.payload.user.role; // Mettre à jour le rôle à partir de l'utilisateur
         state.authError = "";
+        console.log("Login state updated - Role:", action.payload.user.role);
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -315,6 +334,7 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.user = null;
         state.token.value = null;
+        state.role = null;
       })
       // Inscription
       .addCase(registerUser.pending, (state) => {
@@ -326,7 +346,12 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.token;
         state.isAuthenticated = true;
+        state.role = action.payload.user.role; // Mettre à jour le rôle à partir de l'utilisateur
         state.authError = "";
+        console.log(
+          "Registration state updated - Role:",
+          action.payload.user.role
+        );
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
@@ -357,6 +382,11 @@ const authSlice = createSlice({
           state.user = action.payload.user;
           state.token = action.payload.token;
           state.isAuthenticated = true;
+          state.role = action.payload.user.role; // Mettre à jour le rôle à partir de l'utilisateur
+          console.log(
+            "Auth check state updated - Role:",
+            action.payload.user.role
+          );
         }
         state.authError = "";
       })
@@ -365,6 +395,7 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.user = null;
         state.token.value = null;
+        state.role = null;
         state.authError = action.payload;
       })
       // Déconnexion
@@ -377,11 +408,12 @@ const authSlice = createSlice({
         state.user = null;
         state.token = {
           value: null,
-          role: "candidat",
+          role: null,
           email: "",
           mot_de_passe: "",
         };
         state.isAuthenticated = false;
+        state.role = null;
         state.authError = "";
       })
       .addCase(logoutUser.rejected, (state, action) => {
@@ -389,11 +421,12 @@ const authSlice = createSlice({
         state.user = null;
         state.token = {
           value: null,
-          role: "candidat",
+          role: null,
           email: "",
           mot_de_passe: "",
         };
         state.isAuthenticated = false;
+        state.role = null;
         state.authError = action.payload;
       });
   },

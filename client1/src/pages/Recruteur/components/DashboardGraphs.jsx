@@ -137,9 +137,9 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
 
     return {
       labels: labels,
-      datasets: [
-        {
-          label: "Candidats",
+    datasets: [
+      {
+        label: "Candidats",
           data: candidatesData,
           backgroundColor: colorPalette.primary[0],
           borderColor: colorPalette.primary[1],
@@ -149,9 +149,9 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
           pointBackgroundColor: colorPalette.primary[1],
           pointBorderColor: "#fff",
           pointBorderWidth: 2,
-        },
-        {
-          label: "Entretiens",
+      },
+      {
+        label: "Entretiens",
           data: interviewsData,
           backgroundColor: colorPalette.secondary[0],
           borderColor: colorPalette.secondary[1],
@@ -198,11 +198,11 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
             colorPalette.accent1[1],
             colorPalette.accent2[1],
           ],
-          borderWidth: 1,
+        borderWidth: 1,
           hoverOffset: 10,
-        },
-      ],
-    };
+      },
+    ],
+  };
   }, [graphData]);
 
   // Préparer les données pour le graphique des entretiens
@@ -219,10 +219,10 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
 
     return {
       labels,
-      datasets: [
-        {
+    datasets: [
+      {
           data,
-          backgroundColor: [
+        backgroundColor: [
             colorPalette.accent1[0],
             colorPalette.tertiary[0],
             colorPalette.secondary[0],
@@ -267,9 +267,9 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
             backgroundColor: Object.values(colorPalette).map((c) => c[0]),
             borderColor: Object.values(colorPalette).map((c) => c[1]),
             borderWidth: 1,
-          },
-        ],
-      };
+      },
+    ],
+  };
     }
 
     // Extraire les départements des offres si offresByDepartment n'est pas disponible
@@ -288,8 +288,8 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
 
       return {
         labels,
-        datasets: [
-          {
+    datasets: [
+      {
             label: "Offres par département",
             data: counts,
             backgroundColor: Object.values(colorPalette)
@@ -314,9 +314,9 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
           backgroundColor: [colorPalette.primary[0]],
           borderColor: [colorPalette.primary[1]],
           borderWidth: 1,
-        },
-      ],
-    };
+      },
+    ],
+  };
   }, [graphData, data.offres]);
 
   // Options communes pour les graphiques
@@ -506,17 +506,17 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
             <h3 className="text-lg font-semibold mb-4 text-gray-800">
               Offres par département
             </h3>
-            <div className="h-64">
+        <div className="h-64">
               <Bar data={jobsByDepartment} options={barChartOptions} />
-            </div>
-          </div>
+        </div>
+      </div>
 
           {/* Graphique des entretiens */}
           <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">
               Statut des entretiens
             </h3>
-            <div className="h-64">
+        <div className="h-64">
               <Pie data={interviewStatusData} options={pieChartOptions} />
             </div>
           </div>
@@ -547,7 +547,7 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
             Les statistiques s'afficheront ici dès que des candidatures et
             entretiens seront enregistrés.
           </p>
-        </div>
+      </div>
       )}
     </div>
   );

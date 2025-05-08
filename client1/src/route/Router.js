@@ -16,50 +16,79 @@ import DashboardRecrutement from "../pages/Recruteur/RecruiterDashboard";
 import Mesinterview from "../pages/Mesinterview";
 import Profile from "../layout/Navbar/profile";
 
+
 function ProtectedRoute({ children, role }) {
   const { isAuthenticated, user } = useSelector((state) => state.auth);
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  if (role && user?.role !== role) {
+
+  if (role && (!user || user.role !== role)) {
+    console.log(
+      "Accès refusé - Rôle requis:",
+      role,
+      "Rôle actuel:",
+      user?.role
+    );
     return <Navigate to="/" replace />;
   }
+
   return children;
 }
-const Router1 = () => {
-  const location = useLocation();
 
-  // Fait défiler la page vers le haut à chaque changement de route
+function Router() {
+  const location = useLocation();
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
+
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
   return (
-    <Routes>
-      {/* Route parente avec Layout */}
-      <Route path="login" element={<Login />} />
-      <Route path="recrutement" element={<DashboardRecrutement />} />
+    <>
+      <ToastContainer />
+      <Routes>
+        {/* Routes publiques <Route index element={<Home />} />*/}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/" element={<Layout />}>
+          
+          <Route path="offres" element={<OffresEmploi />} />
+          <Route path="offres/:id" element={<DetailsOffreEmploi />} />
+        <Route path="/Interview" element={<Interview />} />
 
-      <Route path="register" element={<Register />} />
-      <Route path="Interview" element={<Interview />} />
-      <Route path="/Interview/:id" element={<Interview />} />
-      
-      <Route path="/" element={<Layout />}>
-        {/* Routes enfants <Route path="/" element={<Home />} />*/}
-<Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        }
-      />
-        <Route path="Mesinterview" element={<Mesinterview />} />
-        <Route path="/offres" element={<OffresEmploi />} />
-        <Route path="/offre/:id" element={<DetailsOffreEmploi />} />
-      </Route>
-    </Routes>
+          {/* Routes protégées pour les candidats */}
+          <Route
+            path="mesinterview"
+            element={
+              <ProtectedRoute role="candidat">
+                <Mesinterview />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="profile"
+            element={
+              <ProtectedRoute role="candidat">
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Routes protégées pour les recruteurs */}
+          <Route
+            path="recrutement/*"
+            element={
+              <ProtectedRoute role="recruteur">
+                <DashboardRecrutement />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+      </Routes>
+    </>
   );
-};
+}
 
-export default Router1;
+export default Router;

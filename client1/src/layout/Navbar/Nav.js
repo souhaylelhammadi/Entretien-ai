@@ -101,6 +101,7 @@ const Navbar = () => {
 
           {/* Desktop Navigation Links */}
           <div className="hidden md:flex items-center space-x-8">
+            {/* Accueil - visible pour tous */}
             <Link
               to="/"
               className={`relative text-base font-medium transition-all duration-200 group ${
@@ -116,6 +117,9 @@ const Navbar = () => {
                 }`}
               ></span>
             </Link>
+
+            {/* Offres - visible pour les visiteurs et candidats */}
+            {(!isAuthenticated || user?.role === "candidat") && (
             <Link
               to="/offres"
               className={`relative text-base font-medium transition-all duration-200 group ${
@@ -127,28 +131,16 @@ const Navbar = () => {
               Offres
               <span
                 className={`absolute bottom-0 left-0 h-0.5 bg-teal-600 transition-all duration-300 ${
-                  isRouteActive("/offres") ? "w-full" : "w-0 group-hover:w-full"
-                }`}
-              ></span>
-            </Link>
-            <Link
-              to="/recrutement"
-              className={`relative text-base font-medium transition-all duration-200 group ${
-                isRouteActive("/recrutement")
-                  ? "text-teal-600"
-                  : "text-gray-600 hover:text-teal-600"
-              }`}
-            >
-              Recruteur
-              <span
-                className={`absolute bottom-0 left-0 h-0.5 bg-teal-600 transition-all duration-300 ${
-                  isRouteActive("/recrutement")
+                    isRouteActive("/offres")
                     ? "w-full"
                     : "w-0 group-hover:w-full"
                 }`}
               ></span>
             </Link>
-            {isAuthenticated && (
+            )}
+
+            {/* Mes Interviews - visible uniquement pour les candidats */}
+            {isAuthenticated && user?.role === "candidat" && (
               <Link
                 to="/mesinterview"
                 className={`relative text-base font-medium transition-all duration-200 group ${
@@ -161,6 +153,27 @@ const Navbar = () => {
                 <span
                   className={`absolute bottom-0 left-0 h-0.5 bg-teal-600 transition-all duration-300 ${
                     isRouteActive("/mesinterview")
+                      ? "w-full"
+                      : "w-0 group-hover:w-full"
+                  }`}
+                ></span>
+              </Link>
+            )}
+
+            {/* Dashboard - visible uniquement pour les recruteurs */}
+            {isAuthenticated && user?.role === "recruteur" && (
+              <Link
+                to="/recrutement"
+                className={`relative text-base font-medium transition-all duration-200 group ${
+                  isRouteActive("/recrutement")
+                    ? "text-teal-600"
+                    : "text-gray-600 hover:text-teal-600"
+                }`}
+              >
+                Dashboard
+                <span
+                  className={`absolute bottom-0 left-0 h-0.5 bg-teal-600 transition-all duration-300 ${
+                    isRouteActive("/recrutement")
                       ? "w-full"
                       : "w-0 group-hover:w-full"
                   }`}
@@ -226,6 +239,7 @@ const Navbar = () => {
                       </div>
                     </div>
                     <div className="py-1">
+                      {user?.role === "candidat" && (
                       <Link
                         to="/profile"
                         className="flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-teal-600 transition-all duration-200"
@@ -233,6 +247,7 @@ const Navbar = () => {
                         <User size={16} className="mr-2" />
                         Mon Profil
                       </Link>
+                      )}
                       <button
                         onClick={handleLogout}
                         className="flex items-center w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-teal-600 transition-all duration-200"
@@ -259,6 +274,7 @@ const Navbar = () => {
         {isMobileMenuOpen && (
           <div className="md:hidden mt-4 py-3 border-t border-gray-100 animate-fadeIn">
             <div className="flex flex-col space-y-2">
+              {/* Accueil - visible pour tous */}
               <Link
                 to="/"
                 className={`py-2 text-base font-medium ${
@@ -267,6 +283,9 @@ const Navbar = () => {
               >
                 Accueil
               </Link>
+
+              {/* Offres - visible pour les visiteurs et candidats */}
+              {(!isAuthenticated || user?.role === "candidat") && (
               <Link
                 to="/offres"
                 className={`py-2 text-base font-medium ${
@@ -275,17 +294,10 @@ const Navbar = () => {
               >
                 Offres
               </Link>
-              <Link
-                to="/recrutement"
-                className={`py-2 text-base font-medium ${
-                  isRouteActive("/recrutement")
-                    ? "text-teal-600"
-                    : "text-gray-700"
-                }`}
-              >
-                Recruteur
-              </Link>
-              {isAuthenticated && (
+              )}
+
+              {/* Mes Interviews - visible uniquement pour les candidats */}
+              {isAuthenticated && user?.role === "candidat" && (
                 <Link
                   to="/mesinterview"
                   className={`py-2 text-base font-medium ${
@@ -295,6 +307,20 @@ const Navbar = () => {
                   }`}
                 >
                   Mes Interviews
+                </Link>
+              )}
+
+              {/* Dashboard - visible uniquement pour les recruteurs */}
+              {isAuthenticated && user?.role === "recruteur" && (
+                <Link
+                  to="/recrutement"
+                  className={`py-2 text-base font-medium ${
+                    isRouteActive("/recrutement")
+                      ? "text-teal-600"
+                      : "text-gray-700"
+                  }`}
+                >
+                  Dashboard
                 </Link>
               )}
 
@@ -320,6 +346,7 @@ const Navbar = () => {
                         : "Utilisateur"}
                     </span>
                   </div>
+                  {user?.role === "candidat" && (
                   <Link
                     to="/profile"
                     className="flex items-center py-2 text-base font-medium text-gray-700"
@@ -327,6 +354,7 @@ const Navbar = () => {
                     <User size={16} className="mr-2" />
                     Mon Profil
                   </Link>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="flex items-center py-2 text-base font-medium text-gray-700"

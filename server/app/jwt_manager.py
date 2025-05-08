@@ -14,6 +14,7 @@ class JWTManager:
         self._initialized = False
         self.blacklist = set()
         self.secret_key = None
+        self.algorithm = "HS256"
 
     def _initialize(self):
         if not self._initialized:
@@ -51,88 +52,64 @@ class JWTManager:
             raise
 
     def verify_token(self, token):
-        """Vérifie un token JWT et retourne l'ID de l'utilisateur ou None en cas d'erreur"""
+        """Vérifie un token JWT et retourne l'ID utilisateur."""
         try:
             if not self._initialized:
                 self._initialize()
-             
-            # Log le token pour le debug
-            logger.info(f"Vérification token (type: {type(token)}): {token[:20]}..." if isinstance(token, str) else f"Vérification token binaire")
-                
-            # Gestion des tokens bytes ou avec caractères spéciaux
-            if isinstance(token, bytes):
-                try:
-                    token = token.decode('utf-8')
-                    logger.info(f"Token décodé de bytes à str: {token[:20]}...")
-                except UnicodeDecodeError as e:
-                    logger.warning(f"Décodage UTF-8 échoué: {e}")
-                    # Essayer avec latin-1 qui peut décoder n'importe quel octet
-                    try:
-                        token = token.decode('latin-1')
-                        logger.info(f"Token décodé avec latin-1: {token[:20]}...")
-                    except Exception as e2:
-                        logger.error(f"Échec du décodage latin-1: {e2}")
-                        return None
+
+            logger.info(f"Vérification token (type: {type(token)}): {token[:20]}...")
             
-            # Vérifier le type du token
-            if not isinstance(token, str):
+            # Nettoyer le token si nécessaire
+            if isinstance(token, str):
+                if token.startswith("Bearer "):
+                    token = token[7:]
+                    logger.info("Préfixe 'Bearer ' retiré")
+                elif not token.strip():
+                    logger.error("Token vide")
+                    return None
+            else:
                 logger.error(f"Type de token invalide: {type(token)}")
                 return None
             
-            # Nettoyer le token des caractères qui pourraient être problématiques
-            token = token.strip()
-            
-            # Supprimer les préfixes Bearer en boucle jusqu'à ce qu'il n'y en ait plus
-            while token.startswith("Bearer "):
-                token = token[7:]
-                logger.info("Préfixe 'Bearer ' retiré")
-                token = token.strip()
-            
-            # Cas où Bearer est présent sans espace
-            if token.startswith("Bearer") and len(token) > 6:
-                token = token[6:]
-                logger.info("Préfixe 'Bearer' (sans espace) retiré")
-                token = token.strip()
-            
             logger.info(f"Token nettoyé final: {token[:20]}...")
             
-            # Vérifier si le token est dans la blacklist
-            if token in self.blacklist:
-                logger.error("Token blacklisté")
-                return None
-            
-            # Vérifier le token
             try:
-                payload = jwt.decode(token, self._get_secret_key(), algorithms=["HS256"])
+                # Décoder le token
+                payload = jwt.decode(
+                    token,
+                    self._get_secret_key(),
+                    algorithms=[self.algorithm],
+                    options={"verify_exp": True}
+                )
                 logger.info("Décodage JWT réussi")
-            except jwt.exceptions.DecodeError as e:
-                logger.error(f"Erreur de décodage JWT: {e}")
-                # Vérifier si le token ressemble à un JWT valide (3 parties séparées par des points)
-                if token.count('.') != 2:
-                    logger.error(f"Format JWT invalide (doit contenir 3 parties): {token[:10]}...")
-                return None
-            
-            # Vérifier l'expiration
-            exp = payload.get("exp")
-            if exp and datetime.fromtimestamp(exp) < datetime.utcnow():
+                
+                # S'assurer que le payload est un dictionnaire
+                if not isinstance(payload, dict):
+                    logger.error(f"Payload non-dictionnaire reçu: {type(payload)}")
+                    return None
+
+                # Vérifier que le payload contient les champs requis
+                if "sub" not in payload:
+                    logger.error("Payload ne contient pas de 'sub' (ID utilisateur)")
+                    return None
+
+                # Retourner directement l'ID utilisateur
+                user_id = payload.get("sub")
+                logger.info(f"ID utilisateur extrait du token: {user_id}")
+                return user_id
+                
+            except jwt.ExpiredSignatureError:
                 logger.error("Token expiré")
                 return None
-            
-            # Vérifier que le payload contient l'ID utilisateur
-            if "sub" not in payload:
-                logger.error("Token ne contient pas d'ID utilisateur (sub)")
+            except jwt.InvalidTokenError as e:
+                logger.error(f"Token invalide: {str(e)}")
                 return None
-                
-            return payload.get("sub")  # Retourne l'ID de l'utilisateur
+            except Exception as e:
+                logger.error(f"Erreur lors du décodage du token: {str(e)}")
+                return None
             
-        except jwt.ExpiredSignatureError:
-            logger.error("Token expiré")
-            return None
-        except jwt.InvalidTokenError as e:
-            logger.error(f"Token invalide: {str(e)}")
-            return None
         except Exception as e:
-            logger.error(f"Erreur de vérification du token: {str(e)}")
+            logger.error(f"Erreur lors de la vérification du token: {str(e)}")
             return None
 
     def blacklist_token(self, token):
@@ -171,6 +148,7 @@ class JWTManager:
                     
                     # Récupérer l'utilisateur depuis la base de données
                     user = current_app.mongo.utilisateurs.find_one({"_id": ObjectId(user_id)})
+                    
                     if not user:
                         return jsonify({"message": "Utilisateur non trouvé"}), 401
                     
@@ -181,9 +159,11 @@ class JWTManager:
                     # Créer le payload à passer à la fonction
                     auth_payload = {
                         "user_id": user_id,
+                            
                         "role": user.get("role"),
                         "email": user.get("email")
                     }
+                    print(auth_payload)
                     
                     kwargs['auth_payload'] = auth_payload
                     return f(*args, **kwargs)

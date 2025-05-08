@@ -211,7 +211,7 @@ function OffresEmploi() {
             {filteredOffres.map((offre) => (
               <Link
                 key={offre.id}
-                to={`/offre/${offre.id}`}
+                to={`/offres/${offre.id}`}
                 className="bg-white p-6 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 hover:scale-[1.02] border border-gray-100 flex flex-col"
                 aria-label={`Voir les détails de l'offre ${offre.titre}`}
               >

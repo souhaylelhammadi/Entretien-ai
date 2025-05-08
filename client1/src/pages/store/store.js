@@ -4,19 +4,19 @@ import offresEmploiReducer from "./offresEmploiSlice";
 import interviewReducer from "./interviewsSlice";
 import acceptedOffersReducer from "./acceptedOffersSlice";
 import dashboardReducer from "./recruteur/dashboardSlice";
-import candidatesReducer from "./recruteur/dashcandidatesSlice";
-import interviewsReducer from "./recruteur/candidatesinterviewsSlice";
+import candidates from "./candidatesSlice";
+import interviewsReducer from "./recruteur/interviewsSlice";
 import profileReducer from "./recruteur/profileSlice";
 import addjobsReducer from "./recruteur/addjobsSlice";
 import jobsReducer from "./recruteur/jobsSlice";
 
-const reducer = {
+const rootReducer = {
   auth: authReducer,
   offresEmploi: offresEmploiReducer,
   interview: interviewReducer,
   acceptedOffers: acceptedOffersReducer,
   dashboard: dashboardReducer,
-  candidates: candidatesReducer,
+  candidates: candidates,
   interviews: interviewsReducer,
   profile: profileReducer,
   addjob: addjobsReducer,
@@ -24,7 +24,7 @@ const reducer = {
 };
 
 export const store = configureStore({
-  reducer,
+  reducer: rootReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
