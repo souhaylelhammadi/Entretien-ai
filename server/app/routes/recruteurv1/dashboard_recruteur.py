@@ -1,11 +1,12 @@
 from flask import Blueprint, jsonify, request, current_app, send_file
 from bson import ObjectId
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jwt_manager import jwt_manager
 from config.config import OFFRES_COLLECTION, CANDIDATURES_COLLECTION, ENTRETIENS_COLLECTION, CANDIDATS_COLLECTION, ACTIVITIES_COLLECTION
 from pymongo.errors import PyMongoError
 import os
+from collections import defaultdict
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -114,141 +115,112 @@ def require_auth(role):
 def get_dashboard_data(auth_payload):
     try:
         user_id = auth_payload["sub"]
-        recruteur_id = auth_payload["recruteur_id"]
-        logger.info(f"Récupération des données du dashboard pour le recruteur {recruteur_id}")
+        logger.info(f"Récupération des données du dashboard pour l'utilisateur {user_id}")
 
-        period = request.args.get("period", "week")
-        logger.info(f"Période sélectionnée: {period}")
-
-        end_date = datetime.utcnow()
-        if period == "week":
-            start_date = end_date - timedelta(days=7)
-        elif period == "month":
-            start_date = end_date - timedelta(days=30)
-        else:
-            start_date = end_date - timedelta(days=365)
-
+        # Récupérer le recruteur
         db = current_app.mongo
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(user_id)})
+        if not recruteur:
+            logger.error(f"Recruteur non trouvé pour l'utilisateur {user_id}")
+            return jsonify({"error": "Recruteur non trouvé"}), 404
 
-        # Utiliser les deux IDs possibles (user_id et recruteur_id)
-        total_candidates = db[CANDIDATS_COLLECTION].count_documents({})
-        total_jobs = db[OFFRES_COLLECTION].count_documents({
-            "$or": [
+        recruteur_id = str(recruteur["_id"])
+        logger.info(f"ID du recruteur trouvé: {recruteur_id}")
+
+        # Calculer la période
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=7)  # Semaine par défaut
+
+        # Récupérer les offres du recruteur
+        offres = list(db[OFFRES_COLLECTION].find(
                 {"recruteur_id": ObjectId(recruteur_id)},
-                {"recruteur_id": ObjectId(user_id)}
-            ]
-        })
-        total_interviews = db[ENTRETIENS_COLLECTION].count_documents({
-            "$or": [
-                {"recruteur_id": ObjectId(recruteur_id)},
-                {"recruteur_id": ObjectId(user_id)}
-            ]
-        })
+            {"_id": 1, "titre": 1, "departement": 1, "statut": 1}
+        ))
+        offre_ids = [offre["_id"] for offre in offres]
 
-        new_candidates = db[CANDIDATS_COLLECTION].count_documents({
-            "date_creation": {"$gte": start_date, "$lte": end_date}
-        })
+        # Statistiques des offres
+        total_jobs = len(offre_ids)
+        active_jobs = sum(1 for offre in offres if offre.get("statut") == "ouverte")
 
-        active_jobs = db[OFFRES_COLLECTION].count_documents({
-            "$or": [
-                {"recruteur_id": ObjectId(recruteur_id)},
-                {"recruteur_id": ObjectId(user_id)}
-            ],
-            "statut": "ouverte"
-        })
+        # Statistiques des candidatures
+        candidatures_query = {
+            "offre_id": {"$in": offre_ids}
+        }
+        
+        # Récupérer toutes les candidatures
+        candidatures = list(db[CANDIDATURES_COLLECTION].find(candidatures_query))
+        total_candidates = len(candidatures)
+        
+        # Nouvelles candidatures de la semaine
+        new_candidates = sum(1 for c in candidatures if c.get("created_at", datetime.utcnow()) >= start_date)
 
-        upcoming_interviews = db[ENTRETIENS_COLLECTION].count_documents({
-            "$or": [
-                {"recruteur_id": ObjectId(recruteur_id)},
-                {"recruteur_id": ObjectId(user_id)}
-            ],
-            "date": {"$gte": datetime.utcnow()}
-        })
+        # Statistiques des entretiens
+        interview_query = {
+            "recruteur_id": ObjectId(recruteur_id)
+        }
+        
+        # Récupérer tous les entretiens
+        entretiens = list(db[ENTRETIENS_COLLECTION].find(interview_query))
+        total_interviews = len(entretiens)
+        
+        # Prochains entretiens
+        upcoming_interviews = sum(1 for e in entretiens if e.get("date", datetime.utcnow()) >= datetime.utcnow())
 
+        # Distribution des statuts des candidatures
+        status_distribution = {
+            "En attente": 0,
+            "En cours": 0,
+            "Accepté": 0,
+            "Refusé": 0
+        }
+        
+        for candidature in candidatures:
+            statut = candidature.get("statut", "En attente")
+            if statut in status_distribution:
+                status_distribution[statut] += 1
+            else:
+                status_distribution["En attente"] += 1
+
+        # Calcul du taux de conversion
         conversion_rate = 0
         if total_candidates > 0:
-            accepted_candidates = db[CANDIDATS_COLLECTION].count_documents({"statut": "accepté"})
-            conversion_rate = (accepted_candidates / total_candidates) * 100
+            accepted_count = status_distribution["Accepté"]
+            conversion_rate = (accepted_count / total_candidates) * 100
 
-        candidates_by_date = db[CANDIDATS_COLLECTION].aggregate([
-            {"$match": {"date_creation": {"$gte": start_date, "$lte": end_date}}},
-            {"$group": {
-                "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date_creation"}},
-                "count": {"$sum": 1}
-            }},
-            {"$sort": {"_id": 1}}
-        ])
+        # Distribution des statuts des entretiens
+        interview_status_distribution = {
+            "Planifié": 0,
+            "En cours": 0,
+            "Terminé": 0,
+            "Annulé": 0
+        }
+        
+        for entretien in entretiens:
+            statut = entretien.get("statut", "Planifié")
+            if statut in interview_status_distribution:
+                interview_status_distribution[statut] += 1
+            else:
+                interview_status_distribution["Planifié"] += 1
 
-        interviews_by_date = db[ENTRETIENS_COLLECTION].aggregate([
-            {"$match": {
-                "$or": [
-                    {"recruteur_id": ObjectId(recruteur_id)},
-                    {"recruteur_id": ObjectId(user_id)}
-                ],
-                "date": {"$gte": start_date, "$lte": end_date}
-            }},
-            {"$group": {
-                "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$date"}},
-                "count": {"$sum": 1}
-            }},
-            {"$sort": {"_id": 1}}
-        ])
+        # Distribution des offres par département
+        offres_by_department = {}
+        for offre in offres:
+            departement = offre.get("departement", "Non spécifié")
+            offres_by_department[departement] = offres_by_department.get(departement, 0) + 1
 
-        status_distribution = db[CANDIDATS_COLLECTION].aggregate([
-            {"$group": {
-                "_id": "$statut",
-                "count": {"$sum": 1}
-            }}
-        ])
-
-        interview_status_distribution = db[ENTRETIENS_COLLECTION].aggregate([
-            {"$match": {
-                "$or": [
-                    {"recruteur_id": ObjectId(recruteur_id)},
-                    {"recruteur_id": ObjectId(user_id)}
-                ]
-            }},
-            {"$group": {
-                "_id": "$statut",
-                "count": {"$sum": 1}
-            }}
-        ])
-
-        recent_activity = db[ACTIVITIES_COLLECTION].find({
+        # Activité récente
+        recent_activity = list(db[ACTIVITIES_COLLECTION].find({
             "user_id": recruteur_id,
             "date": {"$gte": start_date}
-        }).sort("date", -1).limit(10)
+        }).sort("date", -1).limit(10))
 
-        upcoming_interviews_list = db[ENTRETIENS_COLLECTION].find({
-            "recruteur_id": ObjectId(recruteur_id),
-            "date": {"$gte": datetime.utcnow()}
-        }).sort("date", 1).limit(5)
-
-        # Récupérer les offres avec les deux ID possibles
-        offres = list(db[OFFRES_COLLECTION].find({
-            "$or": [
-                {"recruteur_id": ObjectId(recruteur_id)},
-                {"recruteur_id": ObjectId(user_id)}
-            ]
-        }))
-        offres_list = []
-        for offre in offres:
-            date_creation = offre.get("date_creation", datetime.utcnow())
-            date_maj = offre.get("date_maj", datetime.utcnow())
-            offres_list.append({
-                "id": str(offre["_id"]),
-                "titre": offre.get("titre", ""),
-                "description": offre.get("description", ""),
-                "localisation": offre.get("localisation", ""),
-                "departement": offre.get("departement", ""),
-                "entreprise": str(offre.get("entreprise", "")),
-                "recruteur_id": str(offre.get("recruteur_id", "")),
-                "date_creation": date_creation.isoformat() + "Z",
-                "date_maj": date_maj.isoformat() + "Z",
-                "statut": offre.get("statut", "ouverte"),
-                "competences_requises": offre.get("competences_requises", []),
-                "questions_ids": [str(qid) for qid in offre.get("questions_ids", [])],
-                "candidature_ids": [str(cid) for cid in offre.get("candidature_ids", [])],
+        recent_activity_list = []
+        for activity in recent_activity:
+            recent_activity_list.append({
+                "id": str(activity["_id"]),
+                "type": activity.get("type", ""),
+                "message": activity.get("message", ""),
+                "date": activity.get("date", datetime.utcnow()).isoformat() + "Z"
             })
 
         response = {
@@ -258,25 +230,17 @@ def get_dashboard_data(auth_payload):
             "activeJobs": active_jobs,
             "totalInterviews": total_interviews,
             "upcomingInterviews": upcoming_interviews,
-            "conversionRate": conversion_rate,
+            "conversionRate": round(conversion_rate, 2),
+            "hiredCandidates": status_distribution["Accepté"],
+            "recentActivity": recent_activity_list,
             "graphData": {
-                "candidatesByDate": {item["_id"]: item["count"] for item in candidates_by_date},
-                "interviewsByDate": {item["_id"]: item["count"] for item in interviews_by_date},
-                "statusDistribution": {item["_id"] or "unknown": item["count"] for item in status_distribution},
-                "interviewStatusDistribution": {item["_id"] or "unknown": item["count"] for item in interview_status_distribution},
-            },
-            "recentActivity": [{
-                "date": activity.get("date", datetime.utcnow()).isoformat() + "Z",
-                "description": activity.get("description", "")
-            } for activity in recent_activity],
-            "upcomingInterviewsList": [{
-                "date": interview.get("date", datetime.utcnow()).isoformat() + "Z",
-                "candidateName": interview.get("candidate_name", ""),
-                "jobTitle": interview.get("job_title", "")
-            } for interview in upcoming_interviews_list],
-            "offres": offres_list,
+                "statusDistribution": status_distribution,
+                "interviewStatusDistribution": interview_status_distribution,
+                "offresByDepartment": offres_by_department
+            }
         }
 
+        logger.info(f"Données du dashboard générées avec succès pour le recruteur {recruteur_id}")
         return jsonify(response), 200
 
     except PyMongoError as e:
@@ -539,7 +503,6 @@ def get_initial_dashboard_data(auth_payload):
         logger.error(f"Erreur lors de la récupération des données initiales: {str(e)}")
         return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500
 
-# Route pour récupérer les candidats pour les offres du recruteur
 @Dashboard_recruteur_bp.route("/candidates", methods=["GET"])
 @require_auth("recruteur")
 def get_recruiter_candidates(auth_payload):
@@ -547,155 +510,75 @@ def get_recruiter_candidates(auth_payload):
         user_id = auth_payload["sub"]
         recruteur_id = auth_payload["recruteur_id"]
         
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 10))
-        
-        # Calcul de l'offset pour la pagination
-        skip = (page - 1) * per_page
-        
         db = current_app.mongo
         
-        # Vérifier les noms des collections disponibles
-        collections = db.list_collection_names()
-        logger.info(f"Collections disponibles: {collections}")
-        
-        # D'abord récupérer toutes les offres du recruteur
-        logger.info(f"Recherche des offres pour le recruteur_id: {recruteur_id}")
-        offres = list(db[OFFRES_COLLECTION].find({"recruteur_id": ObjectId(recruteur_id)}))
-        logger.info(f"Nombre d'offres trouvées: {len(offres)}")
-        
-        # Log d'une offre d'exemple si disponible
-        if len(offres) > 0:
-            logger.info(f"Exemple d'offre: {offres[0]}")
-            logger.info(f"Champs disponibles dans une offre: {offres[0].keys()}")
-        
-        if len(offres) == 0:
-            logger.warning(f"Aucune offre trouvée pour le recruteur_id: {recruteur_id}")
-            
-            # Vérifier si des offres existent avec d'autres formats de recruteur_id
-            alt_offres = list(db[OFFRES_COLLECTION].find({
-                "$or": [
-                    {"recruteur_id": recruteur_id},  # Essayer le recruteur_id en tant que chaîne
-                    {"recruteur": ObjectId(recruteur_id)},  # Essayer avec le champ "recruteur"
-                    {"recruiter_id": ObjectId(recruteur_id)}  # Essayer avec le champ "recruiter_id"
-                ]
-            }))
-            
-            if len(alt_offres) > 0:
-                logger.info(f"Trouvé {len(alt_offres)} offres avec d'autres formats de recruteur_id")
-                offres = alt_offres
-            else:
-                return jsonify({
-                    "candidates": [],
-                    "pagination": {
-                        "page": page,
-                        "per_page": per_page,
-                        "total": 0,
-                        "pages": 0
-                    }
-                }), 200
-        
+        # Récupérer toutes les offres du recruteur
+        offres = list(db[OFFRES_COLLECTION].find(
+            {"recruteur_id": ObjectId(recruteur_id)},
+            {"_id": 1, "titre": 1}
+        ))
         offre_ids = [offre["_id"] for offre in offres]
-        logger.info(f"IDs des offres trouvées: {[str(oid) for oid in offre_ids]}")
         
-        # Vérifier la structure de la collection candidatures
-        sample_candidature = db[CANDIDATURES_COLLECTION].find_one()
-        if sample_candidature:
-            logger.info(f"Structure d'une candidature type: {sample_candidature}")
-            logger.info(f"Champs disponibles dans une candidature: {sample_candidature.keys()}")
+        # Récupérer toutes les candidatures pour ces offres
+        candidatures = list(db[CANDIDATURES_COLLECTION].find({
+            "offre_id": {"$in": offre_ids}
+        }))
+            
+        # Préparer la liste des candidats avec leurs statuts
+        candidates = []
+        for candidature in candidatures:
+            try:
+                # Récupérer les informations de l'offre
+                offre = next((o for o in offres if o["_id"] == candidature["offre_id"]), None)
+                
+                # Récupérer les informations du candidat
+                candidat = db[USERS_COLLECTION].find_one({"email": candidature.get("user_email")})
+                
+                if candidat:
+                    candidates.append({
+                    "id": str(candidature["_id"]),
+                        "nom": candidat.get("nom", ""),
+                        "prenom": candidat.get("prenom", ""),
+                        "email": candidature.get("user_email", ""),
+                        "offre_titre": offre.get("titre", "") if offre else "Offre non trouvée",
+                        "status": candidature.get("statut", "En attente"),
+                        "date_candidature": candidature.get("created_at", datetime.utcnow()).isoformat() + "Z"
+                    })
+            except Exception as e:
+                logger.error(f"Erreur lors du traitement de la candidature {candidature.get('_id')}: {str(e)}")
+                continue
         
-        # Récupérer les candidatures pour ces offres
-        logger.info(f"Recherche des candidatures pour les offres: {[str(oid) for oid in offre_ids]}")
-        
-        # Essayer avec différents formats possibles pour le champ offre_id
-        query = {
-            "$or": [
-                {"offre_id": {"$in": offre_ids}},  # Format standard
-                {"id_offre": {"$in": offre_ids}},  # Alternative 1
-                {"job_id": {"$in": offre_ids}},    # Alternative 2
-                {"offer_id": {"$in": offre_ids}}   # Alternative 3
-            ]
+        # Calculer la distribution des statuts
+        status_distribution = {
+            "En attente": 0,
+            "En cours": 0,
+            "Accepté": 0,
+            "Refusé": 0
         }
         
-        logger.info(f"Requête de recherche de candidatures: {query}")
-        candidatures = list(db[CANDIDATURES_COLLECTION].find(query).sort("created_at", -1).skip(skip).limit(per_page))
-        
-        logger.info(f"Nombre de candidatures trouvées: {len(candidatures)}")
-        
-        if len(candidatures) == 0:
-            # Vérifier si la collection candidatures contient des données
-            total_candidatures_in_db = db[CANDIDATURES_COLLECTION].count_documents({})
-            logger.info(f"Nombre total de candidatures dans la base de données: {total_candidatures_in_db}")
-            
-            # Vérifier si les champs correspondent
-            if total_candidatures_in_db > 0:
-                example_candidature = db[CANDIDATURES_COLLECTION].find_one({})
-                logger.info(f"Exemple de candidature: {example_candidature}")
-                logger.info(f"Champs disponibles dans une candidature: {example_candidature.keys() if example_candidature else 'Aucun'}")
-        
-        # Compter le nombre total de candidatures
-        total_candidatures = db[CANDIDATURES_COLLECTION].count_documents(query)
-        
-        # Préparer la liste des candidats
-        candidates_list = []
-        
-        for candidature in candidatures:
-            # Récupérer les informations de l'offre associée
-            offre_id = candidature.get("offre_id") or candidature.get("id_offre") or candidature.get("job_id") or candidature.get("offer_id")
-            logger.info(f"Offre ID de la candidature: {str(offre_id) if offre_id else 'Non défini'}")
-            
-            offre = db[OFFRES_COLLECTION].find_one({"_id": offre_id}) if offre_id else None
-            
-            # Récupérer les informations de l'utilisateur candidat
-            candidat_email = candidature.get("user_email") or candidature.get("email") or candidature.get("candidat_email")
-            logger.info(f"Email du candidat: {candidat_email if candidat_email else 'Non défini'}")
-            
-            # Si l'email n'est pas trouvé, essayer avec l'ID du candidat
-            candidat = None
-            if candidat_email:
-                candidat = db[USERS_COLLECTION].find_one({"email": candidat_email})
-            elif candidature.get("candidat_id") or candidature.get("user_id"):
-                candidat_id = candidature.get("candidat_id") or candidature.get("user_id")
-                candidat = db[USERS_COLLECTION].find_one({"_id": ObjectId(candidat_id) if isinstance(candidat_id, str) else candidat_id})
-            
-            if candidat and offre:
-                candidates_list.append({
-                    "id": str(candidature["_id"]),
-                    "nom": candidat.get("nom", "") or candidat.get("name", ""),
-                    "prenom": candidat.get("prenom", "") or candidat.get("firstname", ""),
-                    "email": candidat_email or candidat.get("email", ""),
-                    "offre_titre": offre.get("titre", "") or offre.get("title", ""),
-                    "offre_id": str(offre["_id"]),
-                    "status": candidature.get("status", "") or candidature.get("statut", "en_attente"),
-                    "date_candidature": (candidature.get("created_at") or candidature.get("date_creation") or datetime.utcnow()).isoformat() + "Z" if isinstance(candidature.get("created_at") or candidature.get("date_creation"), datetime) else datetime.utcnow().isoformat() + "Z",
-                    "cv_path": candidature.get("cv_path", "") or candidature.get("resume_path", "")
-                })
+        for candidate in candidates:
+            status = candidate["status"]
+            if status in status_distribution:
+                status_distribution[status] += 1
             else:
-                logger.warning(f"Candidat ou offre non trouvé pour la candidature {str(candidature['_id'])}")
-                logger.warning(f"Candidat trouvé: {bool(candidat)}, Offre trouvée: {bool(offre)}")
+                status_distribution["En attente"] += 1
         
-        logger.info(f"Retour de {len(candidates_list)} candidats pour le recruteur {recruteur_id}")
+        # Trier les candidats par date de candidature (plus récent en premier)
+        candidates.sort(key=lambda x: x["date_candidature"], reverse=True)
         
         return jsonify({
-            "candidates": candidates_list,
-            "pagination": {
-                "page": page,
-                "per_page": per_page,
-                "total": total_candidatures,
-                "pages": (total_candidatures + per_page - 1) // per_page
-            }
+            "candidates": candidates,
+            "status_distribution": status_distribution,
+            "total": len(candidates)
         }), 200
         
-    except ValueError:
-        return jsonify({"error": "Paramètres de pagination invalides"}), 400
     except PyMongoError as e:
-        logger.error(f"Erreur MongoDB dans GET /candidates: {str(e)}")
+        logger.error(f"Erreur MongoDB lors de la récupération des candidats: {str(e)}")
         return jsonify({"error": "Erreur de base de données"}), 500
     except Exception as e:
-        logger.error(f"Erreur dans GET /candidates: {str(e)}")
+        logger.error(f"Erreur lors de la récupération des candidats: {str(e)}")
         return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500
 
-# Route pour récupérer les entretiens pour le recruteur
 @Dashboard_recruteur_bp.route("/interviews", methods=["GET"])
 @require_auth("recruteur")
 def get_recruiter_interviews(auth_payload):
@@ -883,4 +766,383 @@ def download_candidate_cv(auth_payload, candidature_id):
 
     except Exception as e:
         logger.error(f"Erreur lors du téléchargement du CV: {str(e)}")
+        return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500
+
+@Dashboard_recruteur_bp.route("/statistics", methods=["GET"])
+@require_auth("recruteur")
+def get_recruiter_statistics(auth_payload):
+    """Récupère les statistiques générales pour le dashboard du recruteur."""
+    try:
+        user_id = auth_payload["sub"]
+        recruteur_id = auth_payload["recruteur_id"]
+        
+        db = current_app.mongo
+        
+        # Récupérer les IDs des offres du recruteur
+        offre_ids = [offre["_id"] for offre in db[OFFRES_COLLECTION].find(
+            {"recruteur_id": ObjectId(recruteur_id)},
+            {"_id": 1}
+        )]
+        logger.info(f"IDs des offres du recruteur: {[str(oid) for oid in offre_ids]}")
+        
+        # Statistiques des offres
+        total_offres = len(offre_ids)
+        offres_actives = db[OFFRES_COLLECTION].count_documents({
+            "recruteur_id": ObjectId(recruteur_id),
+            "statut": "ouverte"
+        })
+        
+        # Statistiques des candidatures
+        candidatures_query = {
+            "offre_id": {"$in": offre_ids}
+        }
+        
+        total_candidatures = db[CANDIDATURES_COLLECTION].count_documents(candidatures_query)
+        logger.info(f"Nombre total de candidatures trouvées: {total_candidatures}")
+        
+        # Statistiques par statut
+        candidatures_par_statut = defaultdict(int)
+        candidatures = db[CANDIDATURES_COLLECTION].find(candidatures_query)
+        
+        for candidature in candidatures:
+            statut = candidature.get("statut", "En attente")
+            candidatures_par_statut[statut] += 1
+        
+        # Statistiques des 30 derniers jours
+        date_limite = datetime.now(timezone.utc) - timedelta(days=30)
+        candidatures_recentes = db[CANDIDATURES_COLLECTION].count_documents({
+            "offre_id": {"$in": offre_ids},
+            "created_at": {"$gte": date_limite}
+        })
+        
+        # Statistiques par département
+        offres_par_departement = defaultdict(int)
+        offres = db[OFFRES_COLLECTION].find({"recruteur_id": ObjectId(recruteur_id)})
+        for offre in offres:
+            departement = offre.get("departement", "Non spécifié")
+            offres_par_departement[departement] += 1
+        
+        # Statistiques des candidatures par département
+        candidatures_par_departement = defaultdict(int)
+        for offre in offres:
+            departement = offre.get("departement", "Non spécifié")
+            nb_candidatures = db[CANDIDATURES_COLLECTION].count_documents({
+                "offre_id": offre["_id"]
+            })
+            candidatures_par_departement[departement] += nb_candidatures
+        
+        # Statistiques des candidatures par jour (30 derniers jours)
+        candidatures_par_jour = defaultdict(int)
+        pipeline = [
+            {
+                "$match": {
+                    "offre_id": {"$in": offre_ids},
+                    "created_at": {"$gte": date_limite}
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "$dateToString": {
+                            "format": "%Y-%m-%d",
+                            "date": "$created_at"
+                        }
+                    },
+                    "count": {"$sum": 1}
+                }
+            }
+        ]
+        
+        result = list(db[CANDIDATURES_COLLECTION].aggregate(pipeline))
+        for item in result:
+            candidatures_par_jour[item["_id"]] = item["count"]
+        
+        return jsonify({
+            "statistics": {
+                "offres": {
+                    "total": total_offres,
+                    "actives": offres_actives,
+                    "par_departement": dict(offres_par_departement)
+                },
+                "candidatures": {
+                    "total": total_candidatures,
+                    "recentes": candidatures_recentes,
+                    "par_statut": dict(candidatures_par_statut),
+                    "par_departement": dict(candidatures_par_departement),
+                    "par_jour": dict(candidatures_par_jour)
+                }
+            }
+        }), 200
+        
+    except PyMongoError as e:
+        logger.error(f"Erreur MongoDB dans /statistics: {str(e)}")
+        return jsonify({"error": "Erreur de base de données", "code": "DB_ERROR"}), 500
+    except Exception as e:
+        logger.error(f"Erreur dans /statistics: {str(e)}")
+        return jsonify({"error": f"Erreur serveur: {str(e)}", "code": "SERVER_ERROR"}), 500
+
+@Dashboard_recruteur_bp.route("/candidatures-trend", methods=["GET"])
+@require_auth("recruteur")
+def get_candidatures_trend(auth_payload):
+    """Récupère l'évolution des candidatures sur les 30 derniers jours."""
+    try:
+        user_id = auth_payload["sub"]
+        recruteur_id = auth_payload["recruteur_id"]
+        
+        db = current_app.mongo
+        
+        # Récupérer les IDs des offres du recruteur
+        offre_ids = [offre["_id"] for offre in db[OFFRES_COLLECTION].find(
+            {"recruteur_id": ObjectId(recruteur_id)},
+            {"_id": 1}
+        )]
+        
+        # Initialiser les données pour les 30 derniers jours
+        date_limite = datetime.now(timezone.utc) - timedelta(days=30)
+        dates = [(datetime.now(timezone.utc) - timedelta(days=i)).date() for i in range(30)]
+        candidatures_par_jour = {date.isoformat(): 0 for date in dates}
+        
+        # Récupérer les candidatures des 30 derniers jours
+        pipeline = [
+            {
+                "$match": {
+                    "offre_id": {"$in": offre_ids},
+                    "created_at": {"$gte": date_limite}
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "$dateToString": {
+                            "format": "%Y-%m-%d",
+                            "date": "$created_at"
+                        }
+                    },
+                    "count": {"$sum": 1}
+                }
+            }
+        ]
+        
+        result = list(db[CANDIDATURES_COLLECTION].aggregate(pipeline))
+        
+        # Mettre à jour les données avec les résultats de l'agrégation
+        for item in result:
+            candidatures_par_jour[item["_id"]] = item["count"]
+        
+        return jsonify({
+            "trend": {
+                "dates": list(candidatures_par_jour.keys()),
+                "counts": list(candidatures_par_jour.values())
+            }
+        }), 200
+        
+    except PyMongoError as e:
+        logger.error(f"Erreur MongoDB dans /candidatures-trend: {str(e)}")
+        return jsonify({"error": "Erreur de base de données", "code": "DB_ERROR"}), 500
+    except Exception as e:
+        logger.error(f"Erreur dans /candidatures-trend: {str(e)}")
+        return jsonify({"error": f"Erreur serveur: {str(e)}", "code": "SERVER_ERROR"}), 500
+
+@Dashboard_recruteur_bp.route("/top-candidates", methods=["GET"])
+@require_auth("recruteur")
+def get_top_candidates(auth_payload):
+    """Récupère les meilleurs candidats basés sur le nombre de candidatures acceptées."""
+    try:
+        user_id = auth_payload["sub"]
+        recruteur_id = auth_payload["recruteur_id"]
+        
+        db = current_app.mongo
+        
+        # Récupérer les IDs des offres du recruteur
+        offre_ids = [offre["_id"] for offre in db[OFFRES_COLLECTION].find(
+            {"recruteur_id": ObjectId(recruteur_id)},
+            {"_id": 1}
+        )]
+        
+        # Pipeline d'agrégation pour obtenir les meilleurs candidats
+        pipeline = [
+            {
+                "$match": {
+                    "offre_id": {"$in": offre_ids},
+                    "statut": "Accepté"
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$user_email",
+                    "count": {"$sum": 1}
+                }
+            },
+            {
+                "$sort": {"count": -1}
+            },
+            {
+                "$limit": 5
+            }
+        ]
+        
+        top_candidates = list(db[CANDIDATURES_COLLECTION].aggregate(pipeline))
+        
+        # Enrichir les données avec les informations des candidats
+        result = []
+        for candidate in top_candidates:
+            user = db[USERS_COLLECTION].find_one({"email": candidate["_id"]})
+            if user:
+                candidat = db[CANDIDATS_COLLECTION].find_one({"utilisateur_id": user["_id"]})
+                if candidat:
+                    result.append({
+                        "email": candidate["_id"],
+                        "nom": candidat.get("nom", ""),
+                        "prenom": candidat.get("prenom", ""),
+                        "candidatures_acceptees": candidate["count"]
+                    })
+        
+        return jsonify({
+            "top_candidates": result
+        }), 200
+        
+    except PyMongoError as e:
+        logger.error(f"Erreur MongoDB dans /top-candidates: {str(e)}")
+        return jsonify({"error": "Erreur de base de données", "code": "DB_ERROR"}), 500
+    except Exception as e:
+        logger.error(f"Erreur dans /top-candidates: {str(e)}")
+        return jsonify({"error": f"Erreur serveur: {str(e)}", "code": "SERVER_ERROR"}), 500
+
+@Dashboard_recruteur_bp.route("/candidatures/status", methods=["GET"])
+@require_auth("recruteur")
+def get_candidatures_status(auth_payload):
+    """Récupère les statuts des candidatures pour le dashboard."""
+    try:
+        user_id = auth_payload["sub"]
+        logger.info(f"Récupération des statuts des candidatures pour l'utilisateur {user_id}")
+
+        # Récupérer le recruteur
+        db = current_app.mongo
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(user_id)})
+        if not recruteur:
+            logger.error(f"Recruteur non trouvé pour l'utilisateur {user_id}")
+            return jsonify({"error": "Recruteur non trouvé"}), 404
+
+        recruteur_id = str(recruteur["_id"])
+        
+        # Récupérer les offres du recruteur
+        offres = list(db[OFFRES_COLLECTION].find(
+            {"recruteur_id": ObjectId(recruteur_id)},
+            {"_id": 1, "titre": 1}
+        ))
+        offre_ids = [offre["_id"] for offre in offres]
+
+        # Récupérer toutes les candidatures pour ces offres
+        candidatures = list(db[CANDIDATURES_COLLECTION].find({
+            "offre_id": {"$in": offre_ids}
+        }))
+
+        # Organiser les candidatures par statut
+        status_counts = {
+            "En attente": 0,
+            "En cours": 0,
+            "Accepté": 0,
+            "Refusé": 0
+        }
+
+        # Compter les candidatures par statut
+        for candidature in candidatures:
+            statut = candidature.get("statut", "En attente")
+            if statut in status_counts:
+                status_counts[statut] += 1
+            else:
+                status_counts["En attente"] += 1
+
+        # Récupérer les dernières candidatures avec leurs détails
+        recent_candidatures = []
+        for candidature in candidatures:
+            offre = next((o for o in offres if o["_id"] == candidature["offre_id"]), None)
+            if offre:
+                recent_candidatures.append({
+                    "id": str(candidature["_id"]),
+                    "offre_id": str(candidature["offre_id"]),
+                    "offre_titre": offre.get("titre", "Sans titre"),
+                    "statut": candidature.get("statut", "En attente"),
+                    "created_at": candidature.get("created_at", datetime.utcnow()).isoformat(),
+                    "user_email": candidature.get("user_email", "")
+                })
+
+        # Trier les candidatures récentes par date de création
+        recent_candidatures.sort(key=lambda x: x["created_at"], reverse=True)
+        recent_candidatures = recent_candidatures[:10]  # Limiter aux 10 plus récentes
+
+        return jsonify({
+            "status_counts": status_counts,
+            "recent_candidatures": recent_candidatures,
+            "total_candidatures": len(candidatures)
+        }), 200
+
+    except PyMongoError as e:
+        logger.error(f"Erreur MongoDB lors de la récupération des statuts: {str(e)}")
+        return jsonify({"error": "Erreur de base de données"}), 500
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des statuts: {str(e)}")
+        return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500
+
+@Dashboard_recruteur_bp.route("/accepted-interviews", methods=["GET"])
+@require_auth("recruteur")
+def get_accepted_interviews(auth_payload):
+    try:
+        user_id = auth_payload["sub"]
+        recruteur_id = auth_payload["recruteur_id"]
+        
+        db = current_app.mongo
+        
+        # Récupérer les offres du recruteur
+        offres = list(db[OFFRES_COLLECTION].find(
+            {"recruteur_id": ObjectId(recruteur_id)},
+            {"_id": 1, "titre": 1}
+        ))
+        offre_ids = [offre["_id"] for offre in offres]
+        
+        # Récupérer les candidatures acceptées
+        candidatures_acceptees = list(db[CANDIDATURES_COLLECTION].find({
+            "offre_id": {"$in": offre_ids},
+            "statut": "Accepté"
+        }))
+        
+        # Récupérer les entretiens associés aux candidatures acceptées
+        entretiens = []
+        for candidature in candidatures_acceptees:
+            entretien = db[ENTRETIENS_COLLECTION].find_one({
+                "candidature_id": candidature["_id"]
+            })
+            
+            if entretien:
+                # Récupérer les informations du candidat
+                candidat = db[USERS_COLLECTION].find_one({"_id": candidature["candidat_id"]})
+                
+                # Récupérer les informations de l'offre
+                offre = next((o for o in offres if o["_id"] == candidature["offre_id"]), None)
+                
+                entretiens.append({
+                    "id": str(entretien["_id"]),
+                    "candidature_id": str(candidature["_id"]),
+                    "offre_id": str(candidature["offre_id"]),
+                    "offre_titre": offre["titre"] if offre else "Offre inconnue",
+                    "candidat_nom": f"{candidat.get('nom', '')} {candidat.get('prenom', '')}".strip() if candidat else "Candidat inconnu",
+                    "candidat_email": candidat.get("email", "") if candidat else "",
+                    "date": entretien.get("date", datetime.utcnow()).isoformat() + "Z",
+                    "statut": entretien.get("statut", "En attente"),
+                    "notes": entretien.get("notes", ""),
+                    "feedback": entretien.get("feedback", ""),
+                    "rating": entretien.get("rating", 0)
+                })
+        
+        logger.info(f"Retour de {len(entretiens)} entretiens acceptés pour le recruteur {recruteur_id}")
+        return jsonify({
+            "interviews": entretiens,
+            "total": len(entretiens)
+        }), 200
+        
+    except PyMongoError as e:
+        logger.error(f"Erreur MongoDB dans /accepted-interviews: {str(e)}")
+        return jsonify({"error": "Erreur de base de données"}), 500
+    except Exception as e:
+        logger.error(f"Erreur dans /accepted-interviews: {str(e)}")
         return jsonify({"error": f"Erreur serveur: {str(e)}"}), 500

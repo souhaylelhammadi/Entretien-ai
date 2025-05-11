@@ -143,10 +143,11 @@ const CandidatesSection = () => {
       try {
         setLocalError(null);
         dispatch(clearError());
-        const result = await dispatch(downloadCV(candidatureId)).unwrap();
-        setSelectedCV(result);
+        console.log("Viewing CV for candidature:", candidatureId);
+        setSelectedCV({ id: candidatureId });
         setShowCVModal(true);
       } catch (error) {
+        console.error("Error viewing CV:", error);
         setLocalError(error.message || "Erreur lors de l'affichage du CV");
         setShowCVModal(false);
       }
@@ -612,11 +613,10 @@ const CandidatesSection = () => {
             <div className="flex-1 overflow-hidden relative">
               {selectedCV && (
                 <iframe
-                  src={`${BASE_URL}${selectedCV.url}?token=${encodeURIComponent(
-                    selectedCV.token
-                  )}`}
-                  className="w-full h-full"
+                  src={`${BASE_URL}/api/candidates/cv/${selectedCV.id}?token=${token}`}
+                  className="w-full h-full border-0"
                   title="CV du candidat"
+                  sandbox="allow-same-origin allow-scripts allow-forms"
                   onError={(e) => {
                     console.error("Error loading PDF:", e);
                     setLocalError("Erreur lors du chargement du CV");

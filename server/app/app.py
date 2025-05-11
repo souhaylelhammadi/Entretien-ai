@@ -8,11 +8,12 @@ from routes.recruteurv1.profile import profile_bp
 from routes.recruteurv1.dashboard_recruteur import Dashboard_recruteur_bp
 from routes.recruteurv1 import recruteurv1_bp
 from routes.recruteurv1.entretiens import entretiens_bp
-
+from routes.recruteurv1.postuler import candidatures_bp
 from pymongo import MongoClient
 import logging
 from datetime import datetime, timezone
 from middleware import role_redirect
+from config.config import MONGO_URI
 
 def create_app():
     app = Flask(__name__)
@@ -20,14 +21,19 @@ def create_app():
     # Set default configuration values
     app.config['JWT_SECRET_KEY'] = "default_secret_key_for_development"
     app.config['SECRET_KEY'] = "default_secret_key_for_development"
-    app.config['MONGODB_URI'] = "mongodb://localhost:27017/Entretien_ai"
+    app.config['MONGODB_URI'] = MONGO_URI
     
     # Configure logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     
     # Configure CORS
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, resources={r"/api/*": {
+        "origins": ["http://localhost:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }})
     
     # Middleware to log all requests
     @app.before_request
@@ -98,6 +104,7 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(offres_emploi_bp, url_prefix='/api')
     app.register_blueprint(accepted_offers_bp, url_prefix='/api')
+    app.register_blueprint(candidatures_bp, url_prefix='/api')
     
     # Routes spécifiques aux recruteurs
     app.register_blueprint(profile_bp, url_prefix='/api/recruteur')

@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 import logging
 from pymongo.errors import PyMongoError
 from jwt_manager import jwt_manager
-from utils import verify_token
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -17,33 +16,42 @@ def auth_required(f):
     def wrapper(*args, **kwargs):
         token = request.headers.get("Authorization")
         if not token:
+            logger.error("Pas de token dans les headers")
             return jsonify({"error": "Authentification requise"}), 401
         
-        # Use the existing token verification
-        decoded = verify_token(token)
-        if not decoded:
-            return jsonify({"error": "Token invalide ou expiré"}), 401
-        
-        # Extract email from token
-        email = decoded.split(":")[1] if decoded.startswith("EMAIL:") else None
-        if not email:
-            return jsonify({"error": "Format de token invalide"}), 401
+        try:
+            # Vérifier le token avec jwt_manager
+            user_id = jwt_manager.verify_token(token)
+            if not user_id:
+                logger.error("Token invalide ou expiré")
+                return jsonify({"error": "Token invalide ou expiré"}), 401
             
-        # Get user from database
-        db = current_app.mongo.db
-        user = db.utilisateurs.find_one({"email": email})
-        if not user:
-            return jsonify({"error": "Utilisateur non trouvé"}), 404
+            logger.info(f"Token vérifié, user_id: {user_id}")
             
-        if user.get("role") != "candidat":
-            return jsonify({"error": "Accès réservé aux candidats"}), 403
+            # Récupérer l'utilisateur depuis la base de données
+            db = current_app.mongo
+            user = db.utilisateurs.find_one({"_id": ObjectId(user_id)})
+            if not user:
+                logger.error(f"Utilisateur non trouvé pour l'ID: {user_id}")
+                return jsonify({"error": "Utilisateur non trouvé"}), 404
             
-        request.user = {
-            "id": str(user["_id"]),
-            "email": email,
-            "role": user["role"]
-        }
-        return f(*args, **kwargs)
+            logger.info(f"Utilisateur trouvé: {user}")
+            
+            if user.get("role") != "candidat":
+                logger.error(f"Rôle invalide: {user.get('role')}")
+                return jsonify({"error": "Accès réservé aux candidats"}), 403
+            
+            request.user = {
+                "id": str(user["_id"]),
+                "email": user["email"],
+                "role": user["role"]
+            }
+            logger.info(f"Utilisateur authentifié: {request.user}")
+            return f(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Erreur d'authentification: {str(e)}")
+            return jsonify({"error": "Erreur d'authentification"}), 401
+            
     wrapper.__name__ = f.__name__
     return wrapper
 
@@ -55,7 +63,7 @@ def serialize_doc(doc):
     
     # Convert ObjectId fields to strings
     id_fields = ["_id", "user_id", "offre_id", "candidature_id", "candidat_id", 
-                "recruteur_id", "rapport_id", "entreprise_id"]
+                "recruteur_id", "rapport_id"]
     for field in id_fields:
         if field in doc:
             doc[field] = str(doc[field])
@@ -88,87 +96,92 @@ def serialize_doc(doc):
     
     return doc
 
-@accepted_offers_bp.route("/accepted-offers", methods=["GET"])
+def serialize_mongo_doc(doc):
+    """Convertit tous les ObjectId en chaînes de caractères dans un document MongoDB."""
+    if doc is None:
+        return None
+        
+    if isinstance(doc, ObjectId):
+        return str(doc)
+        
+    if isinstance(doc, dict):
+        return {k: serialize_mongo_doc(v) for k, v in doc.items()}
+        
+    if isinstance(doc, list):
+        return [serialize_mongo_doc(item) for item in doc]
+        
+    return doc
+
+@accepted_offers_bp.route('/accepted-offers', methods=['GET'])
 @auth_required
 def get_accepted_offers():
-    """Retrieve accepted candidatures for the authenticated candidate."""
     try:
-        user_id = ObjectId(request.user["id"])
+        user_id = request.user["id"]
+        user_email = request.user["email"]
+        logger.info(f"Récupération des candidatures pour l'utilisateur: {user_id} ({user_email})")
         
-        # Fetch candidatures with status="accepted" or "pending_interview" for the candidate
-        candidatures = list(current_app.mongo.db.candidatures.find({
-            "user_id": user_id,
-            "statut": {"$in": ["accepted", "pending_interview"]}
-        }).sort("date_postulation", -1))
-
-        # Enrich each candidature with offer and entreprise details
+        db = current_app.mongo
+        
+        # D'abord, récupérer l'utilisateur pour obtenir son ID de candidat
+        user = db.utilisateurs.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            logger.error(f"Utilisateur non trouvé: {user_id}")
+            return jsonify({"error": "Utilisateur non trouvé"}), 404
+            
+        logger.info(f"Utilisateur trouvé: {serialize_mongo_doc(user)}")
+        
+        # Récupérer les candidatures avec les statuts spécifiés
+        query = {
+            "user_id": ObjectId(user_id),
+            "statut": {"$in": ["Accepté", "En cours", "En attente"]}
+        }
+        logger.info(f"Requête MongoDB: {serialize_mongo_doc(query)}")
+        
+        candidatures = list(db.candidatures.find(query))
+        logger.info(f"Nombre de candidatures trouvées: {len(candidatures)}")
+        
+        if not candidatures:
+            logger.info("Aucune candidature trouvée")
+            return jsonify({"acceptedOffers": []}), 200
+            
+        # Enrichir chaque candidature avec les détails de l'offre et de l'entreprise
         for candidature in candidatures:
-            # Fetch offer details
-            offer = current_app.mongo.db.offres.find_one({"_id": ObjectId(candidature["offre_id"])})
-            if offer:
-                entreprise = current_app.mongo.db.entreprises.find_one({"_id": offer.get("entreprise", {}).get("_id")})
-                candidature["jobDetails"] = {
-                    "title": offer.get("titre", "N/A"),
-                    "company": entreprise.get("nom", "N/A") if entreprise else offer.get("entreprise", {}).get("nom", "N/A"),
-                    "departement": offer.get("departement", "N/A"),
-                    "location": offer.get("localisation", "N/A"),
-                    "description": offer.get("description", "N/A"),
-                    "entreprise_id": str(offer.get("entreprise", {}).get("_id", "")) if offer.get("entreprise", {}).get("_id") else ""
-                }
-            else:
-                candidature["jobDetails"] = {
-                    "title": "Offre inconnue",
-                    "company": "N/A",
-                    "department": "N/A",
-                    "location": "N/A",
-                    "description": "N/A",
-                    "entreprise_id": ""
-                }
-
-            # Fetch interview details if available
-            interview = current_app.mongo.db.entretiens.find_one({
-                "applicationId": candidature["_id"],
-                "candidateId": user_id
-            }) if "interviews" in current_app.mongo.db.list_collection_names() else None
-            if interview:
-                candidature["interview"] = {
-                    "id": str(interview["_id"]),
-                    "videoPath": interview.get("videoPath", ""),
-                    "score": interview.get("score", None),
-                    "timestamp": interview.get("createdAt", None)
-                }
-            else:
-                candidature["entretiens"] = None
-
-        serialized_candidatures = [serialize_doc(candidature) for candidature in candidatures]
-        logger.info(f"Récupéré {len(serialized_candidatures)} candidatures acceptées pour User ID: {user_id}")
-        return jsonify({
-            "success": True,
-            "data": serialized_candidatures,
-            "message": "Candidatures acceptées récupérées avec succès"
-        }), 200
-
-    except ValueError as e:
-        logger.error(f"Erreur de validation lors de la récupération des candidatures acceptées: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": "Erreur de validation",
-            "details": str(e)
-        }), 400
-    except PyMongoError as e:
-        logger.error(f"Erreur MongoDB lors de la récupération des candidatures acceptées pour User ID {request.user['id']}: {str(e)}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": "Erreur base de données",
-            "details": str(e)
-        }), 500
+            try:
+                # Récupérer les détails de l'offre
+                offre = db.offres.find_one({"_id": candidature["offre_id"]})
+                if offre:
+                    # Transformer les données dans le format attendu par le frontend
+                    candidature["jobDetails"] = {
+                        "title": offre.get("titre", "N/A"),
+                        "department": offre.get("departement", "N/A"),
+                        "location": offre.get("localisation", "N/A"),
+                        "description": offre.get("description", "N/A")
+                    }
+                    
+                    # Récupérer les détails de l'entreprise si l'ID existe
+                    if "entreprise_id" in offre:
+                        entreprise = db.entreprises.find_one({"_id": offre["entreprise_id"]})
+                        if entreprise:
+                            candidature["jobDetails"]["company"] = entreprise.get("nom", "N/A")
+                        
+                # Récupérer les détails de l'entretien si disponible
+                if "entretien_id" in candidature:
+                    entretien = db.entretiens.find_one({"_id": candidature["entretien_id"]})
+                    if entretien:
+                        candidature["entretien"] = serialize_mongo_doc(entretien)
+            except Exception as e:
+                logger.error(f"Erreur lors de l'enrichissement de la candidature {candidature.get('_id')}: {str(e)}")
+                continue
+                    
+        # Sérialiser toutes les candidatures
+        candidatures = [serialize_mongo_doc(candidature) for candidature in candidatures]
+                
+        logger.info(f"Candidatures enrichies: {candidatures}")
+        return jsonify({"acceptedOffers": candidatures}), 200
+        
     except Exception as e:
-        logger.error(f"Erreur serveur lors de la récupération des candidatures acceptées pour User ID {request.user['id']}: {str(e)}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": "Erreur serveur",
-            "details": str(e)
-        }), 500
+        logger.error(f"Erreur lors de la récupération des candidatures: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @accepted_offers_bp.route("/accepted-offers/<string:application_id>", methods=["PUT"])
 @auth_required

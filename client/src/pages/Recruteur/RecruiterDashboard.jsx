@@ -74,6 +74,7 @@ import {
   TrendingUp as TrendingUpIcon,
 } from "@mui/icons-material";
 import DashboardGraphs from "./components/DashboardGraphs";
+import { toast } from "react-hot-toast";
 
 // Register Chart.js components
 ChartJS.register(
@@ -95,13 +96,16 @@ const defaultTheme = createTheme();
 const RecruiterDashboard = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const isInitialMount = useRef(true);
+  const { isAuthenticated, token, role, user } = useSelector(
+    (state) => state.auth
+  );
+  const { data, loading, error } = useSelector((state) => state.dashboard);
+  const [selectedPeriod, setSelectedPeriod] = useState("week");
+  const [activeTab, setActiveTab] = useState("overview");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const dataFetched = useRef(false);
   const dataFetchInProgress = useRef(false);
-  const tabTimeoutRef = useRef(null);
-  const [tabChangeInProgress, setTabChangeInProgress] = useState(false);
-
-  // Référence pour suivre les onglets déjà chargés
+  const initialLoadDone = useRef(false);
   const hasLoadedRef = useRef({
     overview: false,
     profile: false,
@@ -109,31 +113,49 @@ const RecruiterDashboard = () => {
     candidates: false,
     interviews: false,
   });
+  const [tabChangeInProgress, setTabChangeInProgress] = useState(false);
+  const periodFetchInProgress = useRef(false);
 
-  // Référence pour les timers de debounce
-  const debounceTimersRef = useRef({});
+  // Fonction pour gérer les erreurs d'authentification
+  const handleAuthError = useCallback(() => {
+    dispatch(resetAuthState());
+    navigate("/login");
+    toast.error("Session expirée ou non autorisée");
+  }, [dispatch, navigate]);
 
-  const {
-    activeTab,
-    isSidebarOpen,
-    loading,
-    error,
-    selectedPeriod = "week",
-    data,
-  } = useSelector((state) => state.dashboard);
+  // Fonction pour gérer le changement de période
+  const handlePeriodChange = useCallback(
+    async (event) => {
+      const newPeriod = event.target.value;
+      console.log("Changement de période:", newPeriod);
 
-  const { user, token, isAuthenticated, role } = useSelector(
-    (state) => state.auth
+      if (periodFetchInProgress.current) {
+        console.log("Une requête de période est déjà en cours");
+        return;
+      }
+
+      try {
+        periodFetchInProgress.current = true;
+        setSelectedPeriod(newPeriod);
+        const result = await dispatch(
+          fetchGraphData({ period: newPeriod })
+        ).unwrap();
+        console.log("Données reçues pour la période:", newPeriod, result);
+      } catch (error) {
+        console.error("Erreur lors du changement de période:", error);
+        toast.error("Erreur lors du chargement des données");
+      } finally {
+        periodFetchInProgress.current = false;
+      }
+    },
+    [dispatch]
   );
 
-  // Vérifier l'authentification et le rôle
-  useEffect(() => {
-    console.log("État d'authentification:", {
-      isAuthenticated,
-      token,
-      role,
-      user,
-    });
+  // Fonction pour charger les données initiales
+  const loadInitialData = useCallback(async () => {
+    if (initialLoadDone.current) {
+      return;
+    }
 
     if (!isAuthenticated || !token) {
       console.log("Redirection vers login - Non authentifié");
@@ -141,85 +163,65 @@ const RecruiterDashboard = () => {
       return;
     }
 
-    // Vérifier le rôle dans l'objet user
     if (!user || user.role !== "recruteur") {
       console.log("Redirection vers accueil - Rôle non autorisé:", user?.role);
-      // Déconnexion et redirection
       handleAuthError();
       return;
     }
 
-    // S'assurer que le token est dans le localStorage
-    if (!localStorage.getItem("token")) {
-      localStorage.setItem("token", token);
-    }
-
-    // S'assurer que l'ID du recruteur est dans le localStorage
-    if (!localStorage.getItem("userId") && user.id) {
-      localStorage.setItem("userId", user.id);
-    }
-
-    // Si tout est correct, charger les données initiales
     if (!dataFetched.current && !dataFetchInProgress.current) {
       console.log("Chargement initial des données du dashboard");
-      dispatch(fetchInitialData());
-    }
-  }, [isAuthenticated, token, user, role, navigate, dispatch]);
+      dataFetchInProgress.current = true;
+      try {
+        // Charger les données initiales
+        const result = await dispatch(fetchInitialData()).unwrap();
+        console.log("Données initiales reçues:", result);
+        dataFetched.current = true;
+        initialLoadDone.current = true;
 
-  // Charger les données initiales
-  useEffect(() => {
-    const fetchData = async () => {
-      if (
-        isAuthenticated &&
-        token &&
-        !dataFetched.current &&
-        !dataFetchInProgress.current
-      ) {
-        console.log("Chargement des données initiales du dashboard");
-
-        try {
-          dataFetchInProgress.current = true;
-
-          // Charger les données initiales
-          await dispatch(fetchInitialData()).unwrap();
-          console.log("Initial data fetched successfully");
-          dataFetched.current = true;
-
-          // Charger les données de l'onglet actif
-          if (activeTab === "overview") {
-            dispatch(fetchGraphData({ period: selectedPeriod }));
-            hasLoadedRef.current.overview = true;
-          } else if (activeTab === "candidates") {
-            dispatch(fetchCandidates({ page: 1, per_page: 10 }));
-            hasLoadedRef.current.candidates = true;
-          }
-        } catch (error) {
-          console.error("Error fetching initial data:", error);
-          if (
-            error?.includes("Session expired") ||
-            error?.includes("Authentication token not found")
-          ) {
-            handleAuthError();
-          }
-        } finally {
-          dataFetchInProgress.current = false;
+        // Charger les données du graphique pour la période initiale
+        if (activeTab === "overview") {
+          const graphResult = await dispatch(
+            fetchGraphData({ period: selectedPeriod })
+          ).unwrap();
+          console.log("Données graphique initiales reçues:", graphResult);
+          hasLoadedRef.current.overview = true;
         }
+
+        // Charger les autres données nécessaires
+        await Promise.all([
+          dispatch(fetchOffres()).unwrap(),
+          dispatch(fetchCandidates({ page: 1, per_page: 10 })).unwrap(),
+          dispatch(fetchInterviews()).unwrap(),
+          dispatch(fetchProfile()).unwrap(),
+        ]);
+      } catch (error) {
+        console.error("Erreur lors du chargement des données:", error);
+        toast.error("Erreur lors du chargement des données");
+      } finally {
+        dataFetchInProgress.current = false;
       }
-    };
+    }
+  }, [
+    isAuthenticated,
+    token,
+    user,
+    role,
+    navigate,
+    dispatch,
+    handleAuthError,
+    activeTab,
+    selectedPeriod,
+  ]);
 
-    fetchData();
-  }, [isAuthenticated, token, dispatch, activeTab, selectedPeriod]);
+  // Charger les données initiales une seule fois
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
 
-  const handleAuthError = () => {
-    console.log("Erreur d'authentification - Déconnexion");
-    localStorage.removeItem("token");
-    localStorage.removeItem("userId");
-    dispatch(resetAuthState());
-    navigate("/login");
-  };
-
+  // Fonction pour gérer le changement d'onglet
   const handleTabChange = useCallback(
-    (tab) => {
+    async (tab) => {
       if (!user || user.role !== "recruteur") {
         handleAuthError();
         return;
@@ -238,16 +240,24 @@ const RecruiterDashboard = () => {
 
       try {
         setTabChangeInProgress(true);
-        dispatch(setActiveTab(tab));
+        setActiveTab(tab);
 
+        // Charger les données uniquement si elles n'ont pas déjà été chargées
         if (tab === "candidates" && !hasLoadedRef.current.candidates) {
-          dispatch(fetchCandidates({ page: 1, per_page: 10 }));
+          const result = await dispatch(
+            fetchCandidates({ page: 1, per_page: 10 })
+          ).unwrap();
+          console.log("Données candidats reçues:", result);
           hasLoadedRef.current.candidates = true;
         } else if (tab === "overview" && !hasLoadedRef.current.overview) {
-          dispatch(fetchGraphData({ period: selectedPeriod }));
+          const result = await dispatch(
+            fetchGraphData({ period: selectedPeriod })
+          ).unwrap();
+          console.log("Données graphique reçues:", result);
           hasLoadedRef.current.overview = true;
         } else if (tab === "jobs" && !hasLoadedRef.current.jobs) {
-          dispatch(fetchOffres());
+          const result = await dispatch(fetchOffres()).unwrap();
+          console.log("Données offres reçues:", result);
           hasLoadedRef.current.jobs = true;
         }
 
@@ -256,24 +266,36 @@ const RecruiterDashboard = () => {
         }, 500);
       } catch (error) {
         console.error("Erreur lors du changement d'onglet:", error);
+        toast.error("Erreur lors du chargement des données");
         setTabChangeInProgress(false);
       }
     },
-    [activeTab, dispatch, selectedPeriod, tabChangeInProgress, user]
+    [
+      activeTab,
+      dispatch,
+      selectedPeriod,
+      tabChangeInProgress,
+      user,
+      handleAuthError,
+    ]
   );
+
+  // Charger les données du graphique quand la période change
+  useEffect(() => {
+    if (dataFetched.current && activeTab === "overview") {
+      console.log(
+        "Chargement des données du graphique pour la période:",
+        selectedPeriod
+      );
+      dispatch(fetchGraphData({ period: selectedPeriod }));
+    }
+  }, [selectedPeriod, dispatch, activeTab]);
 
   const {
     profile,
     loading: profileLoading,
     error: profileError,
   } = useSelector((state) => state.profile);
-
-  const handlePeriodChange = (event) => {
-    const newPeriod = event.target.value;
-    console.log("Changement de période:", newPeriod);
-    dispatch(setSelectedPeriod(newPeriod));
-    // L'useEffect se chargera de mettre à jour les données pour la nouvelle période
-  };
 
   const menuItems = [
     {
@@ -317,7 +339,7 @@ const RecruiterDashboard = () => {
 
       // Charger les graphiques si nécessaire
       if (activeTab === "overview") {
-      dispatch(fetchGraphData({ period: selectedPeriod }));
+        dispatch(fetchGraphData({ period: selectedPeriod }));
         hasLoadedRef.current.overview = true;
       }
     } catch (error) {
@@ -334,10 +356,8 @@ const RecruiterDashboard = () => {
   // Nettoyage lors du démontage du composant
   useEffect(() => {
     return () => {
-      // Nettoyer tous les timers de debounce
-      Object.values(debounceTimersRef.current).forEach((timer) => {
-        if (timer) clearTimeout(timer);
-      });
+      // Ne pas réinitialiser les flags lors du démontage
+      // Cela permet de conserver l'état entre les navigations
     };
   }, []);
 

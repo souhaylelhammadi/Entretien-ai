@@ -7,35 +7,51 @@ export const fetchAcceptedOffers = createAsyncThunk(
   async (_, { getState, rejectWithValue }) => {
     try {
       const { auth } = getState();
-      const token = auth.token;
-      if (!token) {
+      console.log("État d'authentification:", auth);
+
+      if (!auth || !auth.token) {
+        console.log("Pas de token dans le state");
         throw new Error(
           "Vous devez être connecté pour accéder aux candidatures acceptées"
         );
       }
-      if (token.split(".").length !== 3) {
-        localStorage.removeItem("token");
-        throw new Error("Jeton malformé. Veuillez vous reconnecter.");
+
+      const tokenObj = auth.token;
+      console.log("Token object:", tokenObj);
+
+      if (!tokenObj.value) {
+        console.log("Pas de valeur dans le token");
+        throw new Error("Token invalide");
       }
+
+      const tokenValue = tokenObj.value.replace("Bearer ", "");
+      console.log("Token value:", tokenValue);
 
       const response = await fetch(`${API_BASE_URL}/api/accepted-offers`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${tokenValue}`,
         },
+        credentials: "include",
+        mode: "cors",
       });
+
+      console.log("Response status:", response.status);
+
       const data = await response.json();
+      console.log("Response data:", data);
+
       if (!response.ok) {
         if (response.status === 401) {
           localStorage.removeItem("token");
+          throw new Error("Session expirée. Veuillez vous reconnecter.");
         }
         throw new Error(
           data.error || "Échec de la récupération des candidatures acceptées"
         );
       }
-      // Ensure the response is an array
-      return Array.isArray(data.offers) ? data.offers : [];
+      return data.acceptedOffers || [];
     } catch (error) {
       console.error("fetchAcceptedOffers error:", error.message);
       return rejectWithValue(error.message);
@@ -48,16 +64,25 @@ export const updateOfferStatus = createAsyncThunk(
   async ({ applicationId, status }, { getState, rejectWithValue }) => {
     try {
       const { auth } = getState();
-      const token = auth.token;
-      if (!token) {
+      console.log("État d'authentification pour update:", auth);
+
+      if (!auth || !auth.token) {
+        console.log("Pas de token dans le state pour update");
         throw new Error(
           "Vous devez être connecté pour mettre à jour une candidature"
         );
       }
-      if (token.split(".").length !== 3) {
-        localStorage.removeItem("token");
-        throw new Error("Jeton malformé. Veuillez vous reconnecter.");
+
+      const tokenObj = auth.token;
+      console.log("Token object pour update:", tokenObj);
+
+      if (!tokenObj.value) {
+        console.log("Pas de valeur dans le token pour update");
+        throw new Error("Token invalide");
       }
+
+      const tokenValue = tokenObj.value.replace("Bearer ", "");
+      console.log("Token value pour update:", tokenValue);
 
       const response = await fetch(
         `${API_BASE_URL}/api/accepted-offers/${applicationId}`,
@@ -65,21 +90,29 @@ export const updateOfferStatus = createAsyncThunk(
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${tokenValue}`,
           },
+          credentials: "include",
+          mode: "cors",
           body: JSON.stringify({ status }),
         }
       );
+
+      console.log("Update response status:", response.status);
+
       const data = await response.json();
+      console.log("Update response data:", data);
+
       if (!response.ok) {
         if (response.status === 401) {
           localStorage.removeItem("token");
+          throw new Error("Session expirée. Veuillez vous reconnecter.");
         }
         throw new Error(
           data.error || "Échec de la mise à jour du statut de la candidature"
         );
       }
-      return data.offer;
+      return data.data;
     } catch (error) {
       console.error("updateOfferStatus error:", error.message);
       return rejectWithValue(error.message);
@@ -104,7 +137,7 @@ const acceptedOffersSlice = createSlice({
       .addCase(fetchAcceptedOffers.pending, (state) => {
         state.loading = true;
         state.error = null;
-        state.candidatures = []; // Reset to avoid undefined
+        state.candidatures = [];
       })
       .addCase(fetchAcceptedOffers.fulfilled, (state, action) => {
         state.loading = false;
@@ -113,7 +146,7 @@ const acceptedOffersSlice = createSlice({
       .addCase(fetchAcceptedOffers.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        state.candidatures = []; // Ensure array on error
+        state.candidatures = [];
       })
       .addCase(updateOfferStatus.pending, (state) => {
         state.loading = true;

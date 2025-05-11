@@ -9,7 +9,6 @@ import { store } from "./pages/store/store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { AuthProvider } from "./context/AuthContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,10 +27,8 @@ root.render(
     <BrowserRouter>
       <Provider store={store}>
         <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <App />
-            <ToastContainer position="top-right" autoClose={3000} />
-          </AuthProvider>
+          <App />
+          <ToastContainer position="top-right" autoClose={3000} />
         </QueryClientProvider>
       </Provider>
     </BrowserRouter>

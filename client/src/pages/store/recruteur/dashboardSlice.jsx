@@ -60,15 +60,49 @@ export const fetchInitialData = createAsyncThunk(
       console.log("Recruteur ID:", userId);
       console.log("Token (20 premiers car.):", token.substring(0, 20) + "...");
 
-      const response = await api.get("/api/recruteur/dashboard/init", {
+      const response = await api.get("/api/recruteur/dashboard", {
         headers: { Authorization: token },
         params: { recruteur_id: userId },
       });
 
       console.log("Initial dashboard data received:", response.data);
+      console.log("Données reçues:", {
+        totalCandidates: response.data.totalCandidates,
+        newCandidates: response.data.newCandidates,
+        activeJobs: response.data.activeJobs,
+        totalInterviews: response.data.totalInterviews,
+        upcomingInterviews: response.data.upcomingInterviews,
+        conversionRate: response.data.conversionRate,
+        hiredCandidates: response.data.hiredCandidates,
+      });
       console.log("========== FIN FETCH INITIAL DATA ==========");
 
-      return response.data;
+      // Structure de base pour les graphiques avec les données reçues
+      return {
+        activeJobs: response.data.activeJobs || 0,
+        newCandidates: response.data.newCandidates || 0,
+        totalJobs: response.data.totalJobs || 0,
+        totalCandidates: response.data.totalCandidates || 0,
+        totalInterviews: response.data.totalInterviews || 0,
+        upcomingInterviews: response.data.upcomingInterviews || 0,
+        conversionRate: response.data.conversionRate || 0,
+        recentActivity: response.data.recentActivity || [],
+        offres: response.data.offres || [],
+        graphData: {
+          // Utiliser directement les données formatées par l'API
+          candidatesByDate: response.data.graphData?.candidatesByDate || {},
+          interviewsByDate: response.data.graphData?.interviewsByDate || {},
+          statusDistribution: response.data.graphData?.statusDistribution || {
+            "En attente": response.data.totalCandidates || 0,
+          },
+          interviewStatusDistribution: response.data.graphData
+            ?.interviewStatusDistribution || {
+            "En attente": response.data.upcomingInterviews || 0,
+          },
+          offresByDepartment: response.data.graphData?.offresByDepartment || {},
+          candidatesByJob: response.data.graphData?.candidatesByJob || {},
+        },
+      };
     } catch (error) {
       console.error("Error fetchInitialData:", error);
       return rejectWithValue(
@@ -116,10 +150,12 @@ export const fetchGraphData = createAsyncThunk(
           candidatesByDate: data.graphData?.candidatesByDate || {},
           interviewsByDate: data.graphData?.interviewsByDate || {},
           statusDistribution: data.graphData?.statusDistribution || {
-            "Pas de données": 0,
+            "En attente": data.totalCandidates || 0,
           },
           interviewStatusDistribution: data.graphData
-            ?.interviewStatusDistribution || { "Pas de données": 0 },
+            ?.interviewStatusDistribution || {
+            "En attente": data.upcomingInterviews || 0,
+          },
           offresByDepartment: data.graphData?.offresByDepartment || {},
           candidatesByJob: data.graphData?.candidatesByJob || {},
         },

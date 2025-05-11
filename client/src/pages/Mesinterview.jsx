@@ -18,17 +18,17 @@ import {
 import { toast } from "react-toastify";
 
 const statusIcons = {
-  accepted: <CheckCircle2 className="h-4 w-4 text-green-500" />,
-  pending_interview: <Clock className="h-4 w-4 text-yellow-500" />,
-  completed: <CheckCircle2 className="h-4 w-4 text-blue-500" />,
-  cancelled: <XCircle className="h-4 w-4 text-red-500" />,
+  Accepté: <CheckCircle2 className="h-4 w-4 text-green-500" />,
+  "En cours": <Clock className="h-4 w-4 text-yellow-500" />,
+  Terminé: <CheckCircle2 className="h-4 w-4 text-blue-500" />,
+  Annulé: <XCircle className="h-4 w-4 text-red-500" />,
 };
 
 const statusLabels = {
-  accepted: "Acceptée",
-  pending_interview: "En attente d'entretien",
-  completed: "Terminée",
-  cancelled: "Annulée",
+  Accepté: "Acceptée",
+  "En cours": "En cours",
+  Terminé: "Terminée",
+  Annulé: "Annulée",
 };
 
 const MesInterview = () => {
@@ -60,11 +60,73 @@ const MesInterview = () => {
 
   const handleStatusChange = async (applicationId, newStatus) => {
     try {
-      await dispatch(updateOfferStatus({ applicationId, status: newStatus })).unwrap();
+      await dispatch(
+        updateOfferStatus({ applicationId, status: newStatus })
+      ).unwrap();
       toast.success("Statut mis à jour avec succès !");
     } catch (err) {
       toast.error(err.message || "Erreur lors de la mise à jour du statut");
     }
+  };
+
+  const getActionButtons = (candidature) => {
+    const buttons = [];
+
+    switch (candidature.statut) {
+      case "Accepté":
+        buttons.push(
+          <button
+            key="schedule"
+            onClick={() => handleStatusChange(candidature._id, "En cours")}
+            className="flex items-center px-3 py-1 bg-yellow-500 text-white rounded-md text-sm hover:bg-yellow-600"
+          >
+            <Clock className="h-4 w-4 mr-1" />
+            Planifier Entretien
+          </button>
+        );
+        break;
+
+      case "En cours":
+        buttons.push(
+          <button
+            key="start"
+            onClick={() => handleStartInterview(candidature._id)}
+            className="flex items-center px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+          >
+            <PlayCircle className="h-4 w-4 mr-1" />
+            Démarrer
+          </button>
+        );
+        break;
+
+      case "Terminé":
+        buttons.push(
+          <button
+            key="view"
+            onClick={() => navigate(`/interview-results/${candidature._id}`)}
+            className="flex items-center px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
+          >
+            <CheckCircle2 className="h-4 w-4 mr-1" />
+            Voir Résultats
+          </button>
+        );
+        break;
+    }
+
+    if (candidature.statut !== "Annulé") {
+      buttons.push(
+        <button
+          key="cancel"
+          onClick={() => handleStatusChange(candidature._id, "Annulé")}
+          className="flex items-center px-3 py-1 bg-red-500 text-white rounded-md text-sm hover:bg-red-600"
+        >
+          <XCircle className="h-4 w-4 mr-1" />
+          Annuler
+        </button>
+      );
+    }
+
+    return buttons;
   };
 
   if (loading) {
@@ -89,8 +151,6 @@ const MesInterview = () => {
     );
   }
 
-  const candidaturesList = Array.isArray(candidatures) ? candidatures : [];
-
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -98,11 +158,11 @@ const MesInterview = () => {
           <div className="p-6 border-b">
             <h1 className="text-2xl font-bold text-gray-800">Mes Entretiens</h1>
             <p className="text-gray-600 mt-1">
-              {candidaturesList.length} candidature(s) acceptée(s)
+              {candidatures.length} candidature(s) acceptée(s)
             </p>
           </div>
 
-          {candidaturesList.length === 0 ? (
+          {candidatures.length === 0 ? (
             <div className="text-center py-12">
               <CheckCircle2 className="h-12 w-12 text-gray-400 mx-auto" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">
@@ -138,7 +198,7 @@ const MesInterview = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {candidaturesList.map((candidature) => (
+                  {candidatures.map((candidature) => (
                     <tr key={candidature._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -159,7 +219,9 @@ const MesInterview = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <MapPin className="h-5 w-5 text-gray-400 mr-2" />
-                          <span>{candidature.jobDetails?.location || "N/A"}</span>
+                          <span>
+                            {candidature.jobDetails?.location || "N/A"}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -169,48 +231,16 @@ const MesInterview = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          {statusIcons[candidature.status] || statusIcons.accepted}
+                          {statusIcons[candidature.statut] ||
+                            statusIcons["Accepté"]}
                           <span className="ml-2">
-                            {statusLabels[candidature.status] || "N/A"}
+                            {statusLabels[candidature.statut] || "N/A"}
                           </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex justify-end space-x-2">
-                          {candidature.status === "pending_interview" && (
-                            <button
-                              onClick={() => handleStartInterview(candidature._id)}
-                              className="flex items-center px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
-                            >
-                              <PlayCircle className="h-4 w-4 mr-1" />
-                              Démarrer
-                            </button>
-                          )}
-                          {candidature.status !== "pending_interview" && (
-                            <button
-                              onClick={() =>
-                                handleStatusChange(
-                                  candidature._id,
-                                  "pending_interview"
-                                )
-                              }
-                              className="flex items-center px-3 py-1 bg-yellow-500 text-white rounded-md text-sm hover:bg-yellow-600"
-                            >
-                              <Clock className="h-4 w-4 mr-1" />
-                              Planifier Entretien
-                            </button>
-                          )}
-                          {candidature.status !== "cancelled" && (
-                            <button
-                              onClick={() =>
-                                handleStatusChange(candidature._id, "cancelled")
-                              }
-                              className="flex items-center px-3 py-1 bg-red-500 text-white rounded-md text-sm hover:bg-red-600"
-                            >
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Annuler
-                            </button>
-                          )}
+                          {getActionButtons(candidature)}
                         </div>
                       </td>
                     </tr>
