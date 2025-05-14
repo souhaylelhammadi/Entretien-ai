@@ -4,7 +4,6 @@ import {
   MapPin,
   CheckCircle2,
   PlayCircle,
-  XCircle,
   Clock,
   Loader2,
 } from "lucide-react";
@@ -12,8 +11,8 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   fetchAcceptedOffers,
-  updateOfferStatus,
-  clearOffersError,
+  generateInterview,
+  clearError,
 } from "./store/acceptedOffersSlice";
 import { toast } from "react-toastify";
 
@@ -21,7 +20,7 @@ const statusIcons = {
   Accepté: <CheckCircle2 className="h-4 w-4 text-green-500" />,
   "En cours": <Clock className="h-4 w-4 text-yellow-500" />,
   Terminé: <CheckCircle2 className="h-4 w-4 text-blue-500" />,
-  Annulé: <XCircle className="h-4 w-4 text-red-500" />,
+  Annulé: <CheckCircle2 className="h-4 w-4 text-red-500" />,
 };
 
 const statusLabels = {
@@ -34,7 +33,7 @@ const statusLabels = {
 const MesInterview = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { candidatures, loading, error } = useSelector(
+  const { candidatures, loading, error, generatingInterview } = useSelector(
     (state) => state.acceptedOffers
   );
   const { isAuthenticated } = useSelector((state) => state.auth);
@@ -50,83 +49,12 @@ const MesInterview = () => {
   useEffect(() => {
     if (error) {
       toast.error(error);
-      dispatch(clearOffersError());
+      dispatch(clearError());
     }
   }, [error, dispatch]);
 
-  const handleStartInterview = (applicationId) => {
-    navigate(`/interview/${applicationId}`);
-  };
-
-  const handleStatusChange = async (applicationId, newStatus) => {
-    try {
-      await dispatch(
-        updateOfferStatus({ applicationId, status: newStatus })
-      ).unwrap();
-      toast.success("Statut mis à jour avec succès !");
-    } catch (err) {
-      toast.error(err.message || "Erreur lors de la mise à jour du statut");
-    }
-  };
-
-  const getActionButtons = (candidature) => {
-    const buttons = [];
-
-    switch (candidature.statut) {
-      case "Accepté":
-        buttons.push(
-          <button
-            key="schedule"
-            onClick={() => handleStatusChange(candidature._id, "En cours")}
-            className="flex items-center px-3 py-1 bg-yellow-500 text-white rounded-md text-sm hover:bg-yellow-600"
-          >
-            <Clock className="h-4 w-4 mr-1" />
-            Planifier Entretien
-          </button>
-        );
-        break;
-
-      case "En cours":
-        buttons.push(
-          <button
-            key="start"
-            onClick={() => handleStartInterview(candidature._id)}
-            className="flex items-center px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
-          >
-            <PlayCircle className="h-4 w-4 mr-1" />
-            Démarrer
-          </button>
-        );
-        break;
-
-      case "Terminé":
-        buttons.push(
-          <button
-            key="view"
-            onClick={() => navigate(`/interview-results/${candidature._id}`)}
-            className="flex items-center px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
-          >
-            <CheckCircle2 className="h-4 w-4 mr-1" />
-            Voir Résultats
-          </button>
-        );
-        break;
-    }
-
-    if (candidature.statut !== "Annulé") {
-      buttons.push(
-        <button
-          key="cancel"
-          onClick={() => handleStatusChange(candidature._id, "Annulé")}
-          className="flex items-center px-3 py-1 bg-red-500 text-white rounded-md text-sm hover:bg-red-600"
-        >
-          <XCircle className="h-4 w-4 mr-1" />
-          Annuler
-        </button>
-      );
-    }
-
-    return buttons;
+  const handleInterviewAction = (candidature) => {
+    navigate(`/interview/${candidature.entretien_id}`);
   };
 
   if (loading) {
@@ -144,7 +72,7 @@ const MesInterview = () => {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <XCircle className="h-12 w-12 text-red-500 mx-auto" />
+          <CheckCircle2 className="h-12 w-12 text-red-500 mx-auto" />
           <p className="mt-2 text-gray-600">{error}</p>
         </div>
       </div>
@@ -193,7 +121,7 @@ const MesInterview = () => {
                       Statut
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
+                      Action
                     </th>
                   </tr>
                 </thead>
@@ -239,9 +167,24 @@ const MesInterview = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex justify-end space-x-2">
-                          {getActionButtons(candidature)}
-                        </div>
+                        <button
+                          onClick={() => handleInterviewAction(candidature)}
+                          disabled={generatingInterview}
+                          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                            candidature.statut === "Accepté"
+                              ? "bg-blue-600 hover:bg-blue-700"
+                              : candidature.statut === "En cours"
+                              ? "bg-green-600 hover:bg-green-700"
+                              : "bg-gray-400 cursor-not-allowed"
+                          }`}
+                        >
+                          <PlayCircle className="h-4 w-4 mr-2" />
+                          {candidature.statut === "Accepté"
+                            ? "Passer l'entretien"
+                            : candidature.statut === "En cours"
+                            ? "Continuer l'entretien"
+                            : "Entretien terminé"}
+                        </button>
                       </td>
                     </tr>
                   ))}

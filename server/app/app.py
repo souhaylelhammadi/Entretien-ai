@@ -14,6 +14,7 @@ import logging
 from datetime import datetime, timezone
 from middleware import role_redirect
 from config.config import MONGO_URI
+import os
 
 def create_app():
     app = Flask(__name__)

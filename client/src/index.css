@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Style global pour le curseur pointer */
+* {
+    cursor: pointer;
+}
+
+/* Exceptions pour les éléments non cliquables */
+input, textarea, select, button {
+    cursor: default;
+}
+
+/* Style pour les éléments interactifs */
+a, button, [role="button"], [type="button"], [type="submit"] {
+    cursor: pointer;
+}
+
+/* Style pour les éléments désactivés */
+button:disabled, [disabled] {
+    cursor: not-allowed;
+}
+
 body{
     font: 100px;
 }

@@ -21,19 +21,19 @@ USERS_COLLECTION = 'utilisateurs'
 def format_offre(offre):
     """Format a single job offer for JSON response."""
     return {
-        'id': str(offre['_id']),
-        'titre': str(offre.get('titre', 'Titre non spécifié')),
-        'description': str(offre.get('description', 'Description non disponible')),
-        'localisation': str(offre.get('localisation', 'Localisation non spécifiée')),
-        'departement': str(offre.get('departement', 'Département non spécifié')),
-        'entreprise': str(offre.get('entreprise', '')),
-        'recruteur_id': str(offre.get('recruteur_id', '')),
-        'date_creation': offre.get('date_creation', datetime.datetime.utcnow()).isoformat(),
-        'date_maj': offre.get('date_maj', datetime.datetime.utcnow()).isoformat(),
-        'statut': str(offre.get('statut', 'ouverte')),
-        'competences_requises': offre.get('competences_requises', []),
-        'candidature_ids': [str(cid) for cid in offre.get('candidature_ids', [])],
-        'valide': offre.get('statut', 'ouverte') == 'ouverte'
+                'id': str(offre['_id']),
+                'titre': str(offre.get('titre', 'Titre non spécifié')),
+                'description': str(offre.get('description', 'Description non disponible')),
+                'localisation': str(offre.get('localisation', 'Localisation non spécifiée')),
+                'departement': str(offre.get('departement', 'Département non spécifié')),
+                'entreprise': str(offre.get('entreprise', '')),
+                'recruteur_id': str(offre.get('recruteur_id', '')),
+                'date_creation': offre.get('date_creation', datetime.datetime.utcnow()).isoformat(),
+                'date_maj': offre.get('date_maj', datetime.datetime.utcnow()).isoformat(),
+                'statut': str(offre.get('statut', 'ouverte')),
+                'competences_requises': offre.get('competences_requises', []),
+                'candidature_ids': [str(cid) for cid in offre.get('candidature_ids', [])],
+                'valide': offre.get('statut', 'ouverte') == 'ouverte'
     }
 
 # Route to fetch all job offers
@@ -217,7 +217,7 @@ def submit_candidature():
         db = current_app.mongo
 
         # Récupérer l'ID du candidat
-        candidat = db.candidats.find_one({"user_id": ObjectId(user_id)})
+        candidat = db.candidats.find_one({"utilisateur_id": ObjectId(user_id)})
         if not candidat:
             logger.error(f"Candidat non trouvé pour l'utilisateur: {user_id}")
             return jsonify({"error": "Candidat non trouvé", "code": "CANDIDATE_NOT_FOUND"}), 404

@@ -35,7 +35,11 @@ function DetailsOffreEmploi() {
     candidatureStatus,
     candidatureError,
   } = useSelector((state) => state.offresEmploi);
-  const { token, loading: authLoading } = useSelector((state) => state.auth);
+  const {
+    token,
+    loading: authLoading,
+    user,
+  } = useSelector((state) => state.auth);
   const [cv, setCv] = useState(null);
   const [lettreMotivation, setLettreMotivation] = useState("");
   const [showApplicationForm, setShowApplicationForm] = useState(false);
@@ -127,13 +131,49 @@ function DetailsOffreEmploi() {
       lettreMotivation: lettreMotivation.substring(0, 50) + "...",
     });
 
-    dispatch(
-      submitCandidature({
-        offreId: id,
-        cv,
-        lettreMotivation,
-      })
-    );
+    try {
+      const formData = new FormData();
+      formData.append("offre_id", id);
+      formData.append("cv", cv);
+      formData.append("lettre_motivation", lettreMotivation);
+      formData.append("email", user.email);
+      formData.append("nom", user.nom);
+      formData.append("prenom", user.prenom);
+
+      const authToken = typeof token === "object" ? token.value : token;
+      if (!authToken) {
+        throw new Error("Token d'authentification manquant");
+      }
+
+      const response = await fetch("http://localhost:5000/api/candidatures", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Erreur lors de la soumission de la candidature"
+        );
+      }
+
+      toast.success("Candidature envoyée avec succès !");
+      setSubmissionSuccess(true);
+      setTimeout(() => {
+        navigate("/offres", {
+          state: { message: "Candidature envoyée avec succès !" },
+        });
+      }, 2000);
+    } catch (error) {
+      toast.error(
+        error.message ||
+          "Une erreur est survenue lors de l'envoi de la candidature"
+      );
+    }
   };
 
   const handleAuthSubmit = async (e) => {
@@ -424,6 +464,19 @@ function DetailsOffreEmploi() {
                       >
                         <LogIn className="mr-2 h-5 w-5" />
                         Se connecter
+                      </button>
+                    </div>
+                  ) : user?.role !== "candidat" ? (
+                    <div className="text-center">
+                      <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-4" />
+                      <p className="text-gray-700 mb-4">
+                        Seuls les étudiants peuvent postuler à cette offre.
+                      </p>
+                      <button
+                        onClick={() => navigate("/")}
+                        className="w-full bg-indigo-600 text-white py-3 px-4 rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-md"
+                      >
+                        Retour à l'accueil
                       </button>
                     </div>
                   ) : submissionSuccess ? (

@@ -31,6 +31,7 @@ ChartJS.register(
   RadialLinearScale
 );
 
+// Définir les couleurs comme des constantes (non modifiables)
 const colorPalette = {
   primary: ["rgba(59, 130, 246, 0.7)", "rgba(59, 130, 246, 1)"], // Bleu
   secondary: ["rgba(233, 88, 125, 0.7)", "rgba(233, 88, 125, 1)"], // Rose
@@ -39,6 +40,12 @@ const colorPalette = {
   accent2: ["rgba(139, 92, 246, 0.7)", "rgba(139, 92, 246, 1)"], // Violet
   accent3: ["rgba(236, 72, 153, 0.7)", "rgba(236, 72, 153, 1)"], // Rose vif
 };
+
+// Helper function to safely create color strings
+const safeColor = (color) => String(color);
+
+// Helper function to create color arrays safely
+const safeColorArray = (colors) => colors.map(color => String(color));
 
 const generateRandomData = (min, max, count) => {
   return Array.from(
@@ -182,28 +189,28 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
 
     const result = {
       labels: labels,
-      datasets: [
-        {
-          label: "Candidats",
+    datasets: [
+      {
+        label: "Candidats",
           data: candidatesData,
-          backgroundColor: colorPalette.primary[0],
-          borderColor: colorPalette.primary[1],
+          backgroundColor: safeColor(colorPalette.primary[0]),
+          borderColor: safeColor(colorPalette.primary[1]),
           tension: 0.4,
           fill: true,
           pointRadius: 3,
-          pointBackgroundColor: colorPalette.primary[1],
+          pointBackgroundColor: safeColor(colorPalette.primary[1]),
           pointBorderColor: "#fff",
           pointBorderWidth: 2,
-        },
-        {
-          label: "Entretiens",
+      },
+      {
+        label: "Entretiens",
           data: interviewsData,
-          backgroundColor: colorPalette.secondary[0],
-          borderColor: colorPalette.secondary[1],
+          backgroundColor: safeColor(colorPalette.secondary[0]),
+          borderColor: safeColor(colorPalette.secondary[1]),
           tension: 0.4,
           fill: true,
           pointRadius: 3,
-          pointBackgroundColor: colorPalette.secondary[1],
+          pointBackgroundColor: safeColor(colorPalette.secondary[1]),
           pointBorderColor: "#fff",
           pointBorderWidth: 2,
         },
@@ -236,30 +243,35 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
 
     console.log("Distribution des statuts calculée:", statusDistribution);
 
-    const result = {
-      labels: Object.keys(statusDistribution),
-      datasets: [
-        {
-          data: Object.values(statusDistribution),
-          backgroundColor: [
+    // Créer de nouvelles copies des couleurs pour éviter de modifier des objets gelés
+    const backgroundColors = safeColorArray([
             colorPalette.primary[0],
             colorPalette.tertiary[0],
             colorPalette.secondary[0],
             colorPalette.accent1[0],
             colorPalette.accent2[0],
-          ],
-          borderColor: [
+    ]);
+    
+    const borderColors = safeColorArray([
             colorPalette.primary[1],
             colorPalette.tertiary[1],
             colorPalette.secondary[1],
             colorPalette.accent1[1],
             colorPalette.accent2[1],
-          ],
-          borderWidth: 1,
+    ]);
+
+    const result = {
+      labels: Object.keys(statusDistribution),
+      datasets: [
+        {
+          data: Object.values(statusDistribution),
+          backgroundColor: backgroundColors,
+          borderColor: borderColors,
+        borderWidth: 1,
           hoverOffset: 10,
-        },
-      ],
-    };
+      },
+    ],
+  };
 
     console.log("Données de statut préparées:", result);
     return result;
@@ -284,7 +296,9 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
 
     // Utiliser les données réelles ou les données par défaut
     const interviewStatusDistribution =
-      graphData?.interviewStatusDistribution || defaultDistribution;
+      graphData?.interviewStatusDistribution 
+        ? {...graphData.interviewStatusDistribution} 
+        : {...defaultDistribution};
 
     // S'assurer que toutes les valeurs sont des nombres
     const processedDistribution = Object.entries(
@@ -299,23 +313,28 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
       processedDistribution
     );
 
+    // Créer de nouvelles copies des couleurs pour éviter de modifier des objets gelés
+    const backgroundColors = safeColorArray([
+            colorPalette.accent1[0],
+            colorPalette.tertiary[0],
+            colorPalette.secondary[0],
+            colorPalette.accent2[0],
+    ]);
+    
+    const borderColors = safeColorArray([
+            colorPalette.accent1[1],
+            colorPalette.tertiary[1],
+            colorPalette.secondary[1],
+            colorPalette.accent2[1],
+    ]);
+
     const result = {
       labels: Object.keys(processedDistribution),
       datasets: [
         {
           data: Object.values(processedDistribution),
-          backgroundColor: [
-            colorPalette.accent1[0],
-            colorPalette.tertiary[0],
-            colorPalette.secondary[0],
-            colorPalette.accent2[0],
-          ],
-          borderColor: [
-            colorPalette.accent1[1],
-            colorPalette.tertiary[1],
-            colorPalette.secondary[1],
-            colorPalette.accent2[1],
-          ],
+          backgroundColor: backgroundColors,
+          borderColor: borderColors,
           borderWidth: 1,
           hoverOffset: 10,
         },
@@ -350,7 +369,7 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
       graphData?.offresByDepartment &&
       Object.keys(graphData.offresByDepartment).length > 0
     ) {
-      departmentData = graphData.offresByDepartment;
+      departmentData = {...graphData.offresByDepartment};
     }
     // Sinon, calculer à partir des offres
     else if (data?.offres && data.offres.length > 0) {
@@ -362,7 +381,7 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
     }
     // Si aucune donnée n'est disponible, utiliser les données par défaut
     else {
-      departmentData = defaultDepartments;
+      departmentData = {...defaultDepartments};
     }
 
     // Ajuster la somme pour qu'elle corresponde au nombre d'offres actives
@@ -372,11 +391,18 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
       const diff = total - currentSum;
       const firstDept = Object.keys(departmentData)[0];
       if (firstDept) {
-        departmentData[firstDept] = (departmentData[firstDept] || 0) + diff;
+        departmentData = {
+          ...departmentData,
+          [firstDept]: (departmentData[firstDept] || 0) + diff
+        };
       }
     }
 
     console.log("Données de département traitées:", departmentData);
+
+    // Créer de nouvelles copies des couleurs pour éviter de modifier des objets gelés
+    const backgroundColors = safeColorArray(Object.values(colorPalette).map(c => c[0]));
+    const borderColors = safeColorArray(Object.values(colorPalette).map(c => c[1]));
 
     const result = {
       labels: Object.keys(departmentData),
@@ -384,12 +410,12 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
         {
           label: "Offres par département",
           data: Object.values(departmentData),
-          backgroundColor: Object.values(colorPalette).map((c) => c[0]),
-          borderColor: Object.values(colorPalette).map((c) => c[1]),
+          backgroundColor: backgroundColors,
+          borderColor: borderColors,
           borderWidth: 1,
-        },
-      ],
-    };
+      },
+    ],
+  };
 
     console.log("Données de département préparées:", result);
     return result;
@@ -555,23 +581,23 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
       </div>
 
       {/* Graphiques avec données réelles */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Graphique d'activité */}
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">
-            Activité récente
-          </h3>
-          <div className="h-64">
-            <Line data={activityData} options={lineChartOptions} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Graphique d'activité */}
+          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+              Activité récente
+            </h3>
+            <div className="h-64">
+              <Line data={activityData} options={lineChartOptions} />
+            </div>
           </div>
-        </div>
 
-        {/* Graphique de distribution des statuts */}
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">
-            Distribution des candidatures
-          </h3>
-          <div className="h-64">
+          {/* Graphique de distribution des statuts */}
+          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+              Distribution des candidatures
+            </h3>
+            <div className="h-64">
             {loading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -584,28 +610,28 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
               <Doughnut data={statusData} options={pieChartOptions} />
             )}
           </div>
-        </div>
-
-        {/* Graphique des offres par département */}
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">
-            Offres par département
-          </h3>
-          <div className="h-64">
-            <Bar data={jobsByDepartment} options={barChartOptions} />
           </div>
-        </div>
 
-        {/* Graphique des entretiens */}
-        <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">
-            Statut des entretiens
-          </h3>
-          <div className="h-64">
-            <Pie data={interviewStatusData} options={pieChartOptions} />
-          </div>
+          {/* Graphique des offres par département */}
+          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+              Offres par département
+            </h3>
+        <div className="h-64">
+              <Bar data={jobsByDepartment} options={barChartOptions} />
         </div>
       </div>
+
+          {/* Graphique des entretiens */}
+          <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+              Statut des entretiens
+            </h3>
+        <div className="h-64">
+              <Pie data={interviewStatusData} options={pieChartOptions} />
+            </div>
+          </div>
+        </div>
 
       {/* Message si aucun graphique n'est disponible */}
       {!hasData && (
@@ -633,7 +659,7 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
             Les statistiques s'afficheront ici dès que des candidatures et
             entretiens seront enregistrés.
           </p>
-        </div>
+      </div>
       )}
     </div>
   );

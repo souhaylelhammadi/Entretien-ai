@@ -72,8 +72,9 @@ import {
   Work as WorkIcon,
   Event as EventIcon,
   TrendingUp as TrendingUpIcon,
+  Refresh as RefreshIcon,
 } from "@mui/icons-material";
-import DashboardGraphs from "./components/DashboardGraphs";
+import DashboardGraphs from "./components/DashboardGraphs.fixed";
 import { toast } from "react-hot-toast";
 
 // Register Chart.js components
@@ -353,6 +354,28 @@ const RecruiterDashboard = () => {
     }
   };
 
+  // Utiliser cet effet pour mettre à jour les données lorsque le composant devient visible
+  useEffect(() => {
+    // Fonction pour gérer la visibilité de la page
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        console.log("Page redevenue visible - Mise à jour des données");
+        loadInitialData();
+      }
+    };
+
+    // S'abonner à l'événement de changement de visibilité
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Mettre à jour à chaque montage
+    loadInitialData();
+
+    // Nettoyer l'abonnement
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [loadInitialData]);
+
   // Nettoyage lors du démontage du composant
   useEffect(() => {
     return () => {
@@ -426,8 +449,21 @@ const RecruiterDashboard = () => {
               <Menu />
             </Button>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Bell />
-              <Typography>{user?.name || "Utilisateur"}</Typography>
+              <Button
+                variant="text"
+                color="inherit"
+                sx={{ mr: 2 }}
+                onClick={() => navigate("/notifications")}
+              >
+                <Bell />
+              </Button>
+              <Button
+                variant="text"
+                color="inherit"
+                onClick={() => setActiveTab("profile")}
+              >
+                <User />
+              </Button>
             </Box>
           </Box>
 

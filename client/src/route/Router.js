@@ -12,7 +12,7 @@ import Interview from "../pages/Interview";
 import OffresEmploi from "../pages/OffresEmploi";
 import DetailsOffreEmploi from "../pages/components/DetailsOffreEmploi";
 import { Navigate } from "react-router-dom";
-import DashboardRecrutement from "../pages/Recruteur/RecruiterDashboard";
+import DashboardRecrutement from "../pages/recruteur/RecruiterDashboard"; 
 import Mesinterview from "../pages/Mesinterview";
 import Profile from "../layout/Navbar/profile";
 

@@ -29,16 +29,17 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
-  fetchOffersWithCandidates,
+  getOffresWithCandidates,
   downloadCV,
   clearError,
   toggleOffer,
   updateCandidateStatus,
   getLettreMotivation,
   clearLettreMotivation,
+  setStatusUpdateState,
+  clearSelectedCV,
 } from "../../store/candidatesSlice";
 import { BASE_URL } from "../../../config";
-
 const CandidatesSection = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -47,8 +48,6 @@ const CandidatesSection = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const fetchTimeoutRef = useRef(null);
   const [selectedCandidature, setSelectedCandidature] = useState(null);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [pendingStatusUpdate, setPendingStatusUpdate] = useState(null);
   const [showCVModal, setShowCVModal] = useState(false);
   const [selectedCV, setSelectedCV] = useState(null);
   const [filters, setFilters] = useState({
@@ -56,9 +55,9 @@ const CandidatesSection = () => {
     searchTerm: "",
   });
   const [showLettreModal, setShowLettreModal] = useState(false);
-  const selectedLettreMotivation = useSelector(
-    (state) => state.candidates.selectedLettreMotivation
-  );
+  const [selectedLettreMotivation, setSelectedLettreMotivation] =
+    useState(null);
+  const [statusUpdateStates, setStatusUpdateStates] = useState({});
 
   // Get auth state through useSelector
   const authState = useSelector((state) => state.auth);
@@ -89,7 +88,7 @@ const CandidatesSection = () => {
   // Fetch offers with candidates on component mount
   useEffect(() => {
     if (isAuthenticated && user?.role === "recruteur" && token) {
-      dispatch(fetchOffersWithCandidates());
+      dispatch(getOffresWithCandidates());
     } else if (!token) {
       setLocalError("Token d'authentification manquant");
     }
@@ -105,7 +104,7 @@ const CandidatesSection = () => {
     try {
       setLocalError(null);
       dispatch(clearError());
-      const result = await dispatch(fetchOffersWithCandidates()).unwrap();
+      const result = await dispatch(getOffresWithCandidates()).unwrap();
       console.log("Candidatures chargées avec succès:", result);
     } catch (error) {
       console.error("Erreur lors du chargement des candidatures:", error);
@@ -143,8 +142,16 @@ const CandidatesSection = () => {
       try {
         setLocalError(null);
         dispatch(clearError());
-        console.log("Viewing CV for candidature:", candidatureId);
-        setSelectedCV({ id: candidatureId });
+
+        // Vérifier si le CV est déjà chargé
+        if (selectedCV && selectedCV.id === candidatureId) {
+          setShowCVModal(true);
+          return;
+        }
+
+        const blob = await dispatch(downloadCV(candidatureId)).unwrap();
+        const url = URL.createObjectURL(blob);
+        setSelectedCV({ id: candidatureId, url });
         setShowCVModal(true);
       } catch (error) {
         console.error("Error viewing CV:", error);
@@ -152,8 +159,17 @@ const CandidatesSection = () => {
         setShowCVModal(false);
       }
     },
-    [dispatch]
+    [dispatch, selectedCV]
   );
+
+  const handleCloseCVModal = useCallback(() => {
+    setShowCVModal(false);
+    if (selectedCV?.url) {
+      URL.revokeObjectURL(selectedCV.url);
+    }
+    setSelectedCV(null);
+    dispatch(clearSelectedCV());
+  }, [selectedCV, dispatch]);
 
   const handleToggleOffer = useCallback(
     (offerId) => {
@@ -162,32 +178,41 @@ const CandidatesSection = () => {
     [dispatch]
   );
 
-  const handleStatusChange = useCallback((candidatureId, newStatus) => {
-    setPendingStatusUpdate({ candidatureId, newStatus });
-    setShowConfirmDialog(true);
-  }, []);
-
-  const confirmStatusUpdate = useCallback(async () => {
-    if (!pendingStatusUpdate) return;
-
-    try {
-      setLocalError(null);
-      dispatch(clearError());
-      await dispatch(
-        updateCandidateStatus({
-          candidateId: pendingStatusUpdate.candidatureId,
-          status: pendingStatusUpdate.newStatus,
-        })
-      ).unwrap();
-      setShowConfirmDialog(false);
-      setPendingStatusUpdate(null);
-    } catch (error) {
-      setLocalError(error.message || "Erreur lors de la mise à jour du statut");
-    }
-  }, [dispatch, pendingStatusUpdate]);
+  const handleStatusChange = useCallback(
+    async (candidatureId, newStatus) => {
+      setStatusUpdateStates((prev) => ({ ...prev, [candidatureId]: true }));
+      try {
+        await dispatch(
+          updateCandidateStatus({ candidatureId, status: newStatus })
+        ).unwrap();
+        // Rafraîchir les données après la mise à jour
+        dispatch(getOffresWithCandidates());
+      } catch (error) {
+        console.error("Erreur lors de la mise à jour du statut:", error);
+      } finally {
+        setStatusUpdateStates((prev) => ({ ...prev, [candidatureId]: false }));
+      }
+    },
+    [dispatch]
+  );
 
   const handleViewCandidature = useCallback((candidature) => {
-    setSelectedCandidature(candidature);
+    if (!candidature) {
+      console.error("Candidature data is undefined");
+      return;
+    }
+    setSelectedCandidature({
+      id: candidature.id || candidature._id,
+      nom: candidature.nom || "Non spécifié",
+      prenom: candidature.prenom || "Non spécifié",
+      email: candidature.email || "Non spécifié",
+      status: candidature.status || "En attente",
+      lettre_motivation: candidature.lettre_motivation || "",
+      cv_path: candidature.cv_path || "",
+      date_creation: candidature.date_creation || new Date().toISOString(),
+      offre_id: candidature.offre_id || "",
+      offre_titre: candidature.offre_titre || "Offre non spécifiée",
+    });
   }, []);
 
   const handleCloseCandidatureDetails = useCallback(() => {
@@ -196,20 +221,22 @@ const CandidatesSection = () => {
 
   const handleViewLettre = useCallback(
     async (candidatureId) => {
+      if (!candidatureId) {
+        console.error("Candidature ID is undefined");
+        return;
+      }
       try {
         setLocalError(null);
         dispatch(clearError());
         const result = await dispatch(
           getLettreMotivation(candidatureId)
         ).unwrap();
-        if (!result.lettre_motivation) {
-          throw new Error("Lettre de motivation non disponible");
-        }
+        setSelectedLettreMotivation(result);
         setShowLettreModal(true);
       } catch (error) {
+        console.error("Error viewing lettre:", error);
         setLocalError(
-          error.message ||
-            "Erreur lors de l'affichage de la lettre de motivation"
+          error.message || "Erreur lors de l'affichage de la lettre"
         );
         setShowLettreModal(false);
       }
@@ -219,6 +246,7 @@ const CandidatesSection = () => {
 
   const handleCloseLettreModal = useCallback(() => {
     setShowLettreModal(false);
+    setSelectedLettreMotivation(null);
     dispatch(clearLettreMotivation());
   }, [dispatch]);
 
@@ -253,14 +281,26 @@ const CandidatesSection = () => {
   };
 
   const getFilteredCandidates = (candidats) => {
+    if (!Array.isArray(candidats)) {
+      console.error("candidats is not an array:", candidats);
+      return [];
+    }
     return candidats.filter((candidat) => {
+      if (!candidat) return false;
       const matchesSearch =
         !filters.searchTerm ||
-        candidat.nom.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        candidat.prenom
-          .toLowerCase()
-          .includes(filters.searchTerm.toLowerCase()) ||
-        candidat.email.toLowerCase().includes(filters.searchTerm.toLowerCase());
+        (candidat.nom &&
+          candidat.nom
+            .toLowerCase()
+            .includes(filters.searchTerm.toLowerCase())) ||
+        (candidat.prenom &&
+          candidat.prenom
+            .toLowerCase()
+            .includes(filters.searchTerm.toLowerCase())) ||
+        (candidat.email &&
+          candidat.email
+            .toLowerCase()
+            .includes(filters.searchTerm.toLowerCase()));
 
       const matchesStatus =
         filters.status === "all" || candidat.status === filters.status;
@@ -492,22 +532,52 @@ const CandidatesSection = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-center">
                               <div className="flex justify-center space-x-2">
                                 <button
-                                  onClick={() =>
-                                    handleStatusChange(candidat.id, "Accepté")
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStatusChange(candidat.id, "Accepté");
+                                  }}
+                                  className={`px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 ${
+                                    statusUpdateStates[candidat.id]
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : ""
+                                  }`}
+                                  disabled={
+                                    candidat.status === "Accepté" ||
+                                    statusUpdateStates[candidat.id]
                                   }
-                                  className="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                                  disabled={candidat.status === "Accepté"}
                                 >
-                                  Accepter
+                                  {statusUpdateStates[candidat.id] ? (
+                                    <div className="flex items-center">
+                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                      Mise à jour...
+                                    </div>
+                                  ) : (
+                                    "Accepter"
+                                  )}
                                 </button>
                                 <button
-                                  onClick={() =>
-                                    handleStatusChange(candidat.id, "Refusé")
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStatusChange(candidat.id, "Refusé");
+                                  }}
+                                  className={`px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 ${
+                                    statusUpdateStates[candidat.id]
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : ""
+                                  }`}
+                                  disabled={
+                                    candidat.status === "Refusé" ||
+                                    statusUpdateStates[candidat.id]
                                   }
-                                  className="px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
-                                  disabled={candidat.status === "Refusé"}
                                 >
-                                  Refuser
+                                  {statusUpdateStates[candidat.id] ? (
+                                    <div className="flex items-center">
+                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                      Mise à jour...
+                                    </div>
+                                  ) : (
+                                    "Refuser"
+                                  )}
                                 </button>
                               </div>
                             </td>
@@ -593,7 +663,7 @@ const CandidatesSection = () => {
       )}
 
       {/* Modal pour le CV */}
-      {showCVModal && (
+      {showCVModal && selectedCV && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-4xl h-[90vh] flex flex-col">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
@@ -601,64 +671,38 @@ const CandidatesSection = () => {
                 CV du candidat
               </h3>
               <button
-                onClick={() => {
-                  setShowCVModal(false);
-                  setSelectedCV(null);
-                }}
+                onClick={handleCloseCVModal}
                 className="text-gray-400 hover:text-gray-500"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
             <div className="flex-1 overflow-hidden relative">
-              {selectedCV && (
-                <iframe
-                  src={`${BASE_URL}/api/candidates/cv/${selectedCV.id}?token=${token}`}
-                  className="w-full h-full border-0"
-                  title="CV du candidat"
-                  sandbox="allow-same-origin allow-scripts allow-forms"
-                  onError={(e) => {
-                    console.error("Error loading PDF:", e);
-                    setLocalError("Erreur lors du chargement du CV");
-                    setShowCVModal(false);
-                    setSelectedCV(null);
-                  }}
-                />
+              {candidatesState.cvLoadingStates[selectedCV.id] ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                </div>
+              ) : (
+                <object
+                  data={selectedCV.url}
+                  type="application/pdf"
+                  className="w-full h-full"
+                >
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-gray-500">
+                      Impossible d'afficher le PDF.
+                      <a
+                        href={selectedCV.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-700 ml-2"
+                      >
+                        Ouvrir dans un nouvel onglet
+                      </a>
+                    </p>
+                  </div>
+                </object>
               )}
-              <div
-                className="absolute inset-0 flex items-center justify-center bg-gray-100"
-                style={{ display: selectedCV ? "none" : "flex" }}
-              >
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de confirmation pour le changement de statut */}
-      {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Confirmer le changement de statut
-            </h3>
-            <p className="text-sm text-gray-500 mb-6">
-              Êtes-vous sûr de vouloir changer le statut de cette candidature ?
-            </p>
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={() => setShowConfirmDialog(false)}
-                className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={confirmStatusUpdate}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Confirmer
-              </button>
             </div>
           </div>
         </div>
@@ -698,34 +742,43 @@ const CandidatesSection = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-500">
-                      Candidat
-                    </h4>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {selectedLettreMotivation.candidat.prenom}{" "}
-                      {selectedLettreMotivation.candidat.nom}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {selectedLettreMotivation.candidat.email}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-500">
-                      Lettre de motivation
-                    </h4>
+                  {selectedLettreMotivation.type === "pdf" ? (
                     <div className="mt-2 p-4 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                        {selectedLettreMotivation.lettre_motivation}
-                      </p>
+                      <object
+                        data={selectedLettreMotivation.url}
+                        type="application/pdf"
+                        className="w-full h-[500px]"
+                      >
+                        <div className="flex items-center justify-center h-full">
+                          <p className="text-gray-500">
+                            Impossible d'afficher le PDF.
+                            <a
+                              href={selectedLettreMotivation.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-500 hover:text-blue-700 ml-2"
+                            >
+                              Ouvrir dans un nouvel onglet
+                            </a>
+                          </p>
+                        </div>
+                      </object>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="mt-2 p-4 bg-gray-50 rounded-lg">
+                      <pre className="whitespace-pre-wrap text-sm text-gray-700">
+                        {selectedLettreMotivation.content}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
         </div>
       )}
+
+      
     </div>
   );
 };

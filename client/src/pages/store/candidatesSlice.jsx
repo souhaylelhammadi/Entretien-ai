@@ -1,161 +1,152 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import axios from "axios";
+import { BASE_URL } from "../../config";
 
-// Configuration de base d'axios
-const API_BASE_URL = "http://localhost:5000";
-axios.defaults.baseURL = API_BASE_URL;
+// Actions asynchrones
+export const getOffresWithCandidates = createAsyncThunk(
+  "candidates/getOffresWithCandidates",
+  async (_, { getState }) => {
+    const state = getState();
+    const token = state.auth.token?.value || state.auth.token;
 
-// Fonction utilitaire pour obtenir le token
-const getToken = () => {
-  const token = localStorage.getItem("token");
-  if (!token) {
-    console.warn("Token non trouvé dans le localStorage");
-    return null;
-  }
-  // Retourner le token tel quel, sans ajouter de préfixe Bearer
-  return token;
-};
-
-// Async thunks
-const fetchOffersWithCandidates = createAsyncThunk(
-  "candidates/fetchOffersWithCandidates",
-  async (_, { getState, rejectWithValue }) => {
-    try {
-      const token = getToken();
-      if (!token) {
-        console.error("Token non trouvé dans le localStorage");
-        return rejectWithValue("Utilisateur non connecté");
-      }
-
-      const { auth } = getState();
-      if (!auth?.user?.role || auth.user.role !== "recruteur") {
-        console.error("Rôle non autorisé:", auth?.user?.role);
-        return rejectWithValue("Accès non autorisé - Rôle recruteur requis");
-      }
-
-      console.log(
-        "Envoi de la requête avec le token:",
-        token.substring(0, 20) + "..."
-      );
-
-      const response = await axios.get(
-        "/api/candidates/offres-with-candidates",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      console.log("Réponse reçue:", response.data);
-      return response.data.offres;
-    } catch (error) {
-      console.error("Erreur lors de la récupération des offres:", error);
-      if (error.response) {
-        console.error("Détails de l'erreur:", error.response.data);
-        return rejectWithValue(
-          error.response.data.error ||
-            "Erreur lors de la récupération des offres"
-        );
-      }
-      return rejectWithValue("Erreur de connexion au serveur");
+    if (!token) {
+      throw new Error("Token d'authentification manquant");
     }
+
+    // Nettoyer le token pour éviter le double préfixe Bearer
+    const cleanToken = token.replace(/^Bearer\s+Bearer\s+/, 'Bearer ').replace(/^Bearer\s+/, 'Bearer ');
+
+    const response = await fetch(
+      `${BASE_URL}/api/candidates/offres-with-candidates`,
+      {
+        headers: {
+          Authorization: cleanToken,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(
+        error.error || "Erreur lors de la récupération des offres"
+      );
+    }
+
+    return response.json();
   }
 );
 
-const downloadCV = createAsyncThunk(
+export const downloadCV = createAsyncThunk(
   "candidates/downloadCV",
-  async (candidatureId, { getState, rejectWithValue }) => {
-    try {
-      const token = getToken();
-      if (!token) {
-        return rejectWithValue("Utilisateur non connecté");
-      }
+  async (candidatureId, { getState }) => {
+    const state = getState();
+    const token = state.auth.token?.value || state.auth.token;
 
-      // Retourner l'URL du CV avec le token
-      return {
-        url: `/api/candidates/cv/${candidatureId}`,
-        token: token,
-      };
-    } catch (error) {
-      console.error("Erreur lors du téléchargement du CV:", error);
-      return rejectWithValue(
-        error.response?.data?.error || "Erreur lors du téléchargement du CV"
-      );
+    if (!token) {
+      throw new Error("Token d'authentification manquant");
     }
+
+    // Nettoyer le token pour éviter le double préfixe Bearer
+    const cleanToken = token.replace(/^Bearer\s+Bearer\s+/, 'Bearer ').replace(/^Bearer\s+/, 'Bearer ');
+
+    const response = await fetch(
+      `${BASE_URL}/api/candidates/cv/${candidatureId}`,
+      {
+        headers: {
+          Authorization: cleanToken,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Erreur lors du téléchargement du CV");
+    }
+
+    return response.blob();
   }
 );
 
-const updateCandidateStatus = createAsyncThunk(
-  "candidates/updateCandidateStatus",
-  async ({ candidateId, status }, { getState, rejectWithValue }) => {
-    try {
-      const token = getToken();
-      if (!token) {
-        return rejectWithValue("Utilisateur non connecté");
-      }
-
-      const response = await axios.put(
-        `/api/candidates/${candidateId}`,
-        { status },
-        {
-          headers: { Authorization: token },
-        }
-      );
-
-      return { id: candidateId, status };
-    } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.error || "Erreur lors de la mise à jour du statut"
-      );
-    }
-  }
-);
-
-const getLettreMotivation = createAsyncThunk(
+export const getLettreMotivation = createAsyncThunk(
   "candidates/getLettreMotivation",
-  async (candidatureId, { getState, rejectWithValue }) => {
-    try {
-      const token = getToken();
-      if (!token) {
-        return rejectWithValue("Utilisateur non connecté");
+  async (candidatureId, { getState }) => {
+    const state = getState();
+    const token = state.auth.token?.value || state.auth.token;
+
+    if (!token) {
+      throw new Error("Token d'authentification manquant");
+    }
+
+    // Nettoyer le token pour éviter le double préfixe Bearer
+    const cleanToken = token.replace(/^Bearer\s+Bearer\s+/, 'Bearer ').replace(/^Bearer\s+/, 'Bearer ');
+
+    const response = await fetch(
+      `${BASE_URL}/api/candidates/lettre/${candidatureId}`,
+      {
+        headers: {
+          Authorization: cleanToken,
+        },
       }
+    );
 
-      const response = await axios.get(
-        `/api/candidates/lettre/${candidatureId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      return response.data;
-    } catch (error) {
-      console.error(
-        "Erreur lors de la récupération de la lettre de motivation:",
-        error
-      );
-      return rejectWithValue(
-        error.response?.data?.error ||
-          "Erreur lors de la récupération de la lettre de motivation"
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(
+        error.error || "Erreur lors de la récupération de la lettre"
       );
     }
+
+    const data = await response.json();
+    return data;
   }
 );
+
+export const updateCandidateStatus = createAsyncThunk(
+  "candidates/updateStatus",
+  async ({ candidatureId, status }, { getState }) => {
+    const state = getState();
+    const token = state.auth.token?.value || state.auth.token;
+
+    if (!token) {
+      throw new Error("Token d'authentification manquant");
+    }
+
+    // Nettoyer le token pour éviter le double préfixe Bearer
+    const cleanToken = token.replace(/^Bearer\s+Bearer\s+/, 'Bearer ').replace(/^Bearer\s+/, 'Bearer ');
+
+    const response = await fetch(
+      `${BASE_URL}/api/candidates/${candidatureId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: cleanToken,
+        },
+        body: JSON.stringify({ status }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Erreur lors de la mise à jour du statut");
+    }
+
+    return response.json();
+  }
+);
+
+const initialState = {
+  offres: [],
+  loading: false,
+  error: null,
+  expandedOffers: {},
+  downloadProgress: 0,
+  cvLoadingStates: {},
+  lettreMotivation: null,
+};
 
 const candidatesSlice = createSlice({
   name: "candidates",
-  initialState: {
-    offres: [],
-    loading: false,
-    error: null,
-    expandedOffers: {},
-    downloadProgress: 0,
-    selectedLettreMotivation: null,
-  },
+  initialState,
   reducers: {
     toggleOffer: (state, action) => {
       const offerId = action.payload;
@@ -164,83 +155,68 @@ const candidatesSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
-    setDownloadProgress: (state, action) => {
-      state.downloadProgress = action.payload;
-    },
     clearLettreMotivation: (state) => {
-      state.selectedLettreMotivation = null;
+      state.lettreMotivation = null;
+    },
+    clearSelectedCV: (state) => {
+      state.selectedCV = null;
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchOffersWithCandidates.pending, (state) => {
+      // getOffresWithCandidates
+      .addCase(getOffresWithCandidates.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchOffersWithCandidates.fulfilled, (state, action) => {
+      .addCase(getOffresWithCandidates.fulfilled, (state, action) => {
         state.loading = false;
-        state.offres = action.payload;
+        state.offres = action.payload.offres;
       })
-      .addCase(fetchOffersWithCandidates.rejected, (state, action) => {
+      .addCase(getOffresWithCandidates.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.error.message;
       })
-      .addCase(downloadCV.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-        state.downloadProgress = 0;
+      // downloadCV
+      .addCase(downloadCV.pending, (state, action) => {
+        state.cvLoadingStates[action.meta.arg] = true;
       })
-      .addCase(downloadCV.fulfilled, (state) => {
-        state.loading = false;
-        state.downloadProgress = 100;
+      .addCase(downloadCV.fulfilled, (state, action) => {
+        state.cvLoadingStates[action.meta.arg] = false;
       })
       .addCase(downloadCV.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.downloadProgress = 0;
+        state.cvLoadingStates[action.meta.arg] = false;
+        state.error = action.error.message;
       })
-      .addCase(updateCandidateStatus.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+      // getLettreMotivation
+      .addCase(getLettreMotivation.fulfilled, (state, action) => {
+        state.lettreMotivation = action.payload;
       })
+      .addCase(getLettreMotivation.rejected, (state, action) => {
+        state.error = action.error.message;
+      })
+      // updateCandidateStatus
       .addCase(updateCandidateStatus.fulfilled, (state, action) => {
-        state.loading = false;
+        // Mise à jour du statut dans la liste des candidatures
+        const { candidatureId, status } = action.meta.arg;
         state.offres = state.offres.map((offre) => ({
           ...offre,
           candidats: offre.candidats.map((candidat) =>
-            candidat.id === action.payload.id
-              ? { ...candidat, status: action.payload.status }
-              : candidat
+            candidat.id === candidatureId ? { ...candidat, status } : candidat
           ),
         }));
       })
       .addCase(updateCandidateStatus.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(getLettreMotivation.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(getLettreMotivation.fulfilled, (state, action) => {
-        state.loading = false;
-        state.selectedLettreMotivation = action.payload;
-      })
-      .addCase(getLettreMotivation.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+        state.error = action.error.message;
       });
   },
 });
 
-export const { toggleOffer, clearError, setDownloadProgress, clearLettreMotivation } =
-  candidatesSlice.actions;
-
-export {
-  fetchOffersWithCandidates,
-  downloadCV,
-  updateCandidateStatus,
-  getLettreMotivation,
-};
+export const {
+  toggleOffer,
+  clearError,
+  clearLettreMotivation,
+  clearSelectedCV,
+} = candidatesSlice.actions;
 
 export default candidatesSlice.reducer;

@@ -181,6 +181,11 @@ def postuler(offre_id):
             logger.error(f"Utilisateur non trouvé pour l'email: {data['email']}")
             return jsonify({"error": "Utilisateur non trouvé", "code": "USER_NOT_FOUND"}), 404
 
+        # Vérifier le rôle de l'utilisateur
+        if user.get("role") != "candidat":
+            logger.warning(f"Tentative de postulation par un non-candidat: {data['email']}")
+            return jsonify({"error": "Seuls les étudiants peuvent postuler", "code": "UNAUTHORIZED_ROLE"}), 403
+
         # Vérifier si le candidat existe
         candidat = db[CANDIDATS_COLLECTION].find_one({"utilisateur_id": user["_id"]})
         if not candidat:

@@ -1,4 +1,3 @@
-
 from flask import Blueprint, jsonify, request, current_app, send_file, Response, make_response
 import os
 import base64
@@ -9,6 +8,9 @@ from flask_cors import CORS
 from pymongo.errors import PyMongoError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+import PyPDF2
+import io
+from .entretiens_questions import generate_interview_questions, get_stored_questions
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +25,7 @@ CANDIDATURES_COLLECTION = 'candidatures'
 CANDIDATS_COLLECTION = 'candidats'
 UTILISATEURS_COLLECTION = 'utilisateurs'
 RECRUTEURS_COLLECTION = 'recruteurs'
+ENTRETIENS_COLLECTION = 'entretiens'
 
 # Configure CORS
 CORS(candidates_bp, 
@@ -308,13 +311,63 @@ def update_candidate_status(candidate_id, auth_payload):
             logger.error(f"Tentative non autorisée de mise à jour - recruteur {recruteur_id} essaie de modifier une candidature pour l'offre de {offre.get('recruteur_id')}")
             return jsonify({"error": "Vous n'êtes pas autorisé à modifier cette candidature", "code": "UNAUTHORIZED_ACCESS"}), 403
 
-        result = db[CANDIDATURES_COLLECTION].update_one(
-            {"_id": ObjectId(candidate_id)},
-            {"$set": {
-                "statut": data['status'],
-                "updated_at": datetime.now(timezone.utc)
-            }}
-        )
+        # Si le statut est "Accepté", générer les questions et créer l'entretien
+        if data['status'] == "Accepté":
+            # Extraire le texte du CV
+            cv_text = ""
+            if candidature.get("cv_path"):
+                with open(candidature["cv_path"], 'rb') as f:
+                    cv_text = extract_text_from_pdf(f.read())
+
+            # Générer les questions
+            questions_result = generate_interview_questions(cv_text, offre, candidate_id, str(offre_id))
+            
+            if questions_result == ['error']:
+                logger.error("Erreur lors de la génération des questions")
+                return jsonify({"error": "Erreur lors de la génération des questions", "code": "QUESTIONS_GENERATION_ERROR"}), 500
+
+            # Récupérer les questions stockées pour obtenir l'ID
+            stored_questions = get_stored_questions(candidate_id)
+            if not stored_questions:
+                logger.error("Questions non trouvées après génération")
+                return jsonify({"error": "Erreur lors de la récupération des questions", "code": "QUESTIONS_NOT_FOUND"}), 500
+
+            # Créer l'entretien
+            entretien = {
+                "candidature_id": ObjectId(candidate_id),
+                "offre_id": ObjectId(offre_id),
+                "candidat_id": candidature.get("user_id"),
+                "recruteur_id": ObjectId(recruteur_id),
+                "questions_id": stored_questions["_id"],
+                "date_prevue": None,  # À définir plus tard
+                "statut": "planifie",
+                "transcription_ids": [],
+                "rapport_id": None,
+                "date_creation": datetime.now(timezone.utc),
+                "date_maj": datetime.now(timezone.utc)
+            }
+
+            # Insérer l'entretien dans la base de données
+            entretien_result = db[ENTRETIENS_COLLECTION].insert_one(entretien)
+            
+            # Mettre à jour la candidature avec l'ID de l'entretien
+            result = db[CANDIDATURES_COLLECTION].update_one(
+                {"_id": ObjectId(candidate_id)},
+                {"$set": {
+                    "statut": data['status'],
+                    "entretien_id": entretien_result.inserted_id,
+                    "updated_at": datetime.now(timezone.utc)
+                }}
+            )
+        else:
+            # Mise à jour simple du statut
+            result = db[CANDIDATURES_COLLECTION].update_one(
+                {"_id": ObjectId(candidate_id)},
+                {"$set": {
+                    "statut": data['status'],
+                    "updated_at": datetime.now(timezone.utc)
+                }}
+            )
 
         if result.modified_count == 0:
             logger.warning(f"Aucune modification effectuée pour la candidature {candidate_id}")
@@ -510,3 +563,45 @@ def get_lettre_motivation(candidature_id):
     except Exception as e:
         logger.error(f"Erreur lors de la récupération de la lettre de motivation: {str(e)}")
         return jsonify({"error": "Erreur lors de la récupération de la lettre de motivation", "code": "SERVER_ERROR"}), 500
+
+def extract_text_from_pdf(pdf_data):
+    """Extrait le texte d'un fichier PDF."""
+    try:
+        if not pdf_data:
+            logger.error("Aucune donnée PDF fournie")
+            return ""
+
+        # Créer un objet BytesIO pour PyPDF2
+        pdf_file = io.BytesIO(pdf_data)
+        
+        try:
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            if not pdf_reader.pages:
+                logger.error("Le PDF ne contient aucune page")
+                return ""
+        except Exception as e:
+            logger.error(f"Erreur lors de la lecture du PDF: {str(e)}")
+            return ""
+
+        # Extraire le texte de chaque page
+        text = ""
+        for i, page in enumerate(pdf_reader.pages):
+            try:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+                else:
+                    logger.warning(f"Page {i+1} ne contient pas de texte")
+            except Exception as e:
+                logger.error(f"Erreur lors de l'extraction du texte de la page {i+1}: {str(e)}")
+
+        if not text.strip():
+            logger.error("Aucun texte n'a pu être extrait du PDF")
+            return ""
+
+        logger.info(f"Texte extrait avec succès du PDF ({len(text)} caractères)")
+        return text
+
+    except Exception as e:
+        logger.error(f"Erreur lors de l'extraction du texte du PDF: {str(e)}")
+        return ""

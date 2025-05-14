@@ -117,6 +117,11 @@ const JobsSection = () => {
       const jobData = prepareJobData();
       await dispatch(addJob(jobData)).unwrap();
       await dispatch(fetchJobs());
+
+      // Définir un flag dans sessionStorage pour indiquer qu'une offre a été ajoutée
+      // Ce flag sera vérifié par le dashboard pour forcer le rechargement des données
+      sessionStorage.setItem("fromOfferAdd", "true");
+
       dispatch(resetNewJob());
       dispatch(setIsAddingJob(false));
     } catch (error) {

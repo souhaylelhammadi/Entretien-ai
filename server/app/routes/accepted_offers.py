@@ -25,7 +25,7 @@ def auth_required(f):
             if not user_id:
                 logger.error("Token invalide ou expiré")
                 return jsonify({"error": "Token invalide ou expiré"}), 401
-            
+        
             logger.info(f"Token vérifié, user_id: {user_id}")
             
             # Récupérer l'utilisateur depuis la base de données
@@ -42,10 +42,10 @@ def auth_required(f):
                 return jsonify({"error": "Accès réservé aux candidats"}), 403
             
             request.user = {
-                "id": str(user["_id"]),
+            "id": str(user["_id"]),
                 "email": user["email"],
-                "role": user["role"]
-            }
+            "role": user["role"]
+        }
             logger.info(f"Utilisateur authentifié: {request.user}")
             return f(*args, **kwargs)
         except Exception as e:
