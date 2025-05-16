@@ -1,121 +1,144 @@
+// interviewsSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import axios from "axios";
+import { BASE_URL } from "../../config";
 
-const API_BASE_URL = "http://localhost:5000";
+// Action pour récupérer les détails de l'entretien
+export const fetchInterviewDetails = createAsyncThunk(
+  "interview/fetchDetails",
+  async (interviewId, { rejectWithValue }) => {
+    try {
+      console.log("Début du chargement de l'entretien:", interviewId);
+      const response = await axios.get(
+        `${BASE_URL}/api/candidates/entretiens/${interviewId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
 
-export const saveInterviewToDatabase = createAsyncThunk(
-  "interview/saveInterviewToDatabase",
-  async ({ applicationId }, { getState }) => {
-    const { recordedBlob, recordings } = getState().interview;
-    if (!recordedBlob) throw new Error("Aucune vidéo enregistrée");
+      console.log("Réponse du serveur:", response.status);
 
-    const formData = new FormData();
-    formData.append("video", recordedBlob, `interview_${Date.now()}.webm`);
-    formData.append("applicationId", applicationId);
-    recordings.forEach((rec, index) => {
-      formData.append(`transcript_${index}`, rec.transcript || "");
-      formData.append(`questionIndex_${index}`, rec.questionIndex.toString());
-      formData.append(`question_${index}`, rec.question);
-      formData.append(`timestamp_${index}`, rec.timestamp);
-    });
-
-    const response = await fetch(`${API_BASE_URL}/api/save-recording`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-      },
-      body: formData,
-    });
-
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || "Échec de l'enregistrement de la vidéo");
-    }
-    return data;
-  }
-);
-
-export const fetchRecordings = createAsyncThunk(
-  "interview/fetchRecordings",
-  async ({ applicationId }) => {
-    const response = await fetch(
-      `${API_BASE_URL}/api/recordings?applicationId=${applicationId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        },
+      if (response.data.success) {
+        console.log("Données de l'entretien:", response.data.data);
+        return response.data.data;
+      } else {
+        return rejectWithValue(response.data.error || "Erreur inconnue");
       }
-    );
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(
-        data.error || "Échec du chargement des enregistrements précédents"
+    } catch (error) {
+      console.error("Erreur lors du chargement:", error);
+      return rejectWithValue(
+        error.response?.data?.error ||
+          "Erreur lors de la récupération des détails de l'entretien"
       );
     }
-    return data.data.map((rec) => ({
-      questionIndex: rec.questionIndex,
-      transcript: rec.transcript,
-      url: rec.videoUrl,
-      timestamp: rec.timestamp,
-      question: rec.question,
-    }));
   }
 );
+
+// Action pour récupérer les enregistrements
+export const fetchRecordings = createAsyncThunk(
+  "interview/fetchRecordings",
+  async (interviewId, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:5000/api/candidates/entretiens/${interviewId}/recordings`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        return response.data.recordings || [];
+      } else {
+        return rejectWithValue(response.data.error || "Erreur inconnue");
+      }
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.error ||
+          "Erreur lors de la récupération des enregistrements"
+      );
+    }
+  }
+);
+
+// Action pour sauvegarder l'entretien
+export const saveInterviewToDatabase = createAsyncThunk(
+  "interview/saveInterviewToDatabase",
+  async ({ interviewId, recordedBlob, recordings }, { rejectWithValue }) => {
+    try {
+      const formData = new FormData();
+      formData.append("video", recordedBlob, `interview_${interviewId}.webm`);
+      formData.append("recordings", JSON.stringify(recordings));
+
+      const response = await fetch(
+        `${BASE_URL}/api/candidates/entretiens/${interviewId}/recordings`,
+        {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Erreur lors de la sauvegarde de l'entretien"
+        );
+      }
+
+      return { success: true, data };
+    } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+const initialState = {
+  webcamActive: false,
+  isMuted: false,
+  callTime: 0,
+  currentQuestionIndex: 0,
+  cameraError: false,
+  transcript: "",
+  isTranscribing: false,
+  isRecording: false,
+  recordedBlob: null,
+  isSpeaking: false,
+  recordings: [],
+  interviewCompleted: false,
+  showModal: false,
+  errorMessage: "",
+  interviewStarted: false,
+  questions: [],
+  loading: false,
+  error: null,
+  interviewDetails: null,
+};
 
 const interviewSlice = createSlice({
   name: "interview",
-  initialState: {
-    webcamActive: false,
-    isMuted: false,
-    callTime: 0,
-    localStream: null,
-    currentQuestionIndex: 0,
-    cameraError: false,
-    transcript: "",
-    isTranscribing: false,
-    isRecording: false,
-    recordedBlob: null,
-    recordedVideoURL: "",
-    isSpeaking: false,
-    recordings: [],
-    interviewCompleted: false,
-    showModal: false,
-    errorMessage: "",
-    interviewStarted: false,
-    questions: [],
-  },
+  initialState,
   reducers: {
     setState: (state, action) => {
       return { ...state, ...action.payload };
     },
     incrementCallTime: (state) => {
       state.callTime += 1;
-      if (state.callTime >= 1800) {
-        state.interviewCompleted = true;
-      }
     },
     toggleMute: (state) => {
-      if (state.localStream) {
-        const audioTracks = state.localStream.getAudioTracks();
-        audioTracks.forEach((track) => (track.enabled = !track.enabled));
-        state.isMuted = !state.isMuted;
-      }
+      state.isMuted = !state.isMuted;
     },
     hangUp: (state) => {
-      if (state.localStream) {
-        state.localStream.getTracks().forEach((track) => track.stop());
-      }
       state.webcamActive = false;
-      state.localStream = null;
       state.callTime = 0;
-      state.cameraError = false;
-      state.transcript = "";
-      state.isTranscribing = false;
+      state.currentQuestionIndex = 0;
       state.isRecording = false;
-      state.interviewStarted = false;
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-        state.isSpeaking = false;
-      }
+      state.recordedBlob = null;
+      state.recordings = [];
     },
     startRecording: (state) => {
       state.isRecording = true;
@@ -124,78 +147,70 @@ const interviewSlice = createSlice({
       state.isRecording = false;
     },
     setRecordedBlob: (state, action) => {
-      state.recordedBlob = action.payload.blob;
-      state.recordedVideoURL = action.payload.url;
+      state.recordedBlob = action.payload;
     },
     goToNextQuestion: (state) => {
-      if (!state.interviewStarted) return;
       if (state.currentQuestionIndex < state.questions.length - 1) {
-        state.recordings.push({
-          questionIndex: state.currentQuestionIndex,
-          transcript: state.transcript,
-          question: state.questions[state.currentQuestionIndex],
-          timestamp: new Date().toISOString(),
-        });
-        state.transcript = "";
         state.currentQuestionIndex += 1;
-      } else {
-        state.recordings.push({
-          questionIndex: state.currentQuestionIndex,
-          transcript: state.transcript,
-          question: state.questions[state.currentQuestionIndex],
-          timestamp: new Date().toISOString(),
-        });
-        state.interviewCompleted = true;
       }
     },
     goToPreviousQuestion: (state) => {
-      if (!state.interviewStarted || state.currentQuestionIndex === 0) return;
-      state.recordings.push({
-        questionIndex: state.currentQuestionIndex,
-        transcript: state.transcript,
-        question: state.questions[state.currentQuestionIndex],
-        timestamp: new Date().toISOString(),
-      });
-      state.transcript = "";
-      state.currentQuestionIndex -= 1;
+      if (state.currentQuestionIndex > 0) {
+        state.currentQuestionIndex -= 1;
+      }
     },
     goToQuestion: (state, action) => {
       const index = action.payload;
-      if (
-        !state.interviewStarted ||
-        index === state.currentQuestionIndex ||
-        index < 0 ||
-        index >= state.questions.length
-      )
-        return;
-      state.recordings.push({
-        questionIndex: state.currentQuestionIndex,
-        transcript: state.transcript,
-        question: state.questions[state.currentQuestionIndex],
-        timestamp: new Date().toISOString(),
-      });
-      state.transcript = "";
-      state.currentQuestionIndex = index;
+      if (index >= 0 && index < state.questions.length) {
+        state.currentQuestionIndex = index;
+      }
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(saveInterviewToDatabase.fulfilled, (state) => {
-        state.errorMessage = "";
+      // Gestion de fetchInterviewDetails
+      .addCase(fetchInterviewDetails.pending, (state) => {
+        state.loading = true;
+        state.error = null;
       })
-      .addCase(saveInterviewToDatabase.rejected, (state, action) => {
-        state.errorMessage =
-          action.error.message ||
-          "Échec de l'enregistrement de l'entretien. Veuillez réessayer.";
+      .addCase(fetchInterviewDetails.fulfilled, (state, action) => {
+        state.loading = false;
+        state.interviewDetails = action.payload;
+        state.questions = action.payload.questions || [];
+        state.currentQuestionIndex = 0;
+      })
+      .addCase(fetchInterviewDetails.rejected, (state, action) => {
+        state.loading = false;
+        state.error =
+          action.payload || "Erreur lors du chargement de l'entretien";
+      })
+      // Gestion de fetchRecordings
+      .addCase(fetchRecordings.pending, (state) => {
+        state.loadingRecordings = true;
       })
       .addCase(fetchRecordings.fulfilled, (state, action) => {
+        state.loadingRecordings = false;
         state.recordings = action.payload;
-        state.errorMessage = "";
       })
       .addCase(fetchRecordings.rejected, (state, action) => {
-        state.errorMessage =
-          action.error.message ||
-          "Échec du chargement des enregistrements précédents.";
+        state.loadingRecordings = false;
+        state.error =
+          action.payload || "Erreur lors du chargement des enregistrements";
+      })
+      // Gestion de saveInterviewToDatabase
+      .addCase(saveInterviewToDatabase.pending, (state) => {
+        state.savingInterview = true;
+      })
+      .addCase(saveInterviewToDatabase.fulfilled, (state, action) => {
+        state.savingInterview = false;
+        state.interviewCompleted = true;
+        state.status = "succeeded";
+        state.error = null;
+      })
+      .addCase(saveInterviewToDatabase.rejected, (state, action) => {
+        state.savingInterview = false;
+        state.status = "failed";
+        state.error = action.payload;
       });
   },
 });

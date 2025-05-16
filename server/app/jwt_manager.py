@@ -56,7 +56,7 @@ class JWTManager:
         try:
             if not self._initialized:
                 self._initialize()
-
+             
             logger.info(f"Vérification token (type: {type(token)}): {token[:20]}...")
             
             # Nettoyer le token si nécessaire
@@ -87,24 +87,24 @@ class JWTManager:
                 if not isinstance(payload, dict):
                     logger.error(f"Payload non-dictionnaire reçu: {type(payload)}")
                     return None
-
+            
                 # Vérifier que le payload contient les champs requis
                 if "sub" not in payload:
                     logger.error("Payload ne contient pas de 'sub' (ID utilisateur)")
                     return None
-
+            
                 # Retourner directement l'ID utilisateur
                 user_id = payload.get("sub")
                 logger.info(f"ID utilisateur extrait du token: {user_id}")
                 return user_id
-                
+            
             except jwt.ExpiredSignatureError:
                 logger.error("Token expiré")
                 return None
-            except jwt.InvalidTokenError as e:
-                logger.error(f"Token invalide: {str(e)}")
-                return None
-            except Exception as e:
+        except jwt.InvalidTokenError as e:
+            logger.error(f"Token invalide: {str(e)}")
+            return None
+        except Exception as e:
                 logger.error(f"Erreur lors du décodage du token: {str(e)}")
                 return None
             
@@ -159,7 +159,7 @@ class JWTManager:
                     # Créer le payload à passer à la fonction
                     auth_payload = {
                         "user_id": user_id,
-                            
+                        
                         "role": user.get("role"),
                         "email": user.get("email")
                     }

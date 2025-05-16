@@ -27,7 +27,6 @@ const statusLabels = {
   Accepté: "Acceptée",
   "En cours": "En cours",
   Terminé: "Terminée",
-  Annulé: "Annulée",
 };
 
 const MesInterview = () => {
@@ -53,16 +52,54 @@ const MesInterview = () => {
     }
   }, [error, dispatch]);
 
-  const handleInterviewAction = (candidature) => {
-    navigate(`/interview/${candidature.entretien_id}`);
+  const handleInterviewAction = async (candidature) => {
+    try {
+      console.log(
+        "Début de handleInterviewAction avec candidature:",
+        candidature
+      );
+
+      if (candidature.entretien_id) {
+        console.log(
+          "Navigation vers l'entretien existant:",
+          candidature.entretien_id
+        );
+        navigate(`/interview/${candidature.entretien_id}`);
+      } else {
+        console.log(
+          "Génération d'un nouvel entretien pour la candidature:",
+          candidature._id
+        );
+        const result = await dispatch(
+          generateInterview(candidature._id)
+        ).unwrap();
+
+        console.log("Résultat de la génération:", result);
+
+        if (result && result.entretien_id) {
+          console.log(
+            "Navigation vers le nouvel entretien:",
+            result.entretien_id
+          );
+          navigate(`/interview/${result.entretien_id}`);
+        } else {
+          console.error("Erreur: Pas d'ID d'entretien dans le résultat");
+          toast.error("Erreur lors de la génération de l'entretien");
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors de l'action d'entretien:", error);
+      toast.error(error.message || "Une erreur est survenue");
+    }
   };
 
-  if (loading) {
+  // Afficher l'état de chargement uniquement lors du chargement initial
+  if (loading && !generatingInterview) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="flex items-center space-x-2">
           <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
-          <span className="text-gray-600">Chargement...</span>
+          <span className="text-gray-600">Chargement des candidatures...</span>
         </div>
       </div>
     );
@@ -178,12 +215,19 @@ const MesInterview = () => {
                               : "bg-gray-400 cursor-not-allowed"
                           }`}
                         >
-                          <PlayCircle className="h-4 w-4 mr-2" />
-                          {candidature.statut === "Accepté"
-                            ? "Passer l'entretien"
-                            : candidature.statut === "En cours"
-                            ? "Continuer l'entretien"
-                            : "Entretien terminé"}
+                          {generatingInterview ? (
+                            <>
+                              <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                              Génération...
+                            </>
+                          ) : (
+                            <>
+                              <PlayCircle className="h-4 w-4 mr-2" />
+                              {candidature.statut === "Accepté"
+                                ? "Passer l'entretien"
+                                : "Entretien terminé"}
+                            </>
+                          )}
                         </button>
                       </td>
                     </tr>

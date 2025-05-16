@@ -742,43 +742,17 @@ const CandidatesSection = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {selectedLettreMotivation.type === "pdf" ? (
-                    <div className="mt-2 p-4 bg-gray-50 rounded-lg">
-                      <object
-                        data={selectedLettreMotivation.url}
-                        type="application/pdf"
-                        className="w-full h-[500px]"
-                      >
-                        <div className="flex items-center justify-center h-full">
-                          <p className="text-gray-500">
-                            Impossible d'afficher le PDF.
-                            <a
-                              href={selectedLettreMotivation.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-500 hover:text-blue-700 ml-2"
-                            >
-                              Ouvrir dans un nouvel onglet
-                            </a>
-                          </p>
-                        </div>
-                      </object>
-                    </div>
-                  ) : (
-                    <div className="mt-2 p-4 bg-gray-50 rounded-lg">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-700">
-                        {selectedLettreMotivation.content}
-                      </pre>
-                    </div>
-                  )}
+                  <div className="mt-2 p-4 bg-gray-50 rounded-lg">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-700">
+                      {selectedLettreMotivation.lettre_motivation}
+                    </pre>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
       )}
-
-      
     </div>
   );
 };

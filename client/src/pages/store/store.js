@@ -29,7 +29,12 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: {
         ignoredActions: ["offresEmploi/submitCandidature"],
-        ignoredPaths: ["offresEmploi.cv", "offresEmploi.lettreMotivation"],
+        ignoredPaths: [
+          "offresEmploi.cv",
+          "offresEmploi.lettreMotivation",
+          "interview.localStream",
+          "interview.recordedBlob"
+        ],
       },
     }),
   devTools: process.env.NODE_ENV !== "production",

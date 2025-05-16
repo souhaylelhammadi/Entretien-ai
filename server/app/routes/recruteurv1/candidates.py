@@ -11,6 +11,11 @@ from flask_limiter.util import get_remote_address
 import PyPDF2
 import io
 from .entretiens_questions import generate_interview_questions, get_stored_questions
+import json
+import tempfile
+import whisper
+from moviepy import VideoFileClip
+import shutil
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -362,12 +367,12 @@ def update_candidate_status(candidate_id, auth_payload):
         else:
             # Mise à jour simple du statut
             result = db[CANDIDATURES_COLLECTION].update_one(
-                {"_id": ObjectId(candidate_id)},
+            {"_id": ObjectId(candidate_id)},
                 {"$set": {
                     "statut": data['status'],
                     "updated_at": datetime.now(timezone.utc)
                 }}
-            )
+        )
 
         if result.modified_count == 0:
             logger.warning(f"Aucune modification effectuée pour la candidature {candidate_id}")
@@ -482,21 +487,17 @@ def get_cv(candidature_id):
 def get_lettre_motivation(candidature_id):
     """Récupérer la lettre de motivation d'une candidature."""
     try:
-        # Récupérer le token depuis l'URL ou les headers
-        token = request.args.get('token')
-        logger.info(f"Token reçu dans l'URL: {token[:20]}...")  # Log seulement le début du token pour la sécurité
-
-        if not token:
-            logger.error("Aucun token d'authentification fourni")
+        # Récupérer le token depuis les headers
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            logger.error("Aucun token d'authentification fourni dans les headers")
             return jsonify({"error": "Authentification requise", "code": "NO_TOKEN"}), 401
 
         # Nettoyer le token
+        token = auth_header
         if token.startswith("Bearer "):
             token = token[7:]
             logger.info("Préfixe 'Bearer ' retiré du token")
-        elif "Bearer " in token:
-            token = token.split("Bearer ")[1]
-            logger.info("Token extrait après 'Bearer '")
 
         # Vérifier le token
         jwt_manager = get_jwt_manager()
@@ -510,7 +511,7 @@ def get_lettre_motivation(candidature_id):
             return jsonify({"error": "Token invalide ou expiré", "code": "INVALID_TOKEN"}), 401
 
         logger.info(f"User ID extrait du token: {user_id}")
-        
+
         db = current_app.mongo
         # D'abord, récupérer l'utilisateur
         user = db[UTILISATEURS_COLLECTION].find_one({"_id": ObjectId(str(user_id))})
@@ -564,6 +565,117 @@ def get_lettre_motivation(candidature_id):
         logger.error(f"Erreur lors de la récupération de la lettre de motivation: {str(e)}")
         return jsonify({"error": "Erreur lors de la récupération de la lettre de motivation", "code": "SERVER_ERROR"}), 500
 
+@candidates_bp.route("/entretiens-acceptes/<string:candidat_id>", methods=["GET"])
+@require_auth("candidat")
+def get_accepted_interviews(candidat_id, auth_payload):
+    """Récupérer les entretiens acceptés pour un candidat."""
+    try:
+        db = current_app.mongo
+        
+        # Vérifier que le candidat existe
+        candidat = db[CANDIDATS_COLLECTION].find_one({"_id": ObjectId(candidat_id)})
+        if not candidat:
+            return jsonify({"error": "Candidat non trouvé", "code": "CANDIDATE_NOT_FOUND"}), 404
+
+        # Récupérer les entretiens acceptés
+        entretiens = db[ENTRETIENS_COLLECTION].find({
+            "candidat_id": ObjectId(candidat_id),
+            "statut": "planifie"
+        })
+
+        result = []
+        for entretien in entretiens:
+            # Récupérer les détails de l'offre
+            offre = db[OFFRES_COLLECTION].find_one({"_id": entretien["offre_id"]})
+            if not offre:
+                continue
+
+            # Récupérer les détails du recruteur
+            recruteur = db[RECRUTEURS_COLLECTION].find_one({"_id": entretien["recruteur_id"]})
+            if not recruteur:
+                continue
+
+            # Récupérer les questions
+            questions = db["questions"].find_one({"_id": entretien["questions_id"]})
+            
+            result.append({
+                "id": str(entretien["_id"]),
+                "offre": {
+                    "id": str(offre["_id"]),
+                    "titre": offre.get("titre", ""),
+                    "entreprise": offre.get("entreprise", ""),
+                    "localisation": offre.get("localisation", "")
+                },
+                "recruteur": {
+                    "id": str(recruteur["_id"]),
+                    "nom": recruteur.get("nom", ""),
+                    "prenom": recruteur.get("prenom", "")
+                },
+                "questions": questions.get("questions", []) if questions else [],
+                "date_creation": entretien.get("date_creation", datetime.now(timezone.utc)).isoformat(),
+                "statut": entretien.get("statut", "planifie")
+            })
+
+        return jsonify({
+            "success": True,
+            "entretiens": result
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des entretiens: {str(e)}")
+        return jsonify({"error": str(e), "code": "SERVER_ERROR"}), 500
+
+@candidates_bp.route("/interviews/<string:interview_id>/start", methods=["POST"])
+@require_auth("candidat")
+def start_interview(interview_id, auth_payload):
+    """Démarrer un entretien."""
+    try:
+        db = current_app.mongo
+        
+        # Vérifier que l'entretien existe
+        entretien = db[ENTRETIENS_COLLECTION].find_one({"_id": ObjectId(interview_id)})
+        if not entretien:
+            return jsonify({"error": "Entretien non trouvé", "code": "INTERVIEW_NOT_FOUND"}), 404
+
+        # Vérifier que l'entretien appartient au candidat
+        if str(entretien["candidat_id"]) != auth_payload["sub"]:
+            return jsonify({"error": "Accès non autorisé", "code": "UNAUTHORIZED"}), 403
+
+        # Vérifier que l'entretien est planifié
+        if entretien["statut"] != "planifie":
+            return jsonify({"error": "L'entretien n'est pas planifié", "code": "INTERVIEW_NOT_PLANNED"}), 400
+
+        # Récupérer les questions
+        questions = db["questions"].find_one({"_id": entretien["questions_id"]})
+        if not questions:
+            return jsonify({"error": "Questions non trouvées", "code": "QUESTIONS_NOT_FOUND"}), 404
+
+        # Mettre à jour le statut de l'entretien
+        db[ENTRETIENS_COLLECTION].update_one(
+            {"_id": ObjectId(interview_id)},
+            {
+                "$set": {
+                    "statut": "en_cours",
+                    "date_debut": datetime.now(timezone.utc),
+                    "date_maj": datetime.now(timezone.utc)
+                }
+            }
+        )
+
+        return jsonify({
+            "success": True,
+            "interview": {
+                "id": str(entretien["_id"]),
+                "questions": questions.get("questions", []),
+                "statut": "en_cours",
+                "date_debut": datetime.now(timezone.utc).isoformat()
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Erreur lors du démarrage de l'entretien: {str(e)}")
+        return jsonify({"error": str(e), "code": "SERVER_ERROR"}), 500
+
 def extract_text_from_pdf(pdf_data):
     """Extrait le texte d'un fichier PDF."""
     try:
@@ -605,3 +717,386 @@ def extract_text_from_pdf(pdf_data):
     except Exception as e:
         logger.error(f"Erreur lors de l'extraction du texte du PDF: {str(e)}")
         return ""
+
+@candidates_bp.route("/entretiens/<string:entretien_id>", methods=["GET"])
+@require_auth("candidat")
+def get_interview_details(entretien_id, auth_payload):
+    try:
+        db = current_app.mongo
+        
+        # Vérifier que l'utilisateur est un candidat
+        current_user_id = auth_payload.get('sub')
+        user = db[UTILISATEURS_COLLECTION].find_one({"_id": ObjectId(current_user_id)})
+        if not user or user.get("role") != "candidat":
+            return jsonify({"error": "Accès non autorisé", "code": "UNAUTHORIZED"}), 403
+
+        # Récupérer l'entretien
+        entretien = db[ENTRETIENS_COLLECTION].find_one({"_id": ObjectId(entretien_id)})
+        if not entretien:
+            return jsonify({"error": "Entretien non trouvé", "code": "INTERVIEW_NOT_FOUND"}), 404
+
+        # Vérifier que l'entretien appartient au candidat
+        if str(entretien.get("candidat_id")) != current_user_id:
+            return jsonify({"error": "Accès non autorisé", "code": "UNAUTHORIZED"}), 403
+
+        # Récupérer les questions associées
+        questions = db["questions"].find_one({"_id": ObjectId(entretien.get("questions_id"))})
+        if not questions:
+            # Si les questions ne sont pas trouvées, essayer de les générer à nouveau
+            candidature = db[CANDIDATURES_COLLECTION].find_one({"_id": ObjectId(entretien.get("candidature_id"))})
+            if not candidature:
+                return jsonify({"error": "Candidature non trouvée", "code": "APPLICATION_NOT_FOUND"}), 404
+
+            offre = db[OFFRES_COLLECTION].find_one({"_id": ObjectId(entretien.get("offre_id"))})
+            if not offre:
+                return jsonify({"error": "Offre non trouvée", "code": "OFFER_NOT_FOUND"}), 404
+
+            # Générer les questions
+            questions = generate_interview_questions(
+                candidature.get("cv_text", ""),
+                offre,
+                str(candidature["_id"]),
+                str(offre["_id"])
+            )
+
+            if questions == ['error']:
+                return jsonify({"error": "Erreur lors de la génération des questions", "code": "QUESTIONS_GENERATION_ERROR"}), 500
+
+            # Stocker les questions dans la base de données
+            questions_doc = {
+                "candidature_id": ObjectId(candidature["_id"]),
+                "offre_id": ObjectId(offre["_id"]),
+                "questions": questions,
+                "date_creation": datetime.now(timezone.utc)
+            }
+            
+            result = db["questions"].insert_one(questions_doc)
+            questions = {"_id": result.inserted_id, "questions": questions}
+
+        # Récupérer les détails de l'offre
+        offre = db[OFFRES_COLLECTION].find_one({"_id": ObjectId(entretien.get("offre_id"))})
+        if not offre:
+            return jsonify({"error": "Offre non trouvée", "code": "OFFER_NOT_FOUND"}), 404
+
+        # Récupérer les détails du recruteur
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"_id": ObjectId(entretien.get("recruteur_id"))})
+        if not recruteur:
+            return jsonify({"error": "Recruteur non trouvé", "code": "RECRUITER_NOT_FOUND"}), 404
+
+        # Formater la réponse
+        response_data = {
+            "entretien": {
+                "_id": str(entretien["_id"]),
+                "statut": entretien.get("statut"),
+                "date_prevue": entretien.get("date_prevue"),
+                "date_creation": entretien.get("date_creation"),
+                "date_maj": entretien.get("date_maj"),
+            },
+            "questions": questions.get("questions", []),
+            "offre": {
+                "titre": offre.get("titre"),
+                "description": offre.get("description"),
+                "entreprise": offre.get("entreprise"),
+                "localisation": offre.get("localisation"),
+            },
+            "recruteur": {
+                "nom": recruteur.get("nom"),
+                "prenom": recruteur.get("prenom"),
+                "email": recruteur.get("email"),
+            }
+        }
+
+        return jsonify({
+            "success": True,
+            "data": response_data
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des détails de l'entretien: {str(e)}")
+        return jsonify({
+            "error": "Erreur lors de la récupération des détails de l'entretien",
+            "code": "INTERVIEW_DETAILS_ERROR"
+        }), 500
+
+@candidates_bp.route("/entretiens/<string:entretien_id>/recordings", methods=["GET"])
+@require_auth("candidat")
+def get_interview_recordings(entretien_id, auth_payload):
+    try:
+        db = current_app.mongo
+        
+        # Vérifier que l'utilisateur est un candidat
+        current_user_id = auth_payload.get('sub')
+        user = db[UTILISATEURS_COLLECTION].find_one({"_id": ObjectId(current_user_id)})
+        if not user or user.get("role") != "candidat":
+            return jsonify({"error": "Accès non autorisé", "code": "UNAUTHORIZED"}), 403
+
+        # Récupérer l'entretien
+        entretien = db[ENTRETIENS_COLLECTION].find_one({"_id": ObjectId(entretien_id)})
+        if not entretien:
+            return jsonify({"error": "Entretien non trouvé", "code": "INTERVIEW_NOT_FOUND"}), 404
+
+        # Vérifier que l'entretien appartient au candidat
+        if str(entretien.get("candidat_id")) != current_user_id:
+            return jsonify({"error": "Accès non autorisé", "code": "UNAUTHORIZED"}), 403
+
+        # Récupérer les enregistrements
+        recordings = list(db["recordings"].find({
+            "entretien_id": ObjectId(entretien_id)
+        }).sort("timestamp", 1))
+
+        # Formater les enregistrements
+        formatted_recordings = []
+        for recording in recordings:
+            formatted_recordings.append({
+                "id": str(recording["_id"]),
+                "question_index": recording.get("question_index"),
+                "transcript": recording.get("transcript"),
+                "video_url": recording.get("video_path"),
+                "timestamp": recording.get("timestamp"),
+                "question": recording.get("question")
+            })
+
+        return jsonify({
+            "success": True,
+            "data": formatted_recordings
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des enregistrements: {str(e)}")
+        return jsonify({
+            "error": "Erreur lors de la récupération des enregistrements",
+            "code": "RECORDINGS_ERROR"
+        }), 500
+
+@candidates_bp.route("/entretiens", methods=["POST"])
+@require_auth("candidat")
+def create_interview(auth_payload):
+    """Créer un nouvel entretien."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Données manquantes"}), 400
+
+        candidature_id = data.get("candidature_id")
+        offre_id = data.get("offre_id")
+        questions_id = data.get("questions_id")
+        statut = data.get("statut", "planifie")
+
+        if not all([candidature_id, offre_id, questions_id]):
+            return jsonify({"error": "Tous les champs sont requis"}), 400
+
+        db = current_app.mongo
+
+        # Vérifier que la candidature existe et appartient au candidat
+        candidature = db[CANDIDATURES_COLLECTION].find_one({
+            "_id": ObjectId(candidature_id),
+            "candidat_id": ObjectId(auth_payload["sub"])
+        })
+        if not candidature:
+            return jsonify({"error": "Candidature non trouvée ou non autorisée"}), 404
+
+        # Vérifier que l'offre existe
+        offre = db[OFFRES_COLLECTION].find_one({"_id": ObjectId(offre_id)})
+        if not offre:
+            return jsonify({"error": "Offre non trouvée"}), 404
+
+        # Vérifier que les questions existent
+        questions = db["questions"].find_one({"_id": ObjectId(questions_id)})
+        if not questions:
+            return jsonify({"error": "Questions non trouvées"}), 404
+
+        # Créer l'entretien
+        entretien = {
+            "candidature_id": ObjectId(candidature_id),
+            "offre_id": ObjectId(offre_id),
+            "candidat_id": ObjectId(auth_payload["sub"]),
+            "recruteur_id": ObjectId(offre["recruteur_id"]),
+            "questions_id": ObjectId(questions_id),
+            "statut": statut,
+            "date_creation": datetime.now(timezone.utc),
+            "date_maj": datetime.now(timezone.utc)
+        }
+
+        result = db[ENTRETIENS_COLLECTION].insert_one(entretien)
+
+        # Mettre à jour la candidature avec l'ID de l'entretien
+        db[CANDIDATURES_COLLECTION].update_one(
+            {"_id": ObjectId(candidature_id)},
+            {"$set": {"entretien_id": result.inserted_id}}
+        )
+
+        return jsonify({
+            "success": True,
+            "entretien_id": str(result.inserted_id),
+            "message": "Entretien créé avec succès"
+        }), 201
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la création de l'entretien: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+def store_video_and_transcribe(video_base64, entretien_id):
+    try:
+        # Vérifier la taille de la vidéo (max 100MB)
+        video_size = len(base64.b64decode(video_base64.split(',')[1]))
+        if video_size > 100 * 1024 * 1024:  # 100MB en bytes
+            raise ValueError("La taille de la vidéo dépasse la limite de 100MB")
+
+        # Créer un dossier temporaire pour les fichiers
+        temp_dir = tempfile.mkdtemp()
+        try:
+            # Décoder la vidéo base64
+            video_data = base64.b64decode(video_base64.split(',')[1])
+            video_path = os.path.join(temp_dir, 'interview.webm')
+            
+            # Sauvegarder la vidéo temporairement
+            with open(video_path, 'wb') as f:
+                f.write(video_data)
+            
+            # Extraire l'audio
+            audio_path = os.path.join(temp_dir, 'audio.wav')
+            video = VideoFileClip(video_path)
+            video.audio.write_audiofile(audio_path)
+            
+            # Transcrire avec Whisper
+            model = whisper.load_model("base")
+            result = model.transcribe(audio_path)
+            transcription = result["text"]
+            
+            # Générer une URL unique pour la vidéo
+            video_url = f"/api/videos/{entretien_id}"
+            
+            # Stocker la vidéo dans MongoDB
+            video_doc = {
+                "entretien_id": ObjectId(entretien_id),
+                "video_data": video_base64,
+                "video_url": video_url,
+                "transcription": transcription,
+                "created_at": datetime.now(timezone.utc)
+            }
+            video_id = current_app.mongo.db.videos.insert_one(video_doc).inserted_id
+            
+            # Mettre à jour l'entretien
+            current_app.mongo.db.entretiens.update_one(
+                {"_id": ObjectId(entretien_id)},
+                {
+                    "$set": {
+                        "video_id": video_id,
+                        "video_url": video_url,
+                        "transcription": transcription,
+                        "status": "termine",
+                        "date_fin": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
+            
+            return video_id, transcription, video_url
+            
+        finally:
+            # Nettoyage des fichiers temporaires
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as e:
+                logger.error(f"Erreur lors du nettoyage des fichiers temporaires: {str(e)}")
+            
+    except ValueError as ve:
+        logger.error(f"Erreur de validation: {str(ve)}")
+        raise
+    except Exception as e:
+        logger.error(f"Erreur lors du traitement de la vidéo: {str(e)}")
+        raise
+
+@candidates_bp.route('/entretiens/<entretien_id>/recordings', methods=['POST'])
+@require_auth("candidat")
+def save_interview_recordings(entretien_id, auth_payload):
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "Données manquantes"}), 400
+
+        # Vérifier que l'entretien existe et appartient au candidat
+        entretien = current_app.mongo.db.entretiens.find_one({
+            "_id": ObjectId(entretien_id),
+            "candidat_id": ObjectId(auth_payload["sub"])
+        })
+        
+        if not entretien:
+            return jsonify({"success": False, "error": "Entretien non trouvé"}), 404
+
+        # Vérifier que la vidéo est présente
+        if not data.get('video'):
+            return jsonify({"success": False, "error": "Vidéo manquante"}), 400
+
+        # Traiter la vidéo et obtenir la transcription
+        try:
+            video_id, transcription, video_url = store_video_and_transcribe(data.get('video'), entretien_id)
+        except ValueError as ve:
+            return jsonify({"success": False, "error": str(ve)}), 400
+        except Exception as e:
+            return jsonify({"success": False, "error": "Erreur lors du traitement de la vidéo"}), 500
+
+        # Sauvegarder les enregistrements
+        recordings = data.get('recordings', [])
+        for recording in recordings:
+            recording_doc = {
+                "entretien_id": ObjectId(entretien_id),
+                "question_index": recording.get('questionIndex'),
+                "question": recording.get('question'),
+                "transcript": recording.get('transcript'),
+                "timestamp": recording.get('timestamp'),
+                "created_at": datetime.now(timezone.utc)
+            }
+            current_app.mongo.db.recordings.insert_one(recording_doc)
+
+        return jsonify({
+            "success": True,
+            "message": "Enregistrements sauvegardés avec succès",
+            "video_id": str(video_id),
+            "video_url": video_url,
+            "transcription": transcription
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la sauvegarde des enregistrements: {str(e)}")
+        return jsonify({"success": False, "error": "Erreur lors de la sauvegarde des enregistrements"}), 500
+
+@candidates_bp.route('/videos/<entretien_id>', methods=['GET'])
+@require_auth(["candidat", "recruteur"])
+def get_interview_video(entretien_id, auth_payload):
+    try:
+        # Vérifier que l'entretien existe
+        entretien = current_app.mongo.db.entretiens.find_one({
+            "_id": ObjectId(entretien_id)
+        })
+        
+        if not entretien:
+            return jsonify({"error": "Entretien non trouvé"}), 404
+
+        # Vérifier les permissions
+        user_id = ObjectId(auth_payload["sub"])
+        user_role = auth_payload.get("role")
+        
+        if user_role == "candidat" and str(entretien.get("candidat_id")) != str(user_id):
+            return jsonify({"error": "Accès non autorisé"}), 403
+        elif user_role == "recruteur" and str(entretien.get("recruteur_id")) != str(user_id):
+            return jsonify({"error": "Accès non autorisé"}), 403
+
+        # Récupérer la vidéo
+        video = current_app.mongo.db.videos.find_one({
+            "entretien_id": ObjectId(entretien_id)
+        })
+        
+        if not video:
+            return jsonify({"error": "Vidéo non trouvée"}), 404
+
+        # Retourner la vidéo en base64
+        return jsonify({
+            "success": True,
+            "video_data": video.get("video_data"),
+            "transcription": video.get("transcription")
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération de la vidéo: {str(e)}")
+        return jsonify({"error": "Erreur lors de la récupération de la vidéo"}), 500

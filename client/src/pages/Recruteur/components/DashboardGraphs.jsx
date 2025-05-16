@@ -609,7 +609,7 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
             ) : (
               <Doughnut data={statusData} options={pieChartOptions} />
             )}
-          </div>
+            </div>
           </div>
 
           {/* Graphique des offres par département */}

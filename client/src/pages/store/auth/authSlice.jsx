@@ -324,7 +324,8 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.token;
         state.isAuthenticated = true;
-        state.role = action.payload.user.role; // Mettre à jour le rôle à partir de l'utilisateur
+        state.role = action.payload.user.role;
+        state.email = action.payload.user.email;
         state.authError = "";
         console.log("Login state updated - Role:", action.payload.user.role);
       })
@@ -382,7 +383,8 @@ const authSlice = createSlice({
           state.user = action.payload.user;
           state.token = action.payload.token;
           state.isAuthenticated = true;
-          state.role = action.payload.user.role; // Mettre à jour le rôle à partir de l'utilisateur
+          state.role = action.payload.user.role;
+          state.email = action.payload.user.email;
           console.log(
             "Auth check state updated - Role:",
             action.payload.user.role

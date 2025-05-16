@@ -186,27 +186,22 @@ const InterviewsSection = () => {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="flex space-x-2">
+                  <div className="flex items-center space-x-2">
                     <button
-                      className="flex items-center text-blue-600 hover:text-blue-800"
-                      title="Voir les détails"
                       onClick={() => dispatch(setSelectedInterview(interview))}
+                      className="text-blue-600 hover:text-blue-800"
                     >
-                      <Eye className="h-5 w-5 mr-1" />
-                      <span className="text-xs">Détails</span>
+                      <Eye className="h-5 w-5" />
                     </button>
-                  {interview.status !== "Terminé" &&
-                    interview.status !== "Annulé" && (
-                      <button
-                        className="flex items-center text-red-600 hover:text-red-800"
-                        title="Annuler l'entretien"
-                        onClick={() =>
-                          console.log("Annuler entretien", interview.id)
-                        }
+                    {interview.status === "Terminé" && interview.video_url && (
+                      <a
+                        href={interview.video_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-green-600 hover:text-green-800"
                       >
-                        <X className="h-5 w-5 mr-1" />
-                        <span className="text-xs">Annuler</span>
-                      </button>
+                        <Video className="h-5 w-5" />
+                      </a>
                     )}
                   </div>
                 </td>
@@ -337,27 +332,15 @@ const InterviewsSection = () => {
                 </div>
               )}
 
-              {selectedInterview.recording_url && (
+              {selectedInterview.video_url && (
                 <div className="mb-6">
-                  <h4 className="font-medium text-md mb-2">Enregistrement</h4>
-                <div className="relative bg-gray-800 rounded-lg overflow-hidden">
-                  <div className="aspect-w-16 aspect-h-9">
-                    <img
-                      src="/api/placeholder/400/300"
-                      alt="Interview recording preview"
+                  <h4 className="font-medium text-md mb-2">Enregistrement vidéo</h4>
+                  <div className="relative bg-gray-800 rounded-lg overflow-hidden">
+                    <video
+                      src={selectedInterview.video_url}
+                      controls
                       className="w-full h-64 object-cover"
                     />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <a
-                          href={selectedInterview.recording_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-3"
-                        >
-                        <Video className="h-6 w-6 text-blue-600" />
-                        </a>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}

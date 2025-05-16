@@ -14,44 +14,47 @@ accepted_offers_bp = Blueprint('accepted_offers', __name__)
 def auth_required(f):
     """Decorator to ensure user is authenticated and is a candidate"""
     def wrapper(*args, **kwargs):
+        # Vérifier la présence du token
         token = request.headers.get("Authorization")
         if not token:
             logger.error("Pas de token dans les headers")
             return jsonify({"error": "Authentification requise"}), 401
-        
+
         try:
-            # Vérifier le token avec jwt_manager
+            # Vérifier le token
             user_id = jwt_manager.verify_token(token)
             if not user_id:
                 logger.error("Token invalide ou expiré")
                 return jsonify({"error": "Token invalide ou expiré"}), 401
-        
-            logger.info(f"Token vérifié, user_id: {user_id}")
-            
-            # Récupérer l'utilisateur depuis la base de données
+
+            # Récupérer l'utilisateur
             db = current_app.mongo
             user = db.utilisateurs.find_one({"_id": ObjectId(user_id)})
+            
+            # Vérifier que l'utilisateur existe
             if not user:
                 logger.error(f"Utilisateur non trouvé pour l'ID: {user_id}")
                 return jsonify({"error": "Utilisateur non trouvé"}), 404
-            
-            logger.info(f"Utilisateur trouvé: {user}")
-            
+
+            # Vérifier le rôle
             if user.get("role") != "candidat":
                 logger.error(f"Rôle invalide: {user.get('role')}")
                 return jsonify({"error": "Accès réservé aux candidats"}), 403
-            
+
+            # Stocker les informations de l'utilisateur
             request.user = {
-            "id": str(user["_id"]),
+                "id": str(user["_id"]),
                 "email": user["email"],
-            "role": user["role"]
-        }
-            logger.info(f"Utilisateur authentifié: {request.user}")
+                "role": user["role"]
+            }
+
+            # Exécuter la fonction décorée
             return f(*args, **kwargs)
+
         except Exception as e:
             logger.error(f"Erreur d'authentification: {str(e)}")
             return jsonify({"error": "Erreur d'authentification"}), 401
-            
+
     wrapper.__name__ = f.__name__
     return wrapper
 
@@ -118,7 +121,6 @@ def get_accepted_offers():
     try:
         user_id = request.user["id"]
         user_email = request.user["email"]
-        logger.info(f"Récupération des candidatures pour l'utilisateur: {user_id} ({user_email})")
         
         db = current_app.mongo
         

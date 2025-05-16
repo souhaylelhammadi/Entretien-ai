@@ -24,6 +24,7 @@ import GestionRoles from "./pages/Admin/GestionRoles";
 import Navbar from "./components/Navbar";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import Interview from "./pages/Interview";
 
 function App() {
   useEffect(() => {
@@ -125,6 +126,14 @@ function App() {
               element={
                 <AuthGuard>
                   <ProfileCandidat />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/interview/:interviewId"
+              element={
+                <AuthGuard>
+                  <Interview />
                 </AuthGuard>
               }
             />

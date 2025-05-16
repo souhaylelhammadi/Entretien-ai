@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import base64
 import json
 import httpx
+from datetime import datetime, timezone
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -280,15 +281,49 @@ def generate_interview():
         cv_text = data.get('cv_text')
         job_offer = data.get('job_offer')
 
-        if not all([candidature_id, offre_id, cv_text, job_offer]):
+        if not all([candidature_id, offre_id]):
             return jsonify({"error": "Tous les champs sont requis"}), 400
 
-        questions = generate_interview_questions(cv_text, job_offer, candidature_id, offre_id)
+        # Récupérer les détails de la candidature
+        candidature = current_app.mongo.db.candidatures.find_one({"_id": ObjectId(candidature_id)})
+        if not candidature:
+            return jsonify({"error": "Candidature non trouvée"}), 404
+
+        # Récupérer les détails de l'offre
+        offre = current_app.mongo.db.offres.find_one({"_id": ObjectId(offre_id)})
+        if not offre:
+            return jsonify({"error": "Offre non trouvée"}), 404
+
+        # Si le CV n'est pas fourni, essayer de le récupérer depuis la candidature
+        if not cv_text and candidature.get("cv_path"):
+            try:
+                with open(candidature["cv_path"], 'rb') as f:
+                    cv_text = extract_text_from_pdf(f.read())
+            except Exception as e:
+                logger.error(f"Erreur lors de l'extraction du texte du CV: {str(e)}")
+                cv_text = ""
+
+        # Générer les questions
+        questions = generate_interview_questions(cv_text, job_offer or offre, candidature_id, offre_id)
         
         if questions == ['error']:
             return jsonify({"error": "Erreur lors de la génération des questions"}), 500
 
-        return jsonify({"questions": questions}), 200
+        # Stocker les questions dans la base de données
+        questions_doc = {
+            "candidature_id": ObjectId(candidature_id),
+            "offre_id": ObjectId(offre_id),
+            "questions": questions,
+            "date_creation": datetime.now(timezone.utc)
+        }
+        
+        result = current_app.mongo.db.questions.insert_one(questions_doc)
+        
+        return jsonify({
+            "success": True,
+            "questions_id": str(result.inserted_id),
+            "questions": questions
+        }), 200
 
     except Exception as e:
         logger.error(f"Erreur lors de la génération de l'entretien: {str(e)}")

@@ -17,6 +17,7 @@ import Mesinterview from "../pages/Mesinterview";
 import Profile from "../layout/Navbar/profile";
 
 
+
 function ProtectedRoute({ children, role }) {
   const { isAuthenticated, user } = useSelector((state) => state.auth);
 
@@ -53,10 +54,9 @@ function Router() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/" element={<Layout />}>
-          
           <Route path="offres" element={<OffresEmploi />} />
           <Route path="offres/:id" element={<DetailsOffreEmploi />} />
-        <Route path="/Interview" element={<Interview />} />
+          <Route path="/interview/:interviewId" element={<Interview />} />
 
           {/* Routes protégées pour les candidats */}
           <Route
@@ -85,6 +85,7 @@ function Router() {
               </ProtectedRoute>
             }
           />
+         
         </Route>
       </Routes>
     </>

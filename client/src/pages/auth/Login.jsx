@@ -18,6 +18,10 @@ const Login = () => {
 
   const [formErrors, setFormErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    email: "",
+    mot_de_passe: "",
+  });
 
   useEffect(() => {
     dispatch(clearForm());
@@ -42,14 +46,14 @@ const Login = () => {
 
   const validateForm = () => {
     const errors = {};
-    if (!token.email.trim()) {
+    if (!formData.email.trim()) {
       errors.email = "L'email est requis";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(token.email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       errors.email = "L'email est invalide";
     }
-    if (!token.mot_de_passe) {
+    if (!formData.mot_de_passe) {
       errors.mot_de_passe = "Le mot de passe est requis";
-    } else if (token.mot_de_passe.length < 8) {
+    } else if (formData.mot_de_passe.length < 8) {
       errors.mot_de_passe =
         "Le mot de passe doit contenir au moins 8 caractères";
     }
@@ -68,8 +72,8 @@ const Login = () => {
     try {
       const result = await dispatch(
         loginUser({
-          email: token.email,
-          mot_de_passe: token.mot_de_passe,
+          email: formData.email,
+          mot_de_passe: formData.mot_de_passe,
         })
       ).unwrap();
 
@@ -82,6 +86,14 @@ const Login = () => {
       console.error("Erreur de connexion:", error);
       toast.error(error || "Erreur lors de la connexion");
     }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   return (
@@ -105,8 +117,8 @@ const Login = () => {
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Email"
-                value={token.email}
-                onChange={(e) => dispatch(setEmail(e.target.value))}
+                value={formData.email}
+                onChange={handleChange}
               />
               {formErrors.email && (
                 <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>
@@ -118,13 +130,13 @@ const Login = () => {
               </label>
               <input
                 id="password"
-                name="password"
+                name="mot_de_passe"
                 type={showPassword ? "text" : "password"}
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Mot de passe"
-                value={token.mot_de_passe}
-                onChange={(e) => dispatch(setMotDePasse(e.target.value))}
+                value={formData.mot_de_passe}
+                onChange={handleChange}
               />
               {formErrors.mot_de_passe && (
                 <p className="text-red-500 text-xs mt-1">

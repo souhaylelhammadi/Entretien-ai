@@ -64,29 +64,154 @@ export const generateInterview = createAsyncThunk(
   "acceptedOffers/generateInterview",
   async (applicationId, { getState, rejectWithValue }) => {
     try {
-      const { auth } = getState();
+      const { auth, acceptedOffers } = getState();
       if (!auth || !auth.token) {
         throw new Error("Vous devez être connecté pour générer un entretien");
       }
 
+      // Extraire l'ID utilisateur du token JWT
       const tokenValue = auth.token.value.replace("Bearer ", "");
+      const tokenPayload = JSON.parse(atob(tokenValue.split(".")[1]));
+      const userId = tokenPayload.sub;
+
+      console.log("ID de candidature recherché:", applicationId);
+      console.log(
+        "Liste des candidatures:",
+        JSON.stringify(acceptedOffers.candidatures, null, 2)
+      );
+      console.log("ID utilisateur du token:", userId);
+
+      // Vérifier si la candidature existe dans la liste des offres acceptées
+      const candidature = acceptedOffers.candidatures.find(
+        (c) => c._id === applicationId
+      );
+
+      if (!candidature) {
+        console.error("Candidature non trouvée dans le state");
+        throw new Error("Cette candidature n'existe pas ou n'est pas acceptée");
+      }
+
+      console.log("Candidature trouvée:", JSON.stringify(candidature, null, 2));
+
+      // Vérifier que nous avons toutes les données nécessaires
+      if (!candidature._id || !candidature.offre_id) {
+        console.error("Données de candidature incomplètes:", candidature);
+        throw new Error("Données de candidature incomplètes");
+      }
+
+      // Mettre à jour le statut de la candidature
+      const updatePayload = {
+        status: "pending_interview",
+        candidature_id: candidature._id,
+        offre_id: candidature.offre_id,
+        candidat_id: userId,
+      };
+
+      console.log("Payload de mise à jour:", updatePayload);
+
+      const applicationResponse = await fetch(
+        `${BASE_URL}/api/accepted-offers/${applicationId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${tokenValue}`,
+          },
+          body: JSON.stringify(updatePayload),
+          credentials: "include",
+          mode: "cors",
+        }
+      );
+
+      if (!applicationResponse.ok) {
+        const errorData = await applicationResponse.json().catch(() => ({}));
+        console.error("Erreur de mise à jour:", {
+          status: applicationResponse.status,
+          statusText: applicationResponse.statusText,
+          errorData,
+          candidature,
+          userId,
+          updatePayload,
+        });
+        throw new Error(
+          `Impossible de mettre à jour le statut de la candidature: ${
+            errorData.error || applicationResponse.statusText
+          }`
+        );
+      }
+
+      const applicationData = await applicationResponse.json();
+      console.log("Réponse de mise à jour:", applicationData);
+
+      if (!applicationData.offer) {
+        throw new Error("Données de candidature invalides");
+      }
+
+      // Générer l'entretien
+      const interviewPayload = {
+        candidature_id: candidature._id,
+        offre_id: candidature.offre_id,
+        cv_text: candidature.cv_text || "",
+        job_offer: candidature.jobDetails || {},
+      };
+
+      console.log("Payload de génération d'entretien:", interviewPayload);
+
       const response = await fetch(`${BASE_URL}/api/interviews/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${tokenValue}`,
         },
-        body: JSON.stringify({ application_id: applicationId }),
+        body: JSON.stringify(interviewPayload),
         credentials: "include",
         mode: "cors",
       });
 
       const data = await response.json();
+      console.log("Réponse de génération d'entretien:", data);
+
       if (!response.ok) {
         throw new Error(data.error || "Échec de la génération de l'entretien");
       }
 
-      return data.interview;
+      // Créer l'enregistrement de l'entretien
+      const interviewRecordPayload = {
+        candidature_id: candidature._id,
+        offre_id: candidature.offre_id,
+        questions_id: data.questions_id,
+        statut: "planifie",
+      };
+
+      console.log("Payload de création d'entretien:", interviewRecordPayload);
+
+      const interviewResponse = await fetch(
+        `${BASE_URL}/api/candidates/entretiens`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${tokenValue}`,
+          },
+          body: JSON.stringify(interviewRecordPayload),
+          credentials: "include",
+          mode: "cors",
+        }
+      );
+
+      const interviewData = await interviewResponse.json();
+      console.log("Réponse de création d'entretien:", interviewData);
+
+      if (!interviewResponse.ok) {
+        throw new Error(
+          interviewData.error || "Échec de la création de l'entretien"
+        );
+      }
+
+      return {
+        entretien_id: interviewData.entretien_id,
+        candidature_id: candidature._id,
+      };
     } catch (error) {
       console.error("generateInterview error:", error.message);
       return rejectWithValue(error.message);
@@ -101,7 +226,9 @@ export const updateOfferStatus = createAsyncThunk(
     try {
       const { auth } = getState();
       if (!auth || !auth.token) {
-        throw new Error("Vous devez être connecté pour mettre à jour le statut");
+        throw new Error(
+          "Vous devez être connecté pour mettre à jour le statut"
+        );
       }
 
       const tokenValue = auth.token.value.replace("Bearer ", "");
@@ -176,6 +303,7 @@ const acceptedOffersSlice = createSlice({
           (c) => c._id === action.payload.candidature_id
         );
         if (index !== -1) {
+          state.candidatures[index].entretien_id = action.payload.entretien_id;
           state.candidatures[index].statut = "pending_interview";
         }
       })
