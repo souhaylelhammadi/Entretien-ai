@@ -4,6 +4,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 import datetime
 import logging
 from bson.objectid import ObjectId
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -363,3 +364,64 @@ def logout():
     except Exception as e:
         logger.error(f"Erreur dans /logout: {str(e)}")
         return jsonify({'message': f'Erreur serveur: {str(e)}'}), 500
+
+# Route pour vérifier la validité du token
+@auth_bp.route('/verify-token', methods=['GET'])
+def verify_token():
+    try:
+        # Récupérer le token du header Authorization
+        token = request.headers.get('Authorization')
+        if not token:
+            logger.error("Token manquant")
+            return jsonify({
+                'success': False,
+                'message': 'Token manquant'
+            }), 401
+
+        # Vérifier le token
+        try:
+            user_id = get_jwt_manager().verify_token(token)
+            if not user_id:
+                logger.error("Token invalide")
+                return jsonify({
+                    'success': False,
+                    'message': 'Token invalide'
+                }), 401
+
+            # Récupérer les informations de l'utilisateur
+            db = current_app.mongo
+            user = db[USERS_COLLECTION].find_one({'_id': ObjectId(user_id)})
+            
+            if not user:
+                logger.error(f"Utilisateur non trouvé: {user_id}")
+                return jsonify({
+                    'success': False,
+                    'message': 'Utilisateur non trouvé'
+                }), 404
+
+            # Retourner les informations de l'utilisateur
+            return jsonify({
+                'success': True,
+                'user': {
+                    '_id': str(user['_id']),
+                    'nom': user['nom'],
+                    'email': user['email'],
+                    'telephone': user['telephone'],
+                    'role': user['role'],
+                    'nomEntreprise': user.get('nomEntreprise')
+                }
+            }), 200
+
+        except Exception as e:
+            logger.error(f"Erreur de vérification du token: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+    except Exception as e:
+        logger.error(f"Erreur dans verify-token: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur serveur'
+        }), 500

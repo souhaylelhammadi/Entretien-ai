@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import {
   fetchInitialData,
-  fetchGraphData,
+  fetchGraphData, 
   fetchOffres,
   fetchProfile,
   fetchCandidates,
@@ -34,7 +34,7 @@ import { useNavigate } from "react-router-dom";
 import ProfileSection from "./components/ProfileSection";
 import JobsSection from "./components/JobsSection";
 import CandidatesSection from "./components/CandidatesSection";
-import InterviewsSection from "./components/InterviewsSection";
+import InterviewsSection from "./components/ent1";
 import { Bar, Line, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -248,7 +248,7 @@ const RecruiterDashboard = () => {
           const result = await dispatch(
             fetchCandidates({ page: 1, per_page: 10 })
           ).unwrap();
-          console.log("Données candidats reçues:", result);
+          console.log("Candidates data loaded:", result);
           hasLoadedRef.current.candidates = true;
         } else if (tab === "overview" && !hasLoadedRef.current.overview) {
           const result = await dispatch(
@@ -455,7 +455,7 @@ const RecruiterDashboard = () => {
                 sx={{ mr: 2 }}
                 onClick={() => navigate("/notifications")}
               >
-                <Bell />
+                  <Bell />
               </Button>
               <Button
                 variant="text"

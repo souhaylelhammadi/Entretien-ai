@@ -2,13 +2,13 @@ import axios from "axios";
 import { API_URL } from "../config";
 
 const TOKEN_KEY = "auth_token";
-const USER_DATA_KEY = "user_data";
+const USER_KEY = "user_data";
 const TOKEN_TIMESTAMP_KEY = "token_timestamp";
 
 class AuthService {
   constructor() {
     this.token = localStorage.getItem(TOKEN_KEY);
-    this.userData = JSON.parse(localStorage.getItem(USER_DATA_KEY) || "null");
+    this.userData = JSON.parse(localStorage.getItem(USER_KEY) || "null");
     this.tokenTimestamp = localStorage.getItem(TOKEN_TIMESTAMP_KEY);
 
     // Initialiser les intercepteurs
@@ -32,7 +32,7 @@ class AuthService {
     if (!userData) return;
 
     this.userData = userData;
-    localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+    localStorage.setItem(USER_KEY, JSON.stringify(userData));
   }
 
   getToken() {
@@ -55,7 +55,7 @@ class AuthService {
       }
 
       // Vérifier si les données utilisateur sont présentes
-      const storedUserData = localStorage.getItem(USER_DATA_KEY);
+      const storedUserData = localStorage.getItem(USER_KEY);
       if (!storedUserData) {
         this.logout();
         return false;
@@ -135,7 +135,7 @@ class AuthService {
     this.userData = null;
     this.tokenTimestamp = null;
     localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_DATA_KEY);
+    localStorage.removeItem(USER_KEY);
     localStorage.removeItem(TOKEN_TIMESTAMP_KEY);
   }
 

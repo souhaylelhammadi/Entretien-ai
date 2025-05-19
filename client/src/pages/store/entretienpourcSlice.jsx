@@ -69,30 +69,84 @@ export const saveInterviewToDatabase = createAsyncThunk(
   "interview/saveInterviewToDatabase",
   async ({ interviewId, recordedBlob, recordings }, { rejectWithValue }) => {
     try {
-      const formData = new FormData();
-      formData.append("video", recordedBlob, `interview_${interviewId}.webm`);
-      formData.append("recordings", JSON.stringify(recordings));
+      // Convertir le blob en base64
+      const reader = new FileReader();
+      reader.readAsDataURL(recordedBlob);
 
-      const response = await fetch(
+      const base64Video = await new Promise((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+      });
+
+      // Préparer les données à envoyer
+      const data = {
+        video: base64Video,
+        recordings: recordings.map((recording) => ({
+          questionIndex: recording.questionIndex,
+          question: recording.question,
+          transcript: recording.transcript || "",
+          timestamp: recording.timestamp || new Date().toISOString(),
+        })),
+        completedAt: new Date().toISOString(),
+      };
+
+      console.log("Données à envoyer:", {
+        videoSize: recordedBlob.size,
+        recordingsCount: recordings.length,
+        interviewId: interviewId,
+      });
+
+      // Envoyer les données au serveur
+      const response = await axios.post(
         `${BASE_URL}/api/candidates/entretiens/${interviewId}/recordings`,
+        data,
         {
-          method: "POST",
-          body: formData,
-          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            console.log(`Progression de l'upload: ${percentCompleted}%`);
+          },
         }
       );
 
-      const data = await response.json();
+      console.log("Réponse du serveur:", response.data);
 
-      if (!response.ok) {
+      if (response.data.success) {
+        return {
+          success: true,
+          data: response.data.data,
+        };
+      } else {
         throw new Error(
-          data.message || "Erreur lors de la sauvegarde de l'entretien"
+          response.data.error || "Erreur lors de la sauvegarde de l'entretien"
         );
       }
-
-      return { success: true, data };
     } catch (error) {
-      return rejectWithValue(error.message);
+      console.error("Erreur lors de la sauvegarde:", error);
+      if (error.response) {
+        console.error("Détails de l'erreur:", {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers,
+          config: {
+            url: error.config.url,
+            method: error.config.method,
+            headers: error.config.headers,
+          },
+        });
+      }
+      return rejectWithValue(
+        error.response?.data?.error ||
+          error.message ||
+          "Erreur lors de la sauvegarde de l'entretien"
+      );
     }
   }
 );
@@ -150,7 +204,8 @@ const interviewSlice = createSlice({
       state.recordedBlob = action.payload;
     },
     goToNextQuestion: (state) => {
-      if (state.currentQuestionIndex < state.questions.length - 1) {
+      const questionsLength = state.questions?.length || 0;
+      if (state.currentQuestionIndex < questionsLength - 1) {
         state.currentQuestionIndex += 1;
       }
     },
@@ -161,7 +216,8 @@ const interviewSlice = createSlice({
     },
     goToQuestion: (state, action) => {
       const index = action.payload;
-      if (index >= 0 && index < state.questions.length) {
+      const questionsLength = state.questions?.length || 0;
+      if (index >= 0 && index < questionsLength) {
         state.currentQuestionIndex = index;
       }
     },
@@ -172,17 +228,23 @@ const interviewSlice = createSlice({
       .addCase(fetchInterviewDetails.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.questions = [];
+        state.currentQuestionIndex = 0;
       })
       .addCase(fetchInterviewDetails.fulfilled, (state, action) => {
         state.loading = false;
         state.interviewDetails = action.payload;
-        state.questions = action.payload.questions || [];
+        state.questions = Array.isArray(action.payload?.questions)
+          ? action.payload.questions
+          : [];
         state.currentQuestionIndex = 0;
       })
       .addCase(fetchInterviewDetails.rejected, (state, action) => {
         state.loading = false;
         state.error =
           action.payload || "Erreur lors du chargement de l'entretien";
+        state.questions = [];
+        state.currentQuestionIndex = 0;
       })
       // Gestion de fetchRecordings
       .addCase(fetchRecordings.pending, (state) => {
@@ -200,12 +262,20 @@ const interviewSlice = createSlice({
       // Gestion de saveInterviewToDatabase
       .addCase(saveInterviewToDatabase.pending, (state) => {
         state.savingInterview = true;
+        state.error = null;
       })
       .addCase(saveInterviewToDatabase.fulfilled, (state, action) => {
         state.savingInterview = false;
         state.interviewCompleted = true;
         state.status = "succeeded";
         state.error = null;
+        // Mettre à jour les statuts
+        if (action.payload.data) {
+          state.interviewDetails = {
+            ...state.interviewDetails,
+            statut: action.payload.data.statut,
+          };
+        }
       })
       .addCase(saveInterviewToDatabase.rejected, (state, action) => {
         state.savingInterview = false;

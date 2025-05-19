@@ -7,8 +7,9 @@ from routes.recruteurv1.candidates import candidates_bp
 from routes.recruteurv1.profile import profile_bp
 from routes.recruteurv1.dashboard_recruteur import Dashboard_recruteur_bp
 from routes.recruteurv1 import recruteurv1_bp
-from routes.recruteurv1.entretiens import entretiens_bp
-from routes.recruteurv1.postuler import candidatures_bp
+from routes.postuler import candidatures_bp
+from routes.entretiens import entretiens_bp
+from routes.interviews_pour_candidates import interviews_bp
 from pymongo import MongoClient
 import logging
 from datetime import datetime, timezone
@@ -112,12 +113,12 @@ def create_app():
     app.register_blueprint(Dashboard_recruteur_bp, url_prefix='/api/recruteur')
     app.register_blueprint(recruteurv1_bp, url_prefix='/api/recruteur')
     app.register_blueprint(candidates_bp, url_prefix='/api/candidates')
-    app.register_blueprint(entretiens_bp, url_prefix='/api/recruteur')
-        
+    app.register_blueprint(entretiens_bp, url_prefix='/api/recruteur/entretiens')
+
     # Log des routes enregistrées
     logger.info("Routes enregistrées:")
-    #for rule in app.url_map.iter_rules():
-            #logger.info(f"Route: {rule.endpoint} - {rule.methods} - {rule}")
+    for rule in app.url_map.iter_rules():
+        logger.info(f"Route: {rule.endpoint} - {rule.methods} - {rule}")
     return app
 
 if __name__ == "__main__":

@@ -1,28 +1,31 @@
+// Import des reducers
 import { configureStore } from "@reduxjs/toolkit";
 import authReducer from "./auth/authSlice";
 import offresEmploiReducer from "./offresEmploiSlice";
-import interviewReducer from "./interviewsSlice";
+import interviewReducer from "./entretienpourcSlice";
 import acceptedOffersReducer from "./acceptedOffersSlice";
 import dashboardReducer from "./recruteur/dashboardSlice";
-import candidates from "./candidatesSlice";
-import interviewsReducer from "./recruteur/interviewsSlice";
+import candidatesReducer from "./candidatesSlice";
 import profileReducer from "./recruteur/profileSlice";
 import addjobsReducer from "./recruteur/addjobsSlice";
 import jobsReducer from "./recruteur/jobsSlice";
+import entretiensReducer from "./recruteur/ent1";
 
+// Configuration du root reducer
 const rootReducer = {
   auth: authReducer,
   offresEmploi: offresEmploiReducer,
   interview: interviewReducer,
   acceptedOffers: acceptedOffersReducer,
   dashboard: dashboardReducer,
-  candidates: candidates,
-  interviews: interviewsReducer,
+  candidates: candidatesReducer,
   profile: profileReducer,
   addjob: addjobsReducer,
   jobs: jobsReducer,
+  entretiens: entretiensReducer,
 };
 
+// Configuration du store
 export const store = configureStore({
   reducer: rootReducer,
   middleware: (getDefaultMiddleware) =>
@@ -33,7 +36,7 @@ export const store = configureStore({
           "offresEmploi.cv",
           "offresEmploi.lettreMotivation",
           "interview.localStream",
-          "interview.recordedBlob"
+          "interview.recordedBlob",
         ],
       },
     }),

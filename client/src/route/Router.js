@@ -8,7 +8,7 @@ import Login from "../pages/auth/Login";
 import Register from "../pages/auth/Register";
 import Home from "../pages/Home";
 import Layout from "../layout/Layout";
-import Interview from "../pages/Interview";
+import Interview from "../pages/entretienpourc";
 import OffresEmploi from "../pages/OffresEmploi";
 import DetailsOffreEmploi from "../pages/components/DetailsOffreEmploi";
 import { Navigate } from "react-router-dom";

@@ -47,39 +47,11 @@ def accept_candidate(candidature_id):
             print(f"{i}. {question}")
         print("=========================================\n")
 
-        # Création du document questions
-        questions_doc = {
-            "candidature_id": ObjectId(candidature_id),
-            "offre_id": ObjectId(candidature["offre_id"]),
-            "questions": questions,
-            "date_creation": datetime.utcnow(),
-            "statut": "actif"
-        }
-
-        # Insertion des questions dans la base de données
-        questions_result = QUESTIONS_COLLECTION.insert_one(questions_doc)
-
-        # Mise à jour de la candidature
-        update_result = CANDIDATURES_COLLECTION.update_one(
-            {"_id": ObjectId(candidature_id)},
-            {
-                "$set": {
-                    "statut": "Accepté",
-                    "date_modification": datetime.utcnow(),
-                    "questions_id": questions_result.inserted_id
-                }
-            }
-        )
-
-        if update_result.modified_count == 0:
-            return jsonify({"error": "Erreur lors de la mise à jour de la candidature"}), 500
-
         return jsonify({
             "success": True,
-            "message": "Candidature acceptée et questions générées avec succès",
-            "questions_id": str(questions_result.inserted_id)
+            "questions": questions
         }), 200
 
     except Exception as e:
-        logger.error(f"Erreur lors de l'acceptation de la candidature: {str(e)}")
+        logger.error(f"Erreur lors de l'acceptation du candidat: {str(e)}")
         return jsonify({"error": str(e)}), 500 

@@ -742,11 +742,11 @@ const CandidatesSection = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="mt-2 p-4 bg-gray-50 rounded-lg">
-                    <pre className="whitespace-pre-wrap text-sm text-gray-700">
+                    <div className="mt-2 p-4 bg-gray-50 rounded-lg">
+                      <pre className="whitespace-pre-wrap text-sm text-gray-700">
                       {selectedLettreMotivation.lettre_motivation}
-                    </pre>
-                  </div>
+                      </pre>
+                    </div>
                 </div>
               )}
             </div>

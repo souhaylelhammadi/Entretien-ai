@@ -5,6 +5,8 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { setUser } from "./store/authSlice";
 import { authService } from "./services/authService";
 import AuthGuard from "./components/AuthGuard";
 import Login from "./pages/Login";
@@ -25,12 +27,24 @@ import Navbar from "./components/Navbar";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Interview from "./pages/Interview";
+import PrivateRoute from "./components/PrivateRoute";
+import Dashboard from "./pages/dashboard";
+import MesInterviews from "./pages/mesinterview";
 
 function App() {
+  const dispatch = useDispatch();
+
   useEffect(() => {
     // Initialiser les intercepteurs axios
     authService.setupAxiosInterceptors();
   }, []);
+
+  useEffect(() => {
+    if (authService.isAuthenticated()) {
+      const userData = authService.getUser();
+      dispatch(setUser(userData));
+    }
+  }, [dispatch]);
 
   return (
     <Router>
@@ -164,20 +178,38 @@ function App() {
               }
             />
 
-            {/* Redirection par défaut */}
+            {/* Routes protégées */}
             <Route
               path="/dashboard"
               element={
+                <PrivateRoute>
+                  <Dashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/entretien/:interviewId"
+              element={
+                <PrivateRoute>
+                  <Interview />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/mesinterview"
+              element={
+                <PrivateRoute>
+                  <MesInterviews />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Redirection par défaut */}
+            <Route
+              path="/"
+              element={
                 <Navigate
-                  to={
-                    authService.isTokenValid()
-                      ? authService.getUserData()?.role === "admin"
-                        ? "/admin/dashboard"
-                        : authService.getUserData()?.role === "recruteur"
-                        ? "/recruteur/dashboard"
-                        : "/candidat/dashboard"
-                      : "/login"
-                  }
+                  to={authService.isAuthenticated() ? "/dashboard" : "/login"}
                   replace
                 />
               }

@@ -210,8 +210,9 @@ const MesInterview = () => {
                           className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
                             candidature.statut === "Accepté"
                               ? "bg-blue-600 hover:bg-blue-700"
-                              : candidature.statut === "En cours"
-                              ? "bg-green-600 hover:bg-green-700"
+                              
+                              : candidature.statut === "Terminé"
+                              ? "bg-gray-400 cursor-not-allowed"
                               : "bg-gray-400 cursor-not-allowed"
                           }`}
                         >

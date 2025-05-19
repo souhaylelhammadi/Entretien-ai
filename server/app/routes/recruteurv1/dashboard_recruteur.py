@@ -530,10 +530,10 @@ def get_recruiter_candidates(auth_payload):
             try:
                 # Récupérer les informations de l'offre
                 offre = next((o for o in offres if o["_id"] == candidature["offre_id"]), None)
-                
+            
                 # Récupérer les informations du candidat
                 candidat = db[USERS_COLLECTION].find_one({"email": candidature.get("user_email")})
-                
+            
                 if candidat:
                     candidates.append({
                     "id": str(candidature["_id"]),
