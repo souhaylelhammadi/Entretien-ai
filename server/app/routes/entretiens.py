@@ -132,7 +132,7 @@ def get_entretien(entretien_id):
         if not entretien:
             logger.error(f"Entretien {entretien_id} non trouvé dans la base de données")
             return jsonify({"error": "Entretien non trouvé", "code": "INTERVIEW_NOT_FOUND"}), 404
-            
+
         # Then check if it belongs to the candidate
         if str(entretien.get('candidat_id')) != user.get('id'):
             logger.error(f"Entretien {entretien_id} appartient à {entretien.get('candidat_id')} mais le candidat est {user.get('id')}")

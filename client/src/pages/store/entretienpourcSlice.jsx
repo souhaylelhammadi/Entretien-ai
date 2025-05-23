@@ -19,14 +19,14 @@ const getValidToken = () => {
   return cleanToken;
 };
 
-// Action pour récupérer les détails de l'entretien
+// Action to fetch interview details
 export const fetchInterviewDetails = createAsyncThunk(
   "interview/fetchDetails",
   async (interviewId, { rejectWithValue }) => {
     try {
-      console.log("Début du chargement de l'entretien:", interviewId);
+      console.log("Starting to fetch interview:", interviewId);
       const token = getValidToken();
-      console.log("Token utilisé:", token);
+      console.log("Token used:", token);
 
       const response = await axios.get(
         `${BASE_URL}/api/candidates/entretiens/${interviewId}`,
@@ -37,17 +37,16 @@ export const fetchInterviewDetails = createAsyncThunk(
         }
       );
 
-      console.log("Réponse du serveur:", response.status);
-      console.log("Données de l'entretien:", response.data);
+      console.log("Server response:", response.status, response.data);
 
       if (response.data.success) {
         return response.data.data;
       } else {
-        return rejectWithValue(response.data.error || "Erreur inconnue");
+        return rejectWithValue(response.data.error || "Unknown error");
       }
     } catch (error) {
-      console.error("Erreur lors du chargement:", error);
-      console.error("Détails de l'erreur:", {
+      console.error("Error fetching interview details:", error);
+      console.error("Error details:", {
         status: error.response?.status,
         data: error.response?.data,
         headers: error.response?.headers,
@@ -55,26 +54,25 @@ export const fetchInterviewDetails = createAsyncThunk(
 
       if (error.response?.status === 404) {
         return rejectWithValue(
-          "Cet entretien n'existe pas ou n'est pas accessible."
+          "This interview does not exist or is not accessible."
         );
       }
       if (error.response?.status === 403) {
-        return rejectWithValue("Accès à cet entretien interdit.");
+        return rejectWithValue("Access to this interview is forbidden.");
       }
       if (error.response?.status === 401) {
         console.error("401 Unauthorized: Invalid or unauthorized token");
         localStorage.removeItem("token");
-        return rejectWithValue("Session expirée. Veuillez vous reconnecter.");
+        return rejectWithValue("Session expired. Please log in again.");
       }
       return rejectWithValue(
-        error.response?.data?.error ||
-          "Erreur lors de la récupération des détails de l'entretien"
+        error.response?.data?.error || "Error fetching interview details"
       );
     }
   }
 );
 
-// Action pour récupérer les enregistrements
+// Action to fetch recordings
 export const fetchRecordings = createAsyncThunk(
   "interview/fetchRecordings",
   async (interviewId, { rejectWithValue }) => {
@@ -91,44 +89,40 @@ export const fetchRecordings = createAsyncThunk(
         }
       );
 
-      console.log("Recordings response:", response.status);
-      console.log("Recordings data:", response.data);
+      console.log("Recordings response:", response.status, response.data);
 
       if (response.data.success) {
         return response.data.recordings || [];
       } else {
-        return rejectWithValue(response.data.error || "Erreur inconnue");
+        return rejectWithValue(response.data.error || "Unknown error");
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des enregistrements:", error);
-      console.error("Détails de l'erreur:", {
+      console.error("Error fetching recordings:", error);
+      console.error("Error details:", {
         status: error.response?.status,
         data: error.response?.data,
         headers: error.response?.headers,
       });
 
       if (error.response?.status === 404) {
-        return rejectWithValue(
-          "Enregistrements non trouvés pour cet entretien."
-        );
+        return rejectWithValue("Recordings not found for this interview.");
       }
       if (error.response?.status === 403) {
-        return rejectWithValue("Accès aux enregistrements interdit.");
+        return rejectWithValue("Access to recordings is forbidden.");
       }
       if (error.response?.status === 401) {
         console.error("401 Unauthorized: Invalid or unauthorized token");
         localStorage.removeItem("token");
-        return rejectWithValue("Session expirée. Veuillez vous reconnecter.");
+        return rejectWithValue("Session expired. Please log in again.");
       }
       return rejectWithValue(
-        error.response?.data?.error ||
-          "Erreur lors de la récupération des enregistrements"
+        error.response?.data?.error || "Error fetching recordings"
       );
     }
   }
 );
 
-// Action pour sauvegarder l'entretien
+// Action to save interview
 export const saveInterviewToDatabase = createAsyncThunk(
   "interview/saveInterviewToDatabase",
   async ({ interviewId, formData }, { rejectWithValue }) => {
@@ -146,22 +140,28 @@ export const saveInterviewToDatabase = createAsyncThunk(
         }
       );
 
+      console.log("Save interview response:", response.data);
       return response.data;
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error);
+      console.error("Error saving interview:", error);
+      console.error("Error details:", {
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+
       if (error.response?.status === 404) {
-        return rejectWithValue("Entretien non trouvé pour la sauvegarde.");
+        return rejectWithValue("Interview not found for saving.");
       }
       if (error.response?.status === 403) {
-        return rejectWithValue("Sauvegarde interdite pour cet entretien.");
+        return rejectWithValue("Saving this interview is forbidden.");
       }
       if (error.response?.status === 401) {
         console.error("401 Unauthorized: Invalid or unauthorized token");
         localStorage.removeItem("token");
-        return rejectWithValue("Session expirée. Veuillez vous reconnecter.");
+        return rejectWithValue("Session expired. Please log in again.");
       }
       return rejectWithValue(
-        error.response?.data?.error || "Erreur lors de la sauvegarde"
+        error.response?.data?.error || "Error saving interview"
       );
     }
   }
@@ -222,7 +222,7 @@ const interviewSlice = createSlice({
       state.recordedBlob = {
         size: action.payload.size,
         type: action.payload.type,
-        timestamp: new Date().toISOString(),
+        timestamp: action.payload.timestamp,
       };
     },
     goToNextQuestion: (state) => {
@@ -262,8 +262,7 @@ const interviewSlice = createSlice({
       })
       .addCase(fetchInterviewDetails.rejected, (state, action) => {
         state.loading = false;
-        state.error =
-          action.payload || "Erreur lors du chargement de l'entretien";
+        state.error = action.payload || "Error fetching interview details";
         state.questions = [];
         state.currentQuestionIndex = 0;
       })
@@ -276,8 +275,7 @@ const interviewSlice = createSlice({
       })
       .addCase(fetchRecordings.rejected, (state, action) => {
         state.loadingRecordings = false;
-        state.error =
-          action.payload || "Erreur lors du chargement des enregistrements";
+        state.error = action.payload || "Error fetching recordings";
       })
       .addCase(saveInterviewToDatabase.pending, (state) => {
         state.savingInterview = true;

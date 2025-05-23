@@ -10,7 +10,7 @@ const TECHNICAL_QUESTIONS = [
   "What strategies would you use for data management across microservices?",
 ];
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = "https://localhost:5000";
 
 const Interview = () => {
   const localRef = useRef(null);
@@ -537,9 +537,7 @@ const Interview = () => {
             </button>
           )}
           <div className="flex-grow text-center">
-            <h2 className="text-3xl font-bold text-blue-600">
-              Technical Interview Simulation
-            </h2>
+            
             <div className="text-blue-500 mt-2">
               Question {state.currentQuestionIndex + 1} of{" "}
               {TECHNICAL_QUESTIONS.length} ({formatTime(state.callTime)}{" "}

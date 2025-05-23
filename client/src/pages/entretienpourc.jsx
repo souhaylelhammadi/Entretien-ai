@@ -1,97 +1,141 @@
-import React, { useRef, useEffect, useCallback, useState } from "react";
-import { Mic, MicOff, Volume2, Loader2, CheckCircle2 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
+import React, {
+  useRef,
+  useEffect,
+  useCallback,
+  useState,
+  useMemo,
+} from "react";
 import {
-  setState,
-  incrementCallTime,
-  toggleMute,
-  hangUp,
-  startRecording,
-  stopRecording,
-  setRecordedBlob,
-  goToNextQuestion,
-  goToPreviousQuestion,
-  goToQuestion,
-  saveInterviewToDatabase,
-  fetchRecordings,
-  fetchInterviewDetails,
-} from "./store/entretienpourcSlice";
-import { toast } from "react-toastify";
-import { Button, Card, Progress, Modal } from "antd";
-import { BASE_URL } from "../config";
+  Mic,
+  MicOff,
+  Volume2,
+  Loader2,
+  CheckCircle2,
+  PhoneOff,
+  Camera,
+  CameraOff,
+} from "lucide-react";
 
-// Composants d'interface
+// Mock Redux hooks pour la démonstration
+const useSelector = (selector) => {
+  return {
+    webcamActive: false,
+    currentQuestionIndex: 0,
+    cameraError: false,
+    transcript: {},
+    isRecording: false,
+    isSpeaking: false,
+    showModal: false,
+    errorMessage: "",
+    interviewStarted: false,
+    loading: false,
+    error: null,
+    interviewDetails: { id: "1", title: "Entretien technique React" },
+  };
+};
+
+// Définition des questions en dehors du mock
+const mockQuestions = [
+  { id: 1, text: "Parlez-moi de votre expérience en développement React." },
+  {
+    id: 2,
+    text: "Comment gérez-vous l'état dans une application React complexe ?",
+  },
+  {
+    id: 3,
+    text: "Expliquez la différence entre useEffect et useLayoutEffect.",
+  },
+  {
+    id: 4,
+    text: "Comment optimisez-vous les performances d'une application React ?",
+  },
+  {
+    id: 5,
+    text: "Décrivez votre approche pour tester les composants React.",
+  },
+];
+
+const useDispatch = () => (action) => console.log("Dispatch:", action);
+const useNavigate = () => (path) => console.log("Navigate to:", path);
+const useParams = () => ({ interviewId: "1" });
+
+// Mock toast
+const toast = {
+  error: (msg) => console.error("Toast Error:", msg),
+  success: (msg) => console.log("Toast Success:", msg),
+  info: (msg) => console.log("Toast Info:", msg),
+};
+
+// Interface Components
 const StatusIndicator = ({ isActive }) => (
-  <div className="flex items-center space-x-2 bg-blue-700/30 px-4 py-2 rounded-full">
+  <div className="flex items-center space-x-2 bg-blue-700/30 px-4 py-2 rounded-full w-full md:w-auto justify-center md:justify-start">
     <span
       className={`w-2 h-2 ${
         isActive ? "bg-green-400 animate-pulse" : "bg-gray-400"
       } rounded-full`}
-    ></span>
-    <span className="text-sm text-white">En cours</span>
+    />
+    <span className="text-sm text-white">
+      {isActive ? "En cours" : "Hors ligne"}
+    </span>
   </div>
 );
 
-const ProgressBar = ({ current, total, time }) => {
-  const timePercentage = Math.min((time / 1800) * 100, 100);
-
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}:${secs < 10 ? "0" : ""}${secs}`;
-  };
-
+const ProgressBar = ({ current, total }) => {
   return (
-    <div className="mt-6">
+    <div className="mt-4">
       <div className="flex justify-between text-sm mb-1 text-white">
         <span className="font-medium">
           Question {current + 1}/{total || 0}
         </span>
-        <span className="font-medium">Temps écoulé: {formatTime(time)}</span>
       </div>
-      <div className="relative h-2.5 bg-blue-300/30 rounded-full overflow-hidden">
+      <div className="relative h-2 bg-blue-300/30 rounded-full overflow-hidden">
         <div
-          style={{ width: `${timePercentage}%` }}
+          style={{ width: `${((current + 1) / total) * 100}%` }}
           className="absolute top-0 left-0 h-full bg-white transition-all duration-300 rounded-full"
-        ></div>
-      </div>
-      <div className="flex justify-between text-xs mt-1 text-blue-200">
-        <span>0:00</span>
-        <span>{formatTime(1800)}</span>
+        />
       </div>
     </div>
   );
 };
 
-const VideoPlayer = ({ localRef, isActive, isRecording, cameraError }) => {
-  if (!isActive) {
+const VideoPlayer = ({
+  localRef,
+  isActive,
+  isRecording,
+  cameraError,
+  onEndCall,
+  onToggleCamera,
+}) => {
+  useEffect(() => {
+    // Vérifier si la vidéo est bien attachée
+    if (localRef.current && localRef.current.srcObject) {
+      console.log("Vidéo source object:", localRef.current.srcObject);
+    }
+  }, [localRef]);
+
+  if (cameraError) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-        <div className="bg-gray-200/30 p-4 rounded-full mb-4">
-          <MicOff className="w-8 h-8 text-gray-400" />
-        </div>
-        <h3 className="text-lg font-medium text-gray-500 mb-1">
-          Prêt à commencer
-        </h3>
-        <p className="text-gray-400 text-sm">
-          Cliquez sur "Commencer l'entretien" pour démarrer
+      <div className="w-full h-full flex flex-col items-center justify-center text-white bg-gray-800">
+        <CameraOff className="w-16 h-16 mb-4 text-red-400" />
+        <p className="text-lg mb-2">Accès à la caméra refusé</p>
+        <p className="text-sm text-gray-300 text-center px-4">
+          Veuillez autoriser l'accès à la caméra et rafraîchir la page
         </p>
       </div>
     );
   }
 
-  if (cameraError) {
+  if (!isActive) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-white p-6 text-center">
-        <div className="bg-red-100/20 p-4 rounded-full mb-4">
-          <MicOff className="w-8 h-8" />
-        </div>
-        <h3 className="text-xl font-medium mb-2">Accès à la caméra refusé</h3>
-        <p className="text-gray-300 text-sm max-w-xs">
-          Veuillez autoriser l'accès à la caméra et au microphone dans les
-          paramètres de votre navigateur
-        </p>
+      <div className="w-full h-full flex flex-col items-center justify-center text-white bg-gray-800">
+        <Camera className="w-16 h-16 mb-4 text-gray-400" />
+        <p className="text-lg">Caméra désactivée</p>
+        <button
+          onClick={onToggleCamera}
+          className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all"
+        >
+          Activer la caméra
+        </button>
       </div>
     );
   }
@@ -103,15 +147,49 @@ const VideoPlayer = ({ localRef, isActive, isRecording, cameraError }) => {
         autoPlay
         playsInline
         muted
-        className="w-full h-full object-cover rounded-lg"
+        className="w-full h-full object-cover"
         style={{ transform: "scaleX(-1)" }}
+        onLoadedMetadata={(e) => {
+          console.log("Métadonnées vidéo chargées");
+          e.target
+            .play()
+            .catch((err) => console.error("Erreur de lecture:", err));
+        }}
+        onError={(e) => {
+          console.error("Erreur vidéo:", e.target.error);
+        }}
       />
+
+      {/* Indicateur d'enregistrement */}
       {isRecording && (
-        <div className="absolute top-4 right-4 flex items-center bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md">
-          <span className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></span>
-          Enregistrement
+        <div className="absolute top-4 right-4 flex items-center bg-red-600 text-white px-3 py-1 rounded-full text-sm animate-pulse">
+          <div className="w-3 h-3 bg-white rounded-full mr-2 animate-pulse"></div>
+          REC
         </div>
       )}
+
+      {/* Contrôles */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-4 bg-black/50 px-4 py-2 rounded-full">
+        <button
+          onClick={onToggleCamera}
+          className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white p-3 rounded-full transition-all shadow-lg"
+          title="Activer/Désactiver la caméra"
+        >
+          {isActive ? (
+            <Camera className="w-5 h-5" />
+          ) : (
+            <CameraOff className="w-5 h-5" />
+          )}
+        </button>
+
+        <button
+          onClick={onEndCall}
+          className="flex items-center justify-center bg-red-600 hover:bg-red-700 text-white p-3 rounded-full transition-all shadow-lg"
+          title="Terminer l'entretien"
+        >
+          <PhoneOff className="w-5 h-5" />
+        </button>
+      </div>
     </div>
   );
 };
@@ -123,103 +201,54 @@ const QuestionCard = ({
   transcript,
   onSpeakQuestion,
   interviewStarted,
-  totalQuestions = 0,
+  totalQuestions,
+  onNext,
+  onPrevious,
 }) => {
   const handleSpeak = useCallback(() => {
     if (!window.speechSynthesis) {
-      toast.error("Synthèse vocale non supportée par ce navigateur");
+      toast.error("Synthèse vocale non supportée");
       return;
     }
 
-    // Arrêter toute lecture en cours
+    // Arrêter toute synthèse en cours
     window.speechSynthesis.cancel();
 
     const questionText =
       currentQuestion?.text || currentQuestion?.question || "";
     if (!questionText) {
-      console.error("Texte de la question vide");
+      toast.error("Aucune question disponible");
       return;
     }
 
-    // Créer un nouvel objet SpeechSynthesisUtterance
     const speech = new SpeechSynthesisUtterance(questionText);
     speech.lang = "fr-FR";
     speech.rate = 0.9;
     speech.pitch = 1;
     speech.volume = 1;
 
-    // Attendre que les voix soient chargées
-    let voices = window.speechSynthesis.getVoices();
-    if (voices.length === 0) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        voices = window.speechSynthesis.getVoices();
-        const frenchVoice = voices.find(
-          (voice) => voice.lang.includes("fr") || voice.lang.includes("FR")
-        );
-        if (frenchVoice) {
-          speech.voice = frenchVoice;
-        }
-        window.speechSynthesis.speak(speech);
-      };
-    } else {
-      const frenchVoice = voices.find(
-        (voice) => voice.lang.includes("fr") || voice.lang.includes("FR")
-      );
-      if (frenchVoice) {
-        speech.voice = frenchVoice;
-      }
-      window.speechSynthesis.speak(speech);
-    }
-
-    // Gérer les événements de la synthèse vocale
-    speech.onstart = () => {
-      console.log("Lecture démarrée");
-      onSpeakQuestion(true);
-    };
-
-    speech.onend = () => {
-      console.log("Lecture terminée");
+    speech.onstart = () => onSpeakQuestion(true);
+    speech.onend = () => onSpeakQuestion(false);
+    speech.onerror = (e) => {
+      console.error("Erreur de synthèse vocale:", e);
+      toast.error("Erreur lors de la lecture");
       onSpeakQuestion(false);
     };
 
-    speech.onerror = (event) => {
-      console.error("Erreur de synthèse vocale:", event);
-      if (event.error === "interrupted") {
-        console.log("Lecture interrompue");
-      } else {
-        toast.error("Erreur lors de la lecture de la question");
-      }
-      onSpeakQuestion(false);
-    };
-
-    speech.onpause = () => {
-      console.log("Lecture en pause");
-    };
-
-    speech.onresume = () => {
-      console.log("Lecture reprise");
-    };
-
-    speech.onboundary = (event) => {
-      console.log("Limite atteinte:", event.name);
-    };
+    window.speechSynthesis.speak(speech);
   }, [currentQuestion, onSpeakQuestion]);
 
-  // Effet pour charger les voix au montage du composant
-  useEffect(() => {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        const voices = window.speechSynthesis.getVoices();
-        console.log(
-          "Voix disponibles:",
-          voices.map((v) => `${v.name} (${v.lang})`)
-        );
-      };
+  // Convertir le transcript en chaîne de caractères
+  const transcriptText = useMemo(() => {
+    if (!transcript) return "";
+    if (typeof transcript === "object") {
+      return transcript[currentIndex] || "";
     }
-  }, []);
+    return String(transcript);
+  }, [transcript, currentIndex]);
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl shadow-lg border border-blue-100/50">
+    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl shadow-sm border border-blue-100/50">
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center">
           <h3 className="text-lg font-bold text-blue-800">
@@ -233,30 +262,44 @@ const QuestionCard = ({
           <div className="flex items-center bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
             <span className="mr-2">Lecture en cours</span>
             <div className="flex space-x-1">
-              <span className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></span>
+              <span className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" />
               <span
                 className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
                 style={{ animationDelay: "0.2s" }}
-              ></span>
+              />
               <span
                 className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
                 style={{ animationDelay: "0.4s" }}
-              ></span>
+              />
             </div>
           </div>
         )}
       </div>
-      <div className="bg-white p-5 rounded-lg shadow-sm mb-6 border border-gray-100">
+
+      <div className="bg-white p-4 rounded-lg shadow-sm mb-4 border border-gray-100">
         <p className="text-gray-800 leading-relaxed">
           {currentQuestion?.text ||
             currentQuestion?.question ||
             "Chargement..."}
         </p>
       </div>
-      <div className="flex justify-end">
+
+      <div className="flex justify-between gap-2">
+        <button
+          onClick={onPrevious}
+          disabled={currentIndex === 0 || !interviewStarted}
+          className={`flex items-center px-4 py-2 rounded-lg transition-all shadow-sm ${
+            currentIndex === 0 || !interviewStarted
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          }`}
+        >
+          Précédent
+        </button>
+
         <button
           onClick={handleSpeak}
-          className={`flex items-center px-5 py-2.5 rounded-lg transition-all shadow-sm ${
+          className={`flex items-center px-4 py-2 rounded-lg transition-all shadow-sm ${
             !interviewStarted
               ? "bg-gray-300 text-gray-500 cursor-not-allowed"
               : isSpeaking
@@ -266,16 +309,29 @@ const QuestionCard = ({
           disabled={!interviewStarted}
         >
           <Volume2 size={18} className="mr-2" />
-          {isSpeaking ? "Arrêter la lecture" : "Écouter la question"}
+          {isSpeaking ? "Arrêter" : "Écouter"}
+        </button>
+
+        <button
+          onClick={onNext}
+          disabled={currentIndex === totalQuestions - 1 || !interviewStarted}
+          className={`flex items-center px-4 py-2 rounded-lg transition-all shadow-sm ${
+            currentIndex === totalQuestions - 1 || !interviewStarted
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          }`}
+        >
+          Suivant
         </button>
       </div>
-      {transcript && (
-        <div className="mt-6">
+
+      {transcriptText && (
+        <div className="mt-4">
           <h4 className="text-sm font-medium text-gray-500 mb-2">
             Votre réponse:
           </h4>
-          <div className="bg-white p-4 rounded-lg border border-gray-200 text-gray-700">
-            {transcript}
+          <div className="bg-white p-3 rounded-lg border border-gray-200 text-gray-700 text-sm">
+            {transcriptText}
           </div>
         </div>
       )}
@@ -283,27 +339,24 @@ const QuestionCard = ({
   );
 };
 
-const PermissionDeniedModal = ({ onClose, onRetry, onNavigate }) => (
+const ErrorModal = ({ onClose, onRetry, errorMessage }) => (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
       <div className="bg-red-50 p-5 border-b border-red-100">
-        <h3 className="text-xl font-bold text-red-600">Accès refusé</h3>
+        <h3 className="text-xl font-bold text-red-600">Erreur d'accès</h3>
       </div>
       <div className="p-6">
-        <p className="text-gray-700 mb-6">
-          L'accès au microphone ou à la caméra a été refusé. Veuillez autoriser
-          l'accès dans les paramètres de votre navigateur pour continuer.
-        </p>
+        <p className="text-gray-700 mb-6">{errorMessage}</p>
         <div className="flex justify-end space-x-3">
           <button
-            onClick={onNavigate}
+            onClick={onClose}
             className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
           >
             Annuler
           </button>
           <button
             onClick={onRetry}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all"
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-all"
           >
             Réessayer
           </button>
@@ -313,619 +366,442 @@ const PermissionDeniedModal = ({ onClose, onRetry, onNavigate }) => (
   </div>
 );
 
-// Composant principal
+const ConfirmModal = ({ isOpen, onClose, onConfirm, isSaving }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="bg-blue-50 p-5 border-b border-blue-100">
+          <h3 className="text-xl font-bold text-blue-600">Confirmer la fin</h3>
+        </div>
+        <div className="p-6">
+          <p className="text-gray-700 mb-6">
+            Êtes-vous sûr de vouloir terminer l'entretien ? Vos réponses seront
+            sauvegardées.
+          </p>
+          {isSaving && (
+            <div className="mb-4 flex items-center text-blue-600">
+              <Loader2 className="animate-spin mr-2 h-4 w-4" />
+              <span>Sauvegarde en cours...</span>
+            </div>
+          )}
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={onClose}
+              disabled={isSaving}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all disabled:opacity-50"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={isSaving}
+              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-all disabled:opacity-50"
+            >
+              {isSaving ? "Sauvegarde..." : "Terminer"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Interview = () => {
   const { interviewId } = useParams();
   const localRef = useRef(null);
   const mediaRecorderRef = useRef(null);
+  const streamRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const recognitionRef = useRef(null);
-  const localStreamRef = useRef(null);
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const {
-    webcamActive,
-    isMuted,
-    callTime,
-    currentQuestionIndex,
-    cameraError,
-    transcript,
-    isTranscribing,
-    isRecording,
-    isSpeaking,
-    recordings,
-    interviewCompleted,
-    showModal,
-    errorMessage,
-    interviewStarted,
-    questions,
-    loading,
-    error: interviewError,
-    interviewDetails,
-  } = useSelector((state) => state.interview);
+
+  // États locaux
+  const [webcamActive, setWebcamActive] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [cameraError, setCameraError] = useState(false);
+  const [transcript, setTranscript] = useState({});
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [interviewStarted, setInterviewStarted] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [interviewTimer, setInterviewTimer] = useState(900); // 15 minutes
-  const [questionTimer, setQuestionTimer] = useState(40);
-  const [canProceed, setCanProceed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const hasFetchedRef = useRef(false);
-  const recordedBlobsRef = useRef([]); // Stocke les blobs pour chaque question
+  const [recordedBlob, setRecordedBlob] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [callTime, setCallTime] = useState(0);
+  const maxDuration = 1800; // 30 minutes
 
+  // Utiliser les questions mockées
+  const questions = mockQuestions;
+
+  // Formatage du temps
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
+  // Arrêter la caméra
+  const stopCamera = useCallback(() => {
+    console.log("Arrêt de la caméra...");
+
+    // Arrêter l'enregistrement
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state === "recording"
+    ) {
+      mediaRecorderRef.current.stop();
+    }
+
+    // Arrêter le flux média
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop();
+        console.log("Piste arrêtée:", track.kind);
+      });
+      streamRef.current = null;
+    }
+
+    // Nettoyer l'élément vidéo
+    if (localRef.current) {
+      localRef.current.srcObject = null;
+    }
+
+    // Arrêter la reconnaissance vocale
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+
+    // Arrêter la synthèse vocale
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    setWebcamActive(false);
+    setIsRecording(false);
+    setInterviewStarted(false);
+    setCallTime(0);
+
+    console.log("Caméra arrêtée");
+  }, []);
+
+  // Timer pour l'entretien
   useEffect(() => {
-    if (!hasFetchedRef.current && interviewId) {
-      hasFetchedRef.current = true;
-      dispatch(fetchInterviewDetails(interviewId));
-      dispatch(fetchRecordings(interviewId));
+    let interval;
+    if (webcamActive) {
+      interval = setInterval(() => {
+        setCallTime((prev) => {
+          const newTime = prev + 1;
+          if (newTime >= maxDuration) {
+            handleEndCall();
+          }
+          return newTime;
+        });
+      }, 1000);
     }
-  }, [interviewId, dispatch]);
+    return () => clearInterval(interval);
+  }, [webcamActive]);
 
-  // Handle errors (401, 403, 404)
-  useEffect(() => {
-    if (interviewError) {
-      toast.error(interviewError);
-      if (interviewError.includes("Session expirée")) {
-        navigate("/login");
-      } else {
-        navigate("/mesinterview");
-      }
-    }
-  }, [interviewError, navigate]);
-
-  // Speech Recognition Hook
-  const setupRecognition = useCallback(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast.error("Reconnaissance vocale non supportée par ce navigateur");
-      return null;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "fr-FR";
-
-    recognition.onresult = (event) => {
-      let interimTranscript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcriptPart = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          dispatch(setState({ transcript: transcript + " " + transcriptPart }));
-        } else {
-          interimTranscript += transcriptPart;
-        }
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.error("Erreur de reconnaissance vocale:", event.error);
-      if (event.error === "not-allowed") {
-        dispatch(setState({ showModal: true }));
-      }
-    };
-
-    recognition.onend = () => {
-      if (
-        isTranscribing &&
-        recognitionRef.current &&
-        recognitionRef.current.state === "inactive"
-      ) {
-        try {
-          recognitionRef.current.start();
-        } catch (error) {
-          console.error(
-            "Erreur lors du redémarrage de la reconnaissance:",
-            error
-          );
-        }
-      }
-    };
-
-    return recognition;
-  }, [dispatch, transcript, isTranscribing]);
-
+  // Configuration de l'enregistrement
   const setupSources = useCallback(async () => {
     try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("Votre navigateur ne supporte pas l'accès à la caméra");
-      }
+      console.log("Tentative d'accès à la caméra...");
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
+      const constraints = {
+        video: {
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
+          facingMode: "user",
+          frameRate: { ideal: 30, min: 15 },
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+        },
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       if (!stream) {
-        throw new Error("Impossible d'accéder à la caméra");
+        throw new Error("Aucun flux média obtenu");
       }
 
-      localStreamRef.current = stream;
+      streamRef.current = stream;
 
       if (localRef.current) {
         localRef.current.srcObject = stream;
+        await new Promise((resolve, reject) => {
+          localRef.current.onloadedmetadata = resolve;
+          localRef.current.onerror = reject;
+          setTimeout(reject, 5000);
+        });
         await localRef.current.play();
       }
 
-      dispatch(
-        setState({
-          webcamActive: true,
-          cameraError: false,
-          interviewStarted: true,
-        })
-      );
+      // Configuration de l'enregistreur multimédia
+      let mimeType = "video/webm;codecs=vp8,opus";
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        const supportedTypes = [
+          "video/webm;codecs=vp9,opus",
+          "video/webm;codecs=vp8",
+          "video/webm",
+          "video/mp4",
+        ];
+        mimeType =
+          supportedTypes.find((type) => MediaRecorder.isTypeSupported(type)) ||
+          "";
+      }
 
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "video/webm",
+        mimeType: mimeType || undefined,
+        videoBitsPerSecond: 2500000,
+        audioBitsPerSecond: 128000,
       });
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           recordedChunksRef.current.push(event.data);
         }
       };
 
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, {
-          type: "video/webm",
-        });
-        recordedBlobsRef.current[currentQuestionIndex] = blob;
-        dispatch(setRecordedBlob(blob));
-        recordedChunksRef.current = [];
+      mediaRecorder.onstop = async () => {
+        if (recordedChunksRef.current.length > 0) {
+          const blob = new Blob(recordedChunksRef.current, {
+            type: mimeType || "video/webm",
+          });
+          setRecordedBlob(blob);
+          console.log("Enregistrement terminé, taille:", blob.size);
+          await saveRecording(blob);
+        }
       };
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(1000);
-      dispatch(startRecording());
+      setIsRecording(true);
 
-      const recognition = setupRecognition();
-      if (recognition) {
-        recognitionRef.current = recognition;
-        recognition.start();
-        dispatch(setState({ isTranscribing: true }));
+      // Configuration de la reconnaissance vocale
+      if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+        const SpeechRecognition =
+          window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = "fr-FR";
+
+        recognitionRef.current.onresult = (event) => {
+          const transcriptions = Array.from(event.results)
+            .map((result) => result[0])
+            .map((result) => result.transcript)
+            .join("");
+
+          setTranscript((prev) => ({
+            ...prev,
+            [currentQuestionIndex]: transcriptions,
+          }));
+        };
+
+        recognitionRef.current.start();
       }
-    } catch (error) {
-      dispatch(
-        setState({
-          cameraError: true,
-          showModal: true,
-          errorMessage:
-            "Erreur lors de l'accès à la caméra ou au microphone: " +
-            error.message,
-        })
-      );
-    }
-  }, [dispatch, setupRecognition, currentQuestionIndex]);
 
+      setWebcamActive(true);
+      setCameraError(false);
+      setInterviewStarted(true);
+      setShowModal(false);
+    } catch (error) {
+      console.error("Erreur lors de l'accès à la caméra:", error);
+      handleCameraError(error);
+    }
+  }, [currentQuestionIndex]);
+
+  // Fonction pour sauvegarder l'enregistrement
+  const saveRecording = async (blob) => {
+    try {
+      setIsUploading(true);
+
+      const formData = new FormData();
+      formData.append("video", blob, `interview_${Date.now()}.webm`);
+      formData.append("interviewId", interviewId);
+      formData.append("questionIndex", currentQuestionIndex);
+
+      if (transcript[currentQuestionIndex]) {
+        formData.append("transcript", transcript[currentQuestionIndex]);
+      }
+
+      const response = await fetch("/api/interviews/save-recording", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Erreur lors de la sauvegarde");
+      }
+
+      const data = await response.json();
+      console.log("Enregistrement sauvegardé:", data);
+      toast.success("Enregistrement sauvegardé avec succès");
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde:", error);
+      toast.error("Erreur lors de la sauvegarde de l'enregistrement");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Fonction pour gérer les erreurs de la caméra
+  const handleCameraError = useCallback((error) => {
+    let errorMsg = "Erreur d'accès à la caméra";
+
+    if (error.name === "NotAllowedError") {
+      errorMsg =
+        "L'accès à la caméra a été refusé. Veuillez autoriser l'accès à la caméra dans les paramètres de votre navigateur et rafraîchir la page.";
+    } else if (error.name === "NotFoundError") {
+      errorMsg =
+        "Aucune caméra n'a été trouvée sur votre appareil. Veuillez vérifier que votre caméra est correctement connectée.";
+    } else if (error.name === "NotReadableError") {
+      errorMsg =
+        "La caméra est actuellement utilisée par une autre application. Veuillez fermer les autres applications qui utilisent la caméra et réessayer.";
+    } else if (error.name === "OverconstrainedError") {
+      errorMsg =
+        "Les paramètres de la caméra ne sont pas supportés. Veuillez utiliser un autre navigateur ou une autre caméra.";
+    } else if (error.name === "SecurityError") {
+      errorMsg =
+        "Accès à la caméra bloqué pour des raisons de sécurité. Veuillez vérifier les paramètres de votre navigateur.";
+    } else if (error.name === "TypeError") {
+      errorMsg =
+        "Votre navigateur ne supporte pas l'accès à la caméra. Veuillez utiliser un navigateur moderne comme Chrome, Firefox ou Edge.";
+    }
+
+    setCameraError(true);
+    setShowModal(true);
+    setErrorMessage(errorMsg);
+    setWebcamActive(false);
+    toast.error(errorMsg);
+  }, []);
+
+  // Fonction pour basculer le son
+  const toggleMute = useCallback(() => {
+    if (streamRef.current) {
+      const audioTracks = streamRef.current.getAudioTracks();
+      audioTracks.forEach((track) => (track.enabled = !track.enabled));
+      setIsMuted((prev) => !prev);
+    }
+  }, []);
+
+  // Terminer l'entretien
   const handleEndCall = useCallback(async () => {
     try {
       setIsSaving(true);
+      console.log("Fin de l'entretien...");
 
-      // Arrêter l'enregistrement en cours
-      if (isRecording && mediaRecorderRef.current?.state !== "inactive") {
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state === "recording"
+      ) {
         mediaRecorderRef.current.stop();
-        dispatch(stopRecording());
       }
 
-      // Arrêter le flux média
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => track.stop());
-      }
+    if (recordedBlob) {
+      await saveRecording(recordedBlob);
+    }
 
-      // Arrêter la transcription
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        dispatch(setState({ isTranscribing: false }));
-      }
+    stopCamera();
 
-      // Sauvegarder les enregistrements
-      if (recordedBlobsRef.current.length > 0) {
-        const recordingsData = questions.map((question, index) => {
-          const blob = recordedBlobsRef.current[index];
-          return {
-            questionIndex: index,
-            question: question.text || question.question,
-            transcript: recordings[index]?.transcript || transcript || "",
-            timestamp: new Date().toISOString(),
-            blob: blob
-              ? {
-                  size: blob.size,
-                  type: blob.type,
-                  data: blob, // Le Blob sera envoyé directement dans le FormData
-                }
-              : null,
-          };
-        });
+      toast.success("Entretien sauvegardé avec succès");
+      console.log("Entretien terminé et sauvegardé");
 
-        console.log("Sauvegarde des enregistrements:", recordingsData);
-
-        const formData = new FormData();
-        formData.append(
-          "metadata",
-          JSON.stringify({
-            recordings: recordingsData.map(({ blob, ...rest }) => rest),
-            completedAt: new Date().toISOString(),
-          })
-        );
-
-        // Ajouter les Blobs au FormData
-        recordingsData.forEach((recording, index) => {
-          if (recording.blob?.data) {
-            formData.append(
-              `video_${index}`,
-              recording.blob.data,
-              `question_${index}.webm`
-            );
-          }
-        });
-
-        const result = await dispatch(
-          saveInterviewToDatabase({ interviewId, formData })
-        ).unwrap();
-
-        if (result.success) {
-          toast.success("Entretien sauvegardé avec succès");
-          dispatch(hangUp());
-          navigate("/mesinterview", { replace: true });
-        } else {
-          throw new Error(result.error || "Erreur lors de la sauvegarde");
-        }
-      } else {
-        toast.error("Aucune vidéo enregistrée");
-        navigate("/mesinterview", { replace: true });
-      }
+      setShowConfirmModal(false);
+      setCurrentQuestionIndex(0);
+      setTranscript({});
+      setRecordedBlob(null);
     } catch (error) {
-      console.error("Erreur lors de la fin de l'entretien:", error);
-      toast.error(
-        error.message || "Erreur lors de la sauvegarde de l'entretien"
-      );
-      navigate("/mesinterview", { replace: true });
+      console.error("Erreur lors de la sauvegarde:", error);
+      toast.error("Erreur lors de la sauvegarde de l'entretien");
     } finally {
       setIsSaving(false);
     }
-  }, [
-    dispatch,
-    isRecording,
-    questions,
-    transcript,
-    recordings,
-    interviewId,
-    navigate,
-  ]);
+  }, [stopCamera, recordedBlob, saveRecording]);
 
-  useEffect(() => {
-    let timer = null;
+  // Toggle caméra
+  const toggleCamera = useCallback(() => {
     if (webcamActive) {
-      timer = setInterval(() => {
-        setInterviewTimer((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            handleEndCall();
-            return 0;
-          }
-          return prev - 1;
-        });
-        dispatch(incrementCallTime());
-      }, 1000);
-    }
-
-    return () => {
-      if (timer) {
-        clearInterval(timer);
-      }
-    };
-  }, [webcamActive, handleEndCall, dispatch]);
-
-  useEffect(() => {
-    if (webcamActive && !isSpeaking) {
-      setQuestionTimer(5);
-      setCanProceed(false);
-
-      const questionTimerRef = setInterval(() => {
-        setQuestionTimer((prev) => {
-          if (prev <= 1) {
-            clearInterval(questionTimerRef);
-            setCanProceed(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      return () => clearInterval(questionTimerRef);
-    }
-  }, [webcamActive, currentQuestionIndex, isSpeaking]);
-
-  useEffect(() => {
-    return () => {
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => track.stop());
-      }
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
-
-  const handleNextQuestion = useCallback(() => {
-    if (!canProceed) {
-      toast.info(
-        "Veuillez attendre 5 secondes avant de passer à la question suivante"
-      );
-      return;
-    }
-
-    if (isRecording && mediaRecorderRef.current?.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-      dispatch(stopRecording());
-    }
-
-    window.speechSynthesis.cancel();
-
-    const currentTranscript = transcript;
-    const currentQuestion = questions[currentQuestionIndex];
-
-    if (currentTranscript && currentQuestion) {
-      const updatedRecordings = [...recordings];
-      updatedRecordings[currentQuestionIndex] = {
-        questionIndex: currentQuestionIndex,
-        question: currentQuestion.text || currentQuestion.question,
-        transcript: currentTranscript,
-        timestamp: new Date().toISOString(),
-      };
-      dispatch(
-        setState({
-          recordings: updatedRecordings,
-          transcript: "",
-        })
-      );
-    }
-
-    if (currentQuestionIndex < questions.length - 1) {
-      dispatch(goToNextQuestion());
-      setCanProceed(false);
-      setQuestionTimer(5);
-      // Redémarrer l'enregistrement pour la prochaine question
-      if (localStreamRef.current) {
-        const mediaRecorder = new MediaRecorder(localStreamRef.current, {
-          mimeType: "video/webm;codecs=vp9,opus",
-        });
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            recordedChunksRef.current.push(event.data);
-          }
-        };
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(recordedChunksRef.current, {
-            type: "video/webm",
-          });
-          recordedBlobsRef.current[currentQuestionIndex + 1] = blob;
-          dispatch(setRecordedBlob(blob));
-          recordedChunksRef.current = [];
-        };
-        mediaRecorderRef.current = mediaRecorder;
-        mediaRecorder.start(1000);
-        dispatch(startRecording());
-      }
+      stopCamera();
     } else {
-      setShowConfirmModal(true);
+      setupSources();
     }
-  }, [
-    dispatch,
-    canProceed,
-    transcript,
-    questions,
-    currentQuestionIndex,
-    recordings,
-    isRecording,
-  ]);
+  }, [webcamActive, stopCamera, setupSources]);
+
+  // Gestionnaires de questions
+  const handleNextQuestion = useCallback(() => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex((prev) => prev + 1);
+
+      // Auto-speak la question suivante
+      setTimeout(() => {
+        const nextQuestion = questions[currentQuestionIndex + 1];
+        if (nextQuestion && interviewStarted) {
+          const speech = new SpeechSynthesisUtterance(nextQuestion.text);
+          speech.lang = "fr-FR";
+          speech.rate = 0.9;
+          speech.onstart = () => setIsSpeaking(true);
+          speech.onend = () => setIsSpeaking(false);
+          window.speechSynthesis.speak(speech);
+        }
+      }, 100);
+    }
+  }, [currentQuestionIndex, questions.length, interviewStarted]);
 
   const handlePreviousQuestion = useCallback(() => {
-    if (!canProceed) {
-      toast.info("Veuillez attendre la fin du temps imparti");
-      return;
-    }
-
-    if (isRecording && mediaRecorderRef.current?.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-      dispatch(stopRecording());
-    }
-
-    window.speechSynthesis.cancel();
-
-    const currentTranscript = transcript;
-    const currentQuestion = questions[currentQuestionIndex];
-
-    if (currentTranscript && currentQuestion) {
-      const updatedRecordings = [...recordings];
-      updatedRecordings[currentQuestionIndex] = {
-        questionIndex: currentQuestionIndex,
-        question: currentQuestion.text || currentQuestion.question,
-        transcript: currentTranscript,
-        timestamp: new Date().toISOString(),
-      };
-      dispatch(
-        setState({
-          recordings: updatedRecordings,
-          transcript: "",
-        })
-      );
-    }
-
     if (currentQuestionIndex > 0) {
-      dispatch(goToPreviousQuestion());
-      setCanProceed(false);
-      setQuestionTimer(5);
-      // Redémarrer l'enregistrement pour la question précédente
-      if (localStreamRef.current) {
-        const mediaRecorder = new MediaRecorder(localStreamRef.current, {
-          mimeType: "video/webm;codecs=vp9,opus",
-        });
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            recordedChunksRef.current.push(event.data);
-          }
-        };
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(recordedChunksRef.current, {
-            type: "video/webm",
-          });
-          recordedBlobsRef.current[currentQuestionIndex - 1] = blob;
-          dispatch(setRecordedBlob(blob));
-          recordedChunksRef.current = [];
-        };
-        mediaRecorderRef.current = mediaRecorder;
-        mediaRecorder.start(1000);
-        dispatch(startRecording());
-      }
-    } else {
-      toast.info("Vous êtes à la première question");
+      setCurrentQuestionIndex((prev) => prev - 1);
     }
-  }, [
-    dispatch,
-    canProceed,
-    transcript,
-    questions,
-    currentQuestionIndex,
-    recordings,
-    isRecording,
-  ]);
+  }, [currentQuestionIndex]);
 
-  const handleGoToQuestion = useCallback(
-    (index) => {
-      if (isRecording && mediaRecorderRef.current?.state !== "inactive") {
-        mediaRecorderRef.current.stop();
-        dispatch(stopRecording());
-      }
+  // Nettoyage au démontage
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, [stopCamera]);
 
-      dispatch(goToQuestion(index));
-      setTimeout(() => {
-        if (localStreamRef.current) {
-          const mediaRecorder = new MediaRecorder(localStreamRef.current, {
-            mimeType: "video/webm;codecs=vp9,opus",
-          });
-          mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              recordedChunksRef.current.push(event.data);
-            }
-          };
-          mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunksRef.current, {
-              type: "video/webm",
-            });
-            recordedBlobsRef.current[index] = blob;
-            dispatch(setRecordedBlob(blob));
-            recordedChunksRef.current = [];
-          };
-          mediaRecorderRef.current = mediaRecorder;
-          mediaRecorder.start(1000);
-          dispatch(startRecording());
-        }
-      }, 500);
-    },
-    [dispatch, isRecording]
-  );
-
-  const handleToggleMute = useCallback(() => {
-    dispatch(toggleMute());
-    if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = !isMuted;
-      });
+  // Vérifier la compatibilité
+  useEffect(() => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setErrorMessage(
+        "Votre navigateur ne supporte pas l'accès à la caméra. Veuillez utiliser un navigateur moderne."
+      );
+      setCameraError(true);
+      setShowModal(true);
     }
-  }, [dispatch, isMuted]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
-          <span className="text-gray-600">Chargement de l'entretien...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (interviewError) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <CheckCircle2 className="h-12 w-12 text-red-500 mx-auto" />
-          <p className="mt-2 text-gray-600">{interviewError}</p>
-          <button
-            onClick={() => navigate("/mesinterview")}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            Retour aux entretiens
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!interviewDetails) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <CheckCircle2 className="h-12 w-12 text-red-500 mx-auto" />
-          <p className="mt-2 text-gray-600">Entretien non trouvé</p>
-          <button
-            onClick={() => navigate("/mesinterview")}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            Retour aux entretiens
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (showModal) {
-    return (
-      <PermissionDeniedModal
-        onClose={() => dispatch(setState({ showModal: false }))}
-        onRetry={() => {
-          dispatch(setState({ showModal: false }));
-          setupSources();
-        }}
-        onNavigate={() => navigate("/mesinterview")}
-      />
-    );
-  }
-
-  if (interviewCompleted) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card title="Entretien terminé" className="w-96">
-          <p>Votre entretien a été enregistré avec succès.</p>
-          <Button
-            type="primary"
-            onClick={() => navigate("/mesinterview", { replace: true })}
-          >
-            Retour au tableau de bord
-          </Button>
-        </Card>
-      </div>
-    );
-  }
+  }, []);
 
   return (
-    <div className="flex flex-col items-center min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="w-full max-w-6xl bg-white rounded-2xl shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold">
-                Simulation d'entretien technique (Ingénieur Informatique)
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      {/* En-tête */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-3 sticky top-0 z-10 shadow-md">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-2">
+            <div className="w-full md:w-auto">
+              <h1 className="text-lg md:text-xl font-bold">
+                Simulation d'entretien technique
               </h1>
-              <p className="text-blue-100 mt-1">
+              <p className="text-blue-100 text-xs md:text-sm">
                 Répondez aux questions techniques pour vous entraîner
               </p>
             </div>
             {!webcamActive ? (
               <button
+                type="button"
                 onClick={setupSources}
-                className="bg-white text-blue-600 px-6 py-3 rounded-lg hover:bg-blue-50 transition-all shadow-md flex items-center font-medium"
+                className="w-full md:w-auto bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition-all shadow-md text-sm font-medium"
               >
+                <Camera className="w-4 h-4 inline mr-2" />
                 Commencer l'entretien
               </button>
             ) : (
@@ -935,34 +811,49 @@ const Interview = () => {
           <ProgressBar
             current={currentQuestionIndex}
             total={questions.length}
-            time={callTime}
           />
         </div>
+      </div>
 
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Contenu principal */}
+      <div className="flex-1 p-3 md:p-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Zone vidéo */}
             <div className="lg:col-span-2">
-              <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
-                <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden h-[calc(100vh-12rem)]">
+                <div className="relative h-full bg-black">
                   <VideoPlayer
                     localRef={localRef}
                     isActive={webcamActive}
                     isRecording={isRecording}
                     cameraError={cameraError}
+                    onEndCall={() => setShowConfirmModal(true)}
+                    onToggleCamera={toggleCamera}
                   />
                 </div>
               </div>
             </div>
 
+            {/* Zone des questions */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-lg shadow-lg p-4">
-                <h2 className="text-xl font-bold mb-4">Questions</h2>
+              <div className="bg-white rounded-lg shadow-lg p-3 h-[calc(100vh-12rem)] overflow-y-auto">
+                <h2 className="text-lg font-bold mb-3 text-gray-800">
+                  Questions
+                </h2>
                 {!webcamActive ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500">
+                  <div className="text-center py-6">
+                    <Camera className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-500 mb-3 text-sm">
                       Cliquez sur "Commencer l'entretien" pour voir les
                       questions
                     </p>
+                    <button
+                      onClick={setupSources}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all text-sm"
+                    >
+                      Démarrer maintenant
+                    </button>
                   </div>
                 ) : (
                   <>
@@ -971,71 +862,144 @@ const Interview = () => {
                       currentIndex={currentQuestionIndex}
                       isSpeaking={isSpeaking}
                       transcript={transcript}
-                      onSpeakQuestion={(status) =>
-                        dispatch(setState({ isSpeaking: status }))
-                      }
+                      onSpeakQuestion={setIsSpeaking}
                       interviewStarted={interviewStarted}
                       totalQuestions={questions.length}
+                      onNext={handleNextQuestion}
+                      onPrevious={handlePreviousQuestion}
                     />
 
-                    <div className="flex justify-between mt-4">
-                      <button
-                        onClick={handlePreviousQuestion}
-                        disabled={currentQuestionIndex === 0 || !canProceed}
-                        className="px-4 py-2 rounded-lg bg-gray-200 disabled:opacity-50"
-                      >
-                        Précédente
-                      </button>
-                      <button
-                        onClick={handleNextQuestion}
-                        disabled={
-                          currentQuestionIndex === questions.length - 1 ||
-                          !canProceed
-                        }
-                        className="px-4 py-2 rounded-lg bg-gray-200 disabled:opacity-50"
-                      >
-                        Suivante
-                      </button>
-                    </div>
-
-                    {currentQuestionIndex === questions.length - 1 && (
+                    {/* Bouton de fin d'entretien */}
+                    <div className="mt-4">
                       <button
                         onClick={() => setShowConfirmModal(true)}
                         disabled={isSaving}
-                        className="w-full mt-4 px-4 py-2 rounded-lg bg-green-500 text-white disabled:opacity-50"
+                        className="w-full px-3 py-2 rounded-lg bg-green-600 text-white disabled:opacity-50 hover:bg-green-700 transition-colors text-sm font-medium shadow-sm"
                       >
-                        Terminer et sauvegarder
+                        {isSaving ? (
+                          <span className="flex items-center justify-center">
+                            <Loader2 className="animate-spin mr-2 h-4 w-4" />
+                            Sauvegarde en cours...
+                          </span>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 inline mr-2" />
+                            Terminer et sauvegarder
+                          </>
+                        )}
                       </button>
-                    )}
+                    </div>
+
+                    {/* Informations sur l'entretien */}
+                    <div className="mt-3 p-2 bg-blue-50 rounded-lg border border-blue-100">
+                      <div className="flex items-center text-xs text-blue-700">
+                        <div className="flex items-center">
+                          {isRecording && (
+                            <>
+                              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
+                              <span className="font-medium">
+                                Enregistrement en cours
+                              </span>
+                            </>
+                          )}
+                          {!isRecording && webcamActive && (
+                            <>
+                              <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                              <span>Caméra active</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-blue-600">
+                        <p>• Répondez naturellement aux questions</p>
+                        <p>• Votre vidéo et audio sont enregistrés</p>
+                        <p>• Utilisez les boutons pour naviguer</p>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
             </div>
           </div>
+
+          {/* Statistiques de l'entretien */}
+          {webcamActive && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center">
+                  <div className="bg-blue-100 p-2 rounded-lg">
+                    <Volume2 className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-xs font-medium text-gray-600">
+                      Questions
+                    </p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {currentQuestionIndex + 1}/{questions.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center">
+                  <div className="bg-green-100 p-2 rounded-lg">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-xs font-medium text-gray-600">
+                      Progression
+                    </p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {Math.round(
+                        ((currentQuestionIndex + 1) / questions.length) * 100
+                      )}
+                      %
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center">
+                  <div
+                    className={`p-2 rounded-lg ${
+                      isRecording ? "bg-red-100" : "bg-gray-100"
+                    }`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full ${
+                        isRecording ? "bg-red-500 animate-pulse" : "bg-gray-400"
+                      }`}
+                    />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-xs font-medium text-gray-600">Statut</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {isRecording ? "REC" : "Pause"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {errorMessage && (
-        <div className="mt-4 py-3 px-4 bg-red-50 text-red-600 rounded-lg border border-red-100 max-w-6xl w-full">
-          {errorMessage}
-        </div>
-      )}
+      {/* Modales */}
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={handleEndCall}
+        isSaving={isSaving}
+      />
 
-      {showConfirmModal && (
-        <Modal
-          title="Confirmer la fin de l'entretien"
-          visible={showConfirmModal}
-          onOk={handleEndCall}
-          onCancel={() => setShowConfirmModal(false)}
-          okText="Terminer"
-          cancelText="Annuler"
-          okButtonProps={{ disabled: isSaving }}
-        >
-          <p>
-            Êtes-vous sûr de vouloir terminer l'entretien ? Vos réponses et
-            enregistrements seront sauvegardés.
-          </p>
-        </Modal>
+      {showModal && (
+        <ErrorModal
+          onClose={() => setShowModal(false)}
+          onRetry={setupSources}
+          errorMessage={errorMessage}
+        />
       )}
     </div>
   );
