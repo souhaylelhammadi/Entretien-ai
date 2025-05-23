@@ -1,14 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-import {
-  Mic,
-  MicOff,
-  PhoneOff,
-  Volume2,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  CheckCircle2,
-} from "lucide-react";
+import { Mic, MicOff, Volume2, Loader2, CheckCircle2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -27,22 +18,10 @@ import {
   fetchInterviewDetails,
 } from "./store/entretienpourcSlice";
 import { toast } from "react-toastify";
-import Webcam from "react-webcam";
-import { Button, Card, Progress, Modal, message } from "antd";
-import {
-  AudioOutlined,
-  AudioMutedOutlined,
-  VideoCameraOutlined,
-  VideoCameraFilled,
-  LeftOutlined,
-  RightOutlined,
-  CheckCircleOutlined,
-} from "@ant-design/icons";
-import axios from "axios";
+import { Button, Card, Progress, Modal } from "antd";
 import { BASE_URL } from "../config";
-import { createAsyncThunk } from "@reduxjs/toolkit";
 
-// Helper Components
+// Composants d'interface
 const StatusIndicator = ({ isActive }) => (
   <div className="flex items-center space-x-2 bg-blue-700/30 px-4 py-2 rounded-full">
     <span
@@ -79,7 +58,7 @@ const ProgressBar = ({ current, total, time }) => {
       </div>
       <div className="flex justify-between text-xs mt-1 text-blue-200">
         <span>0:00</span>
-        <span>{formatTime(1000)}</span>
+        <span>{formatTime(1800)}</span>
       </div>
     </div>
   );
@@ -118,13 +97,14 @@ const VideoPlayer = ({ localRef, isActive, isRecording, cameraError }) => {
   }
 
   return (
-    <>
+    <div className="relative w-full h-full bg-black">
       <video
         ref={localRef}
         autoPlay
         playsInline
         muted
-        className="w-full h-full object-cover"
+        className="w-full h-full object-cover rounded-lg"
+        style={{ transform: "scaleX(-1)" }}
       />
       {isRecording && (
         <div className="absolute top-4 right-4 flex items-center bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md">
@@ -132,7 +112,7 @@ const VideoPlayer = ({ localRef, isActive, isRecording, cameraError }) => {
           Enregistrement
         </div>
       )}
-    </>
+    </div>
   );
 };
 
@@ -145,8 +125,98 @@ const QuestionCard = ({
   interviewStarted,
   totalQuestions = 0,
 }) => {
-  const questionText =
-    currentQuestion?.text || currentQuestion?.question || "Chargement...";
+  const handleSpeak = useCallback(() => {
+    if (!window.speechSynthesis) {
+      toast.error("Synthèse vocale non supportée par ce navigateur");
+      return;
+    }
+
+    // Arrêter toute lecture en cours
+    window.speechSynthesis.cancel();
+
+    const questionText =
+      currentQuestion?.text || currentQuestion?.question || "";
+    if (!questionText) {
+      console.error("Texte de la question vide");
+      return;
+    }
+
+    // Créer un nouvel objet SpeechSynthesisUtterance
+    const speech = new SpeechSynthesisUtterance(questionText);
+    speech.lang = "fr-FR";
+    speech.rate = 0.9;
+    speech.pitch = 1;
+    speech.volume = 1;
+
+    // Attendre que les voix soient chargées
+    let voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        voices = window.speechSynthesis.getVoices();
+        const frenchVoice = voices.find(
+          (voice) => voice.lang.includes("fr") || voice.lang.includes("FR")
+        );
+        if (frenchVoice) {
+          speech.voice = frenchVoice;
+        }
+        window.speechSynthesis.speak(speech);
+      };
+    } else {
+      const frenchVoice = voices.find(
+        (voice) => voice.lang.includes("fr") || voice.lang.includes("FR")
+      );
+      if (frenchVoice) {
+        speech.voice = frenchVoice;
+      }
+      window.speechSynthesis.speak(speech);
+    }
+
+    // Gérer les événements de la synthèse vocale
+    speech.onstart = () => {
+      console.log("Lecture démarrée");
+      onSpeakQuestion(true);
+    };
+
+    speech.onend = () => {
+      console.log("Lecture terminée");
+      onSpeakQuestion(false);
+    };
+
+    speech.onerror = (event) => {
+      console.error("Erreur de synthèse vocale:", event);
+      if (event.error === "interrupted") {
+        console.log("Lecture interrompue");
+      } else {
+        toast.error("Erreur lors de la lecture de la question");
+      }
+      onSpeakQuestion(false);
+    };
+
+    speech.onpause = () => {
+      console.log("Lecture en pause");
+    };
+
+    speech.onresume = () => {
+      console.log("Lecture reprise");
+    };
+
+    speech.onboundary = (event) => {
+      console.log("Limite atteinte:", event.name);
+    };
+  }, [currentQuestion, onSpeakQuestion]);
+
+  // Effet pour charger les voix au montage du composant
+  useEffect(() => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const voices = window.speechSynthesis.getVoices();
+        console.log(
+          "Voix disponibles:",
+          voices.map((v) => `${v.name} (${v.lang})`)
+        );
+      };
+    }
+  }, []);
 
   return (
     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl shadow-lg border border-blue-100/50">
@@ -177,11 +247,15 @@ const QuestionCard = ({
         )}
       </div>
       <div className="bg-white p-5 rounded-lg shadow-sm mb-6 border border-gray-100">
-        <p className="text-gray-800 leading-relaxed">{questionText}</p>
+        <p className="text-gray-800 leading-relaxed">
+          {currentQuestion?.text ||
+            currentQuestion?.question ||
+            "Chargement..."}
+        </p>
       </div>
       <div className="flex justify-end">
         <button
-          onClick={onSpeakQuestion}
+          onClick={handleSpeak}
           className={`flex items-center px-5 py-2.5 rounded-lg transition-all shadow-sm ${
             !interviewStarted
               ? "bg-gray-300 text-gray-500 cursor-not-allowed"
@@ -239,13 +313,12 @@ const PermissionDeniedModal = ({ onClose, onRetry, onNavigate }) => (
   </div>
 );
 
-// Main Component
+// Composant principal
 const Interview = () => {
   const { interviewId } = useParams();
   const localRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
-  const [recordedChunks, setRecordedChunks] = useState([]);
   const recognitionRef = useRef(null);
   const localStreamRef = useRef(null);
   const navigate = useNavigate();
@@ -259,7 +332,6 @@ const Interview = () => {
     transcript,
     isTranscribing,
     isRecording,
-    recordedBlob,
     isSpeaking,
     recordings,
     interviewCompleted,
@@ -268,272 +340,103 @@ const Interview = () => {
     interviewStarted,
     questions,
     loading,
-    interviewError,
+    error: interviewError,
     interviewDetails,
-    recordedVideoUrl,
   } = useSelector((state) => state.interview);
-  const webcamRef = useRef(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [interviewTimer, setInterviewTimer] = useState(900); // 15 minutes en secondes
+  const [interviewTimer, setInterviewTimer] = useState(900); // 15 minutes
   const [questionTimer, setQuestionTimer] = useState(40);
   const [canProceed, setCanProceed] = useState(false);
-  const interviewTimerRef = useRef(null);
-  const questionTimerRef = useRef(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [successMessage, setSuccessMessage] = useState(null);
-  const [saveError, setSaveError] = useState(null);
+  const hasFetchedRef = useRef(false);
+  const recordedBlobsRef = useRef([]); // Stocke les blobs pour chaque question
 
   useEffect(() => {
-    dispatch(fetchInterviewDetails(interviewId));
+    if (!hasFetchedRef.current && interviewId) {
+      hasFetchedRef.current = true;
+      dispatch(fetchInterviewDetails(interviewId));
+      dispatch(fetchRecordings(interviewId));
+    }
   }, [interviewId, dispatch]);
 
-  // Speech Recognition Hook
-  const useSpeechRecognition = () => {
-    const setupRecognition = useCallback(() => {
-      const SpeechRecognition =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        toast.error("Reconnaissance vocale non supportée par ce navigateur");
-        return null;
+  // Handle errors (401, 403, 404)
+  useEffect(() => {
+    if (interviewError) {
+      toast.error(interviewError);
+      if (interviewError.includes("Session expirée")) {
+        navigate("/login");
+      } else {
+        navigate("/mesinterview");
       }
+    }
+  }, [interviewError, navigate]);
 
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "fr-FR";
-      recognition.maxAlternatives = 1;
+  // Speech Recognition Hook
+  const setupRecognition = useCallback(() => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Reconnaissance vocale non supportée par ce navigateur");
+      return null;
+    }
 
-      recognition.onresult = (event) => {
-        let interimTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcriptPart = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            dispatch(
-              setState({ transcript: transcript + " " + transcriptPart })
-            );
-          } else {
-            interimTranscript += transcriptPart;
-          }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "fr-FR";
+
+    recognition.onresult = (event) => {
+      let interimTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcriptPart = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          dispatch(setState({ transcript: transcript + " " + transcriptPart }));
+        } else {
+          interimTranscript += transcriptPart;
         }
-        const interimElement = document.getElementById("interim-transcript");
-        if (interimElement) interimElement.textContent = interimTranscript;
-      };
+      }
+    };
 
-      recognition.onerror = (event) => {
-        console.error("Erreur de reconnaissance vocale:", event.error);
-        if (event.error === "no-speech") {
-          // Redémarrer la reconnaissance si aucune parole n'est détectée
-          if (
-            recognitionRef.current &&
-            recognitionRef.current.state === "inactive"
-          ) {
-            try {
-              recognitionRef.current.start();
-            } catch (error) {
-              console.error(
-                "Erreur lors du redémarrage de la reconnaissance:",
-                error
-              );
-            }
-          }
-        } else if (
-          event.error === "not-allowed" ||
-          event.error === "service-not-allowed"
-        ) {
-          dispatch(setState({ showModal: true }));
-        }
-      };
+    recognition.onerror = (event) => {
+      console.error("Erreur de reconnaissance vocale:", event.error);
+      if (event.error === "not-allowed") {
+        dispatch(setState({ showModal: true }));
+      }
+    };
 
-      recognition.onend = () => {
-        // Redémarrer la reconnaissance si elle s'arrête inopinément
-        if (
-          isTranscribing &&
-          recognitionRef.current &&
-          recognitionRef.current.state === "inactive"
-        ) {
-          try {
-            recognitionRef.current.start();
-          } catch (error) {
-            console.error(
-              "Erreur lors du redémarrage de la reconnaissance:",
-              error
-            );
-          }
-        }
-      };
-
-      return recognition;
-    }, [dispatch, transcript, isTranscribing]);
-
-    const startTranscription = useCallback(() => {
+    recognition.onend = () => {
       if (
+        isTranscribing &&
         recognitionRef.current &&
-        !isTranscribing &&
         recognitionRef.current.state === "inactive"
       ) {
         try {
           recognitionRef.current.start();
-          dispatch(setState({ isTranscribing: true }));
         } catch (error) {
-          console.error("Erreur lors du démarrage de la transcription:", error);
-        }
-      }
-    }, [isTranscribing]);
-
-    const stopTranscription = useCallback(() => {
-      if (
-        recognitionRef.current &&
-        isTranscribing &&
-        recognitionRef.current.state === "listening"
-      ) {
-        try {
-          recognitionRef.current.stop();
-          dispatch(setState({ isTranscribing: false }));
-        } catch (error) {
-          console.error("Erreur lors de l'arrêt de la transcription:", error);
-        }
-      }
-    }, [isTranscribing]);
-
-    return { setupRecognition, startTranscription, stopTranscription };
-  };
-
-  const { setupRecognition, startTranscription, stopTranscription } =
-    useSpeechRecognition();
-
-  const speakQuestion = useCallback(() => {
-    if (!window.speechSynthesis) {
-      toast.error("Synthèse vocale non supportée par ce navigateur");
-      return;
-    }
-
-    // Arrêter toute lecture en cours
-    window.speechSynthesis.cancel();
-
-    const currentQuestion = questions[currentQuestionIndex];
-    if (!currentQuestion) {
-      console.error("Aucune question disponible");
-      return;
-    }
-
-    const questionText =
-      currentQuestion?.text || currentQuestion?.question || "";
-    if (!questionText) {
-      console.error("Texte de la question vide");
-      return;
-    }
-
-    // Créer une nouvelle instance de SpeechSynthesisUtterance
-    const speech = new SpeechSynthesisUtterance(questionText);
-
-    // Configurer les paramètres de la voix
-    speech.lang = "fr-FR";
-    speech.rate = 0.9; // Vitesse de lecture légèrement plus lente
-    speech.pitch = 1;
-    speech.volume = 1;
-
-    // Sélectionner une voix française si disponible
-    const voices = window.speechSynthesis.getVoices();
-    const frenchVoice = voices.find((voice) => voice.lang.includes("fr"));
-    if (frenchVoice) {
-      speech.voice = frenchVoice;
-    }
-
-    // Gérer le début de la lecture
-    speech.onstart = () => {
-      console.log("Début de la lecture de la question");
-      dispatch(setState({ isSpeaking: true }));
-    };
-
-    // Gérer la fin de la lecture
-    speech.onend = () => {
-      console.log("Fin de la lecture de la question");
-      dispatch(setState({ isSpeaking: false }));
-      // Réinitialiser le timer de la question après la lecture
-      setQuestionTimer(5);
-      setCanProceed(false);
-    };
-
-    // Gérer les erreurs
-    speech.onerror = (event) => {
-      console.error("Erreur de synthèse vocale:", event);
-      if (event.error !== "interrupted") {
-        toast.error("Erreur lors de la lecture de la question");
-      }
-      dispatch(setState({ isSpeaking: false }));
-    };
-
-    // S'assurer que les voix sont chargées avant de parler
-    if (voices.length === 0) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        const updatedVoices = window.speechSynthesis.getVoices();
-        const frenchVoice = updatedVoices.find((voice) =>
-          voice.lang.includes("fr")
-        );
-        if (frenchVoice) {
-          speech.voice = frenchVoice;
-        }
-        window.speechSynthesis.speak(speech);
-      };
-    } else {
-      window.speechSynthesis.speak(speech);
-    }
-  }, [currentQuestionIndex, questions, dispatch]);
-
-  // Modifier l'effet pour la lecture des questions
-  useEffect(() => {
-    let timeoutId;
-
-    if (
-      webcamActive &&
-      !isSpeaking &&
-      currentQuestionIndex >= 0 &&
-      currentQuestionIndex < questions.length
-    ) {
-      // Attendre que la page soit complètement chargée avant de lire la question
-      timeoutId = setTimeout(() => {
-        // Vérifier si la synthèse vocale est disponible
-        if (window.speechSynthesis) {
-          speakQuestion();
-        } else {
-          console.error("Synthèse vocale non disponible");
-          toast.error(
-            "La lecture des questions n'est pas supportée par votre navigateur"
+          console.error(
+            "Erreur lors du redémarrage de la reconnaissance:",
+            error
           );
         }
-      }, 1000);
-    }
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      // Arrêter proprement toute lecture en cours lors du démontage
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
       }
     };
-  }, [
-    currentQuestionIndex,
-    webcamActive,
-    isSpeaking,
-    speakQuestion,
-    questions.length,
-  ]);
+
+    return recognition;
+  }, [dispatch, transcript, isTranscribing]);
 
   const setupSources = useCallback(async () => {
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Votre navigateur ne supporte pas l'accès à la caméra");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: "user",
-        },
+        video: true,
         audio: true,
       });
 
-      if (stream.getVideoTracks().length === 0) {
-        throw new Error("Aucune piste vidéo disponible");
+      if (!stream) {
+        throw new Error("Impossible d'accéder à la caméra");
       }
 
       localStreamRef.current = stream;
@@ -551,7 +454,6 @@ const Interview = () => {
         })
       );
 
-      // Initialiser le MediaRecorder
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: "video/webm",
       });
@@ -566,208 +468,130 @@ const Interview = () => {
         const blob = new Blob(recordedChunksRef.current, {
           type: "video/webm",
         });
-        // Stocker l'URL au lieu du Blob
-        const url = URL.createObjectURL(blob);
-        dispatch(setState({ recordedVideoUrl: url }));
+        recordedBlobsRef.current[currentQuestionIndex] = blob;
+        dispatch(setRecordedBlob(blob));
+        recordedChunksRef.current = [];
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorderRef.current.start(1000); // Démarrer l'enregistrement automatiquement
+      mediaRecorder.start(1000);
       dispatch(startRecording());
 
-      // Démarrer la reconnaissance vocale
       const recognition = setupRecognition();
       if (recognition) {
         recognitionRef.current = recognition;
         recognition.start();
         dispatch(setState({ isTranscribing: true }));
       }
-
-      // Lire la première question
-      setTimeout(speakQuestion, 1000);
     } catch (error) {
-      console.error("Erreur lors de la configuration des sources:", error);
       dispatch(
         setState({
           cameraError: true,
-          errorMessage: "Erreur lors de l'accès à la caméra",
+          showModal: true,
+          errorMessage:
+            "Erreur lors de l'accès à la caméra ou au microphone: " +
+            error.message,
         })
       );
     }
-  }, [dispatch, setupRecognition, speakQuestion]);
+  }, [dispatch, setupRecognition, currentQuestionIndex]);
 
   const handleEndCall = useCallback(async () => {
     try {
-      // Arrêter l'enregistrement
-      if (isRecording) {
+      setIsSaving(true);
+
+      // Arrêter l'enregistrement en cours
+      if (isRecording && mediaRecorderRef.current?.state !== "inactive") {
+        mediaRecorderRef.current.stop();
         dispatch(stopRecording());
-        if (
-          mediaRecorderRef.current &&
-          mediaRecorderRef.current.state !== "inactive"
-        ) {
-          mediaRecorderRef.current.stop();
-        }
       }
 
-      // Arrêter le flux vidéo
+      // Arrêter le flux média
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
 
-      // Sauvegarder l'entretien
-      if (recordedChunksRef.current.length > 0) {
-        // Créer le blob avec une qualité réduite
-        const blob = new Blob(recordedChunksRef.current, {
-          type: "video/webm;codecs=vp8,opus",
-        });
-
-        // Convertir le blob en base64
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = async () => {
-          const base64Video = reader.result;
-
-          // Récupérer les transcripts de chaque question
-          const recordings = questions.map((question, index) => {
-            const currentTranscript = transcript || "";
-            const questionText = question.text || question.question || "";
-
-            return {
-              questionIndex: index,
-              question: questionText,
-              transcript: currentTranscript,
-              timestamp: new Date().toISOString(),
-            };
-          });
-
-          try {
-            // Envoyer les données au serveur
-            const token = localStorage.getItem("token");
-            if (!token) {
-              throw new Error("Token d'authentification manquant");
-            }
-
-            const cleanToken = token.replace(/^Bearer\s+/i, "");
-
-            const recordingsData = {
-              video: base64Video,
-              recordings: recordings,
-              interviewId: interviewId,
-              completedAt: new Date().toISOString(),
-            };
-
-            console.log("Données à envoyer:", {
-              videoSize: blob.size,
-              recordingsCount: recordings.length,
-              interviewId: interviewId,
-            });
-
-            const response = await axios.post(
-              `${BASE_URL}/api/candidates/entretiens/${interviewId}/recordings`,
-              recordingsData,
-              {
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${cleanToken}`,
-                },
-                maxContentLength: Infinity,
-                maxBodyLength: Infinity,
-                onUploadProgress: (progressEvent) => {
-                  const percentCompleted = Math.round(
-                    (progressEvent.loaded * 100) / progressEvent.total
-                  );
-                  console.log(`Progression de l'upload: ${percentCompleted}%`);
-                },
-              }
-            );
-
-            if (response.data.success) {
-              // Mettre à jour le statut de la candidature
-              const statusResponse = await axios.put(
-                `${BASE_URL}/api/candidates/${interviewId}/status`,
-                {
-                  status: "completed",
-                  completedAt: new Date().toISOString(),
-                },
-                {
-                  headers: {
-                    Authorization: `Bearer ${cleanToken}`,
-                  },
-                }
-              );
-
-              if (statusResponse.data.success) {
-                // Nettoyer les ressources
-                if (recordedVideoUrl) {
-                  URL.revokeObjectURL(recordedVideoUrl);
-                }
-
-                // Mettre à jour le state et rediriger
-                dispatch(
-                  setState({
-                    interviewCompleted: true,
-                    loading: false,
-                    error: null,
-                  })
-                );
-
-                toast.success("Entretien terminé et sauvegardé avec succès");
-                navigate("/mesinterview", { replace: true });
-              } else {
-                throw new Error("Erreur lors de la mise à jour du statut");
-              }
-            } else {
-              throw new Error(
-                response.data.error ||
-                  "Erreur lors de la sauvegarde de l'entretien"
-              );
-            }
-          } catch (error) {
-            console.error("Erreur lors de l'envoi des données:", error);
-            if (error.response) {
-              console.error("Détails de l'erreur:", {
-                status: error.response.status,
-                data: error.response.data,
-                headers: error.response.headers,
-                config: {
-                  url: error.config.url,
-                  method: error.config.method,
-                  headers: error.config.headers,
-                },
-              });
-            }
-            if (error.response?.status === 401) {
-              toast.error("Session expirée. Veuillez vous reconnecter.");
-              navigate("/login");
-            } else {
-              toast.error(
-                error.response?.data?.error ||
-                  "Erreur lors de l'envoi des données au serveur"
-              );
-            }
-          }
-        };
+      // Arrêter la transcription
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        dispatch(setState({ isTranscribing: false }));
       }
 
-      dispatch(hangUp());
-      navigate("/mesinterview", { replace: true });
+      // Sauvegarder les enregistrements
+      if (recordedBlobsRef.current.length > 0) {
+        const recordingsData = questions.map((question, index) => {
+          const blob = recordedBlobsRef.current[index];
+          return {
+            questionIndex: index,
+            question: question.text || question.question,
+            transcript: recordings[index]?.transcript || transcript || "",
+            timestamp: new Date().toISOString(),
+            blob: blob
+              ? {
+                  size: blob.size,
+                  type: blob.type,
+                  data: blob, // Le Blob sera envoyé directement dans le FormData
+                }
+              : null,
+          };
+        });
+
+        console.log("Sauvegarde des enregistrements:", recordingsData);
+
+        const formData = new FormData();
+        formData.append(
+          "metadata",
+          JSON.stringify({
+            recordings: recordingsData.map(({ blob, ...rest }) => rest),
+            completedAt: new Date().toISOString(),
+          })
+        );
+
+        // Ajouter les Blobs au FormData
+        recordingsData.forEach((recording, index) => {
+          if (recording.blob?.data) {
+            formData.append(
+              `video_${index}`,
+              recording.blob.data,
+              `question_${index}.webm`
+            );
+          }
+        });
+
+        const result = await dispatch(
+          saveInterviewToDatabase({ interviewId, formData })
+        ).unwrap();
+
+        if (result.success) {
+          toast.success("Entretien sauvegardé avec succès");
+          dispatch(hangUp());
+          navigate("/mesinterview", { replace: true });
+        } else {
+          throw new Error(result.error || "Erreur lors de la sauvegarde");
+        }
+      } else {
+        toast.error("Aucune vidéo enregistrée");
+        navigate("/mesinterview", { replace: true });
+      }
     } catch (error) {
       console.error("Erreur lors de la fin de l'entretien:", error);
-      toast.error("Erreur lors de la sauvegarde de l'entretien");
+      toast.error(
+        error.message || "Erreur lors de la sauvegarde de l'entretien"
+      );
       navigate("/mesinterview", { replace: true });
+    } finally {
+      setIsSaving(false);
     }
   }, [
     dispatch,
     isRecording,
-    recordedChunksRef,
     questions,
     transcript,
+    recordings,
     interviewId,
     navigate,
-    recordedVideoUrl,
   ]);
 
-  // Timer pour l'entretien complet (15 minutes)
   useEffect(() => {
     let timer = null;
     if (webcamActive) {
@@ -780,6 +604,7 @@ const Interview = () => {
           }
           return prev - 1;
         });
+        dispatch(incrementCallTime());
       }, 1000);
     }
 
@@ -788,77 +613,39 @@ const Interview = () => {
         clearInterval(timer);
       }
     };
-  }, [webcamActive, handleEndCall]);
+  }, [webcamActive, handleEndCall, dispatch]);
 
-  // Timer pour chaque question (40 secondes)
   useEffect(() => {
     if (webcamActive && !isSpeaking) {
       setQuestionTimer(5);
       setCanProceed(false);
 
-      questionTimerRef.current = setInterval(() => {
+      const questionTimerRef = setInterval(() => {
         setQuestionTimer((prev) => {
           if (prev <= 1) {
-            clearInterval(questionTimerRef.current);
+            clearInterval(questionTimerRef);
             setCanProceed(true);
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-    }
 
-    return () => {
-      if (questionTimerRef.current) {
-        clearInterval(questionTimerRef.current);
-      }
-    };
+      return () => clearInterval(questionTimerRef);
+    }
   }, [webcamActive, currentQuestionIndex, isSpeaking]);
 
-  // Handle Interview Completion
-  useEffect(() => {
-    if (interviewCompleted) {
-      dispatch(saveInterviewToDatabase({ interviewId }));
-      navigate("/mesinterview");
-    }
-  }, [interviewCompleted, navigate, dispatch, interviewId]);
-
-  // Setup Video Stream
-  useEffect(() => {
-    const setupVideo = async () => {
-      if (localRef.current && localStreamRef.current) {
-        try {
-          localRef.current.srcObject = localStreamRef.current;
-          await localRef.current.play();
-        } catch (error) {
-          console.error("Erreur lors de la configuration de la vidéo:", error);
-        }
-      }
-    };
-
-    setupVideo();
-  }, [localStreamRef.current]);
-
-  // Nettoyage des ressources lors du démontage
   useEffect(() => {
     return () => {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
-      if (recordedVideoUrl) {
-        URL.revokeObjectURL(recordedVideoUrl);
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
       }
     };
-  }, [recordedVideoUrl]);
+  }, []);
 
-  // Fetch Previous Recordings
-  useEffect(() => {
-    if (interviewId) {
-      dispatch(fetchRecordings(interviewId));
-    }
-  }, [dispatch, interviewId]);
-
-  // Modifier la fonction handleNextQuestion
   const handleNextQuestion = useCallback(() => {
     if (!canProceed) {
       toast.info(
@@ -867,10 +654,13 @@ const Interview = () => {
       return;
     }
 
-    // Arrêter toute lecture en cours
+    if (isRecording && mediaRecorderRef.current?.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      dispatch(stopRecording());
+    }
+
     window.speechSynthesis.cancel();
 
-    // Sauvegarder la transcription actuelle avant de passer à la question suivante
     const currentTranscript = transcript;
     const currentQuestion = questions[currentQuestionIndex];
 
@@ -885,18 +675,39 @@ const Interview = () => {
       dispatch(
         setState({
           recordings: updatedRecordings,
-          transcript: "", // Réinitialiser la transcription pour la prochaine question
+          transcript: "",
         })
       );
     }
 
-    // Vérifier si nous ne sommes pas à la dernière question
     if (currentQuestionIndex < questions.length - 1) {
       dispatch(goToNextQuestion());
       setCanProceed(false);
-      setQuestionTimer(5); // Réinitialiser le timer à 5 secondes
+      setQuestionTimer(5);
+      // Redémarrer l'enregistrement pour la prochaine question
+      if (localStreamRef.current) {
+        const mediaRecorder = new MediaRecorder(localStreamRef.current, {
+          mimeType: "video/webm;codecs=vp9,opus",
+        });
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunksRef.current.push(event.data);
+          }
+        };
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunksRef.current, {
+            type: "video/webm",
+          });
+          recordedBlobsRef.current[currentQuestionIndex + 1] = blob;
+          dispatch(setRecordedBlob(blob));
+          recordedChunksRef.current = [];
+        };
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.start(1000);
+        dispatch(startRecording());
+      }
     } else {
-      toast.info("Vous avez atteint la dernière question");
+      setShowConfirmModal(true);
     }
   }, [
     dispatch,
@@ -905,19 +716,22 @@ const Interview = () => {
     questions,
     currentQuestionIndex,
     recordings,
+    isRecording,
   ]);
 
-  // Modifier la fonction handlePreviousQuestion
   const handlePreviousQuestion = useCallback(() => {
     if (!canProceed) {
       toast.info("Veuillez attendre la fin du temps imparti");
       return;
     }
 
-    // Arrêter toute lecture en cours
+    if (isRecording && mediaRecorderRef.current?.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      dispatch(stopRecording());
+    }
+
     window.speechSynthesis.cancel();
 
-    // Sauvegarder la transcription actuelle avant de revenir à la question précédente
     const currentTranscript = transcript;
     const currentQuestion = questions[currentQuestionIndex];
 
@@ -932,7 +746,7 @@ const Interview = () => {
       dispatch(
         setState({
           recordings: updatedRecordings,
-          transcript: "", // Réinitialiser la transcription pour la prochaine question
+          transcript: "",
         })
       );
     }
@@ -941,6 +755,28 @@ const Interview = () => {
       dispatch(goToPreviousQuestion());
       setCanProceed(false);
       setQuestionTimer(5);
+      // Redémarrer l'enregistrement pour la question précédente
+      if (localStreamRef.current) {
+        const mediaRecorder = new MediaRecorder(localStreamRef.current, {
+          mimeType: "video/webm;codecs=vp9,opus",
+        });
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunksRef.current.push(event.data);
+          }
+        };
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunksRef.current, {
+            type: "video/webm",
+          });
+          recordedBlobsRef.current[currentQuestionIndex - 1] = blob;
+          dispatch(setRecordedBlob(blob));
+          recordedChunksRef.current = [];
+        };
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.start(1000);
+        dispatch(startRecording());
+      }
     } else {
       toast.info("Vous êtes à la première question");
     }
@@ -951,200 +787,52 @@ const Interview = () => {
     questions,
     currentQuestionIndex,
     recordings,
+    isRecording,
   ]);
 
   const handleGoToQuestion = useCallback(
     (index) => {
+      if (isRecording && mediaRecorderRef.current?.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+        dispatch(stopRecording());
+      }
+
       dispatch(goToQuestion(index));
-      setTimeout(speakQuestion, 500);
+      setTimeout(() => {
+        if (localStreamRef.current) {
+          const mediaRecorder = new MediaRecorder(localStreamRef.current, {
+            mimeType: "video/webm;codecs=vp9,opus",
+          });
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              recordedChunksRef.current.push(event.data);
+            }
+          };
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunksRef.current, {
+              type: "video/webm",
+            });
+            recordedBlobsRef.current[index] = blob;
+            dispatch(setRecordedBlob(blob));
+            recordedChunksRef.current = [];
+          };
+          mediaRecorderRef.current = mediaRecorder;
+          mediaRecorder.start(1000);
+          dispatch(startRecording());
+        }
+      }, 500);
     },
-    [dispatch, speakQuestion]
+    [dispatch, isRecording]
   );
 
   const handleToggleMute = useCallback(() => {
     dispatch(toggleMute());
     if (localStreamRef.current) {
       localStreamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = isMuted;
+        track.enabled = !isMuted;
       });
     }
-    if (isMuted && !isTranscribing) {
-      startTranscription();
-    } else if (!isMuted && isTranscribing) {
-      stopTranscription();
-    }
-  }, [
-    dispatch,
-    isMuted,
-    isTranscribing,
-    startTranscription,
-    stopTranscription,
-  ]);
-
-  const handleSaveInterview = async () => {
-    try {
-      setIsSaving(true);
-      setSaveError(null);
-
-      // Convertir la vidéo en base64
-      const videoBlob = await new Promise((resolve) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = localRef.current.videoWidth;
-        canvas.height = localRef.current.videoHeight;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(localRef.current, 0, 0);
-        canvas.toBlob(resolve, "video/webm");
-      });
-
-      const reader = new FileReader();
-      const videoBase64 = await new Promise((resolve) => {
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(videoBlob);
-      });
-
-      // Préparer les données à envoyer
-      const data = {
-        video: videoBase64,
-        recordings: recordings.map((recording) => ({
-          questionIndex: recording.questionIndex,
-          question: recording.question,
-          transcript: recording.transcript,
-          timestamp: recording.timestamp,
-        })),
-      };
-
-      // Récupérer le token d'authentification
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Token d'authentification manquant");
-      }
-
-      // Envoyer les données au serveur
-      const response = await fetch(
-        `${BASE_URL}/candidates/entretiens/${interviewId}/save`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(data),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || "Erreur lors de la sauvegarde de l'entretien"
-        );
-      }
-
-      const result = await response.json();
-      if (result.success) {
-        setSuccessMessage("Entretien sauvegardé avec succès");
-        // Rediriger vers la page de confirmation ou la liste des entretiens
-        navigate("/candidates/interviews");
-      } else {
-        throw new Error(
-          result.error || "Erreur lors de la sauvegarde de l'entretien"
-        );
-      }
-    } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error);
-      setSaveError(
-        error.message ||
-          "Une erreur est survenue lors de la sauvegarde de l'entretien"
-      );
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleCompleteInterview = async () => {
-    setShowConfirmModal(false);
-    await handleEndCall();
-  };
-
-  const handleFinishInterview = async () => {
-    try {
-      if (!recordedChunksRef.current.length) {
-        toast.error("Aucun enregistrement disponible");
-        return;
-      }
-
-      // Arrêter l'enregistrement si en cours
-      if (
-        mediaRecorderRef.current &&
-        mediaRecorderRef.current.state !== "inactive"
-      ) {
-        mediaRecorderRef.current.stop();
-      }
-
-      // Convertir les chunks en Blob
-      const videoBlob = new Blob(recordedChunksRef.current, {
-        type: "video/webm",
-      });
-
-      // Convertir le Blob en base64
-      const reader = new FileReader();
-      reader.readAsDataURL(videoBlob);
-      reader.onloadend = async () => {
-        const base64Video = reader.result;
-
-        // Préparer les données des enregistrements
-        const recordings = questions.map((question, index) => ({
-          questionIndex: index,
-          question: question.text || question.question,
-          transcript: transcript || "",
-          timestamp: new Date().toISOString(),
-        }));
-
-        try {
-          // Envoyer les données au serveur
-          const response = await axios.post(
-            `${BASE_URL}/api/candidates/${interviewId}/recordings`,
-            {
-              video: base64Video,
-              recordings: recordings,
-            },
-            {
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: localStorage.getItem("token"),
-              },
-            }
-          );
-
-          if (response.data.success) {
-            // Mettre à jour le statut de la candidature
-            await axios.put(
-              `${BASE_URL}/api/candidates/${interviewId}/status`,
-              { status: "completed" },
-              {
-                headers: {
-                  Authorization: localStorage.getItem("token"),
-                },
-              }
-            );
-
-            toast.success("Entretien terminé avec succès");
-            navigate("/mes-entretiens");
-          } else {
-            toast.error(
-              response.data.error ||
-                "Erreur lors de la sauvegarde de l'entretien"
-            );
-          }
-        } catch (error) {
-          console.error("Erreur lors de l'envoi des données:", error);
-          toast.error("Erreur lors de l'envoi des données au serveur");
-        }
-      };
-    } catch (error) {
-      console.error("Erreur lors de la fin de l'entretien:", error);
-      toast.error("Erreur lors de la sauvegarde de l'entretien");
-    }
-  };
+  }, [dispatch, isMuted]);
 
   if (loading) {
     return (
@@ -1209,7 +897,10 @@ const Interview = () => {
       <div className="flex items-center justify-center min-h-screen">
         <Card title="Entretien terminé" className="w-96">
           <p>Votre entretien a été enregistré avec succès.</p>
-          <Button type="primary" onClick={handleCompleteInterview}>
+          <Button
+            type="primary"
+            onClick={() => navigate("/mesinterview", { replace: true })}
+          >
             Retour au tableau de bord
           </Button>
         </Card>
@@ -1220,15 +911,14 @@ const Interview = () => {
   return (
     <div className="flex flex-col items-center min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="w-full max-w-6xl bg-white rounded-2xl shadow-lg overflow-hidden">
-        {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold">
-                Simulation d'entretien technique
+                Simulation d'entretien technique (Ingénieur Informatique)
               </h1>
               <p className="text-blue-100 mt-1">
-                Répondez aux questions pour vous entraîner
+                Répondez aux questions techniques pour vous entraîner
               </p>
             </div>
             {!webcamActive ? (
@@ -1249,69 +939,21 @@ const Interview = () => {
           />
         </div>
 
-        {/* Main Content */}
         <div className="p-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Video Feed */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
                 <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                  {webcamActive ? (
-                    <>
-                      <video
-                        ref={localRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full h-full object-cover"
-                        style={{ transform: "scaleX(-1)" }}
-                      />
-                      {/* Overlay pour les contrôles */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
-                        <div className="flex justify-center items-center space-x-6">
-                          <button
-                            onClick={handleToggleMute}
-                            className={`p-4 rounded-full ${
-                              isMuted
-                                ? "bg-red-500 hover:bg-red-600"
-                                : "bg-white/20 hover:bg-white/30"
-                            } text-white transition-all duration-300 backdrop-blur-sm`}
-                          >
-                            {isMuted ? (
-                              <MicOff className="w-6 h-6" />
-                            ) : (
-                              <Mic className="w-6 h-6" />
-                            )}
-                          </button>
-                          <button
-                            onClick={handleEndCall}
-                            className="p-4 rounded-full bg-red-500 hover:bg-red-600 text-white transition-all duration-300 backdrop-blur-sm"
-                          >
-                            <PhoneOff className="w-6 h-6" />
-                          </button>
-                        </div>
-                      </div>
-                      {/* Indicateur d'enregistrement */}
-                      {isRecording && (
-                        <div className="absolute top-4 right-4 flex items-center bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-md backdrop-blur-sm">
-                          <span className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></span>
-                          Enregistrement
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-white">
-                      <VideoCameraOutlined className="text-4xl mb-4" />
-                      <p className="text-lg">
-                        Cliquez sur "Commencer l'entretien" pour démarrer
-                      </p>
-                    </div>
-                  )}
+                  <VideoPlayer
+                    localRef={localRef}
+                    isActive={webcamActive}
+                    isRecording={isRecording}
+                    cameraError={cameraError}
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Question Card */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-lg shadow-lg p-4">
                 <h2 className="text-xl font-bold mb-4">Questions</h2>
@@ -1329,7 +971,9 @@ const Interview = () => {
                       currentIndex={currentQuestionIndex}
                       isSpeaking={isSpeaking}
                       transcript={transcript}
-                      onSpeakQuestion={speakQuestion}
+                      onSpeakQuestion={(status) =>
+                        dispatch(setState({ isSpeaking: status }))
+                      }
                       interviewStarted={interviewStarted}
                       totalQuestions={questions.length}
                     />
@@ -1356,8 +1000,9 @@ const Interview = () => {
 
                     {currentQuestionIndex === questions.length - 1 && (
                       <button
-                        onClick={handleSaveInterview}
-                        className="w-full mt-4 px-4 py-2 rounded-lg bg-green-500 text-white"
+                        onClick={() => setShowConfirmModal(true)}
+                        disabled={isSaving}
+                        className="w-full mt-4 px-4 py-2 rounded-lg bg-green-500 text-white disabled:opacity-50"
                       >
                         Terminer et sauvegarder
                       </button>
@@ -1377,38 +1022,20 @@ const Interview = () => {
       )}
 
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-bold mb-4">Entretien terminé</h2>
-            <p className="mb-4">
-              Votre entretien a été enregistré avec succès.
-            </p>
-            <p className="mb-6">
-              Vous pouvez maintenant retourner à votre tableau de bord.
-            </p>
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                className="px-4 py-2 rounded-lg bg-gray-200"
-              >
-                Fermer
-              </button>
-              <button
-                onClick={handleCompleteInterview}
-                className="px-4 py-2 rounded-lg bg-blue-500 text-white"
-              >
-                Retour au tableau de bord
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Afficher l'erreur de sauvegarde si elle existe */}
-      {saveError && (
-        <div className="mt-4 py-3 px-4 bg-red-50 text-red-600 rounded-lg border border-red-100 max-w-6xl w-full">
-          {saveError}
-        </div>
+        <Modal
+          title="Confirmer la fin de l'entretien"
+          visible={showConfirmModal}
+          onOk={handleEndCall}
+          onCancel={() => setShowConfirmModal(false)}
+          okText="Terminer"
+          cancelText="Annuler"
+          okButtonProps={{ disabled: isSaving }}
+        >
+          <p>
+            Êtes-vous sûr de vouloir terminer l'entretien ? Vos réponses et
+            enregistrements seront sauvegardés.
+          </p>
+        </Modal>
       )}
     </div>
   );

@@ -113,7 +113,7 @@ def create_app():
     app.register_blueprint(Dashboard_recruteur_bp, url_prefix='/api/recruteur')
     app.register_blueprint(recruteurv1_bp, url_prefix='/api/recruteur')
     app.register_blueprint(candidates_bp, url_prefix='/api/candidates')
-    app.register_blueprint(entretiens_bp, url_prefix='/api/recruteur/entretiens')
+    app.register_blueprint(entretiens_bp)
 
     # Log des routes enregistrées
     logger.info("Routes enregistrées:")

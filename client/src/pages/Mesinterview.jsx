@@ -16,26 +16,28 @@ import {
 } from "./store/acceptedOffersSlice";
 import { toast } from "react-toastify";
 
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
 const statusIcons = {
   Accepté: <CheckCircle2 className="h-4 w-4 text-green-500" />,
-  "En cours": <Clock className="h-4 w-4 text-yellow-500" />,
+  "En attente": <Clock className="h-4 w-4 text-yellow-500" />,
   Terminé: <CheckCircle2 className="h-4 w-4 text-blue-500" />,
   Annulé: <CheckCircle2 className="h-4 w-4 text-red-500" />,
 };
 
 const statusLabels = {
   Accepté: "Acceptée",
-  "En cours": "En cours",
+  "En attente": "En attente",
   Terminé: "Terminée",
 };
 
 const MesInterview = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { candidatures, loading, error, generatingInterview } = useSelector(
+  const { candidatures, loading, error } = useSelector(
     (state) => state.acceptedOffers
   );
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, token } = useSelector((state) => state.auth);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -52,65 +54,12 @@ const MesInterview = () => {
     }
   }, [error, dispatch]);
 
-  const handleInterviewAction = async (candidature) => {
-    try {
-      console.log(
-        "Début de handleInterviewAction avec candidature:",
-        candidature
-      );
-
-      if (candidature.entretien_id) {
-        console.log(
-          "Navigation vers l'entretien existant:",
-          candidature.entretien_id
-        );
-        navigate(`/interview/${candidature.entretien_id}`);
-      } else {
-        console.log(
-          "Génération d'un nouvel entretien pour la candidature:",
-          candidature._id
-        );
-        const result = await dispatch(
-          generateInterview(candidature._id)
-        ).unwrap();
-
-        console.log("Résultat de la génération:", result);
-
-        if (result && result.entretien_id) {
-          console.log(
-            "Navigation vers le nouvel entretien:",
-            result.entretien_id
-          );
-          navigate(`/interview/${result.entretien_id}`);
-        } else {
-          console.error("Erreur: Pas d'ID d'entretien dans le résultat");
-          toast.error("Erreur lors de la génération de l'entretien");
-        }
-      }
-    } catch (error) {
-      console.error("Erreur lors de l'action d'entretien:", error);
-      toast.error(error.message || "Une erreur est survenue");
-    }
-  };
-
-  // Afficher l'état de chargement uniquement lors du chargement initial
-  if (loading && !generatingInterview) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="flex items-center space-x-2">
           <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
           <span className="text-gray-600">Chargement des candidatures...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <CheckCircle2 className="h-12 w-12 text-red-500 mx-auto" />
-          <p className="mt-2 text-gray-600">{error}</p>
         </div>
       </div>
     );
@@ -164,7 +113,12 @@ const MesInterview = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {candidatures.map((candidature) => (
-                    <tr key={candidature._id} className="hover:bg-gray-50">
+                    <tr
+                      key={`${candidature._id}-${
+                        candidature.entretien?.id || "no-interview"
+                      }`}
+                      className="hover:bg-gray-50"
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <Building className="h-5 w-5 text-gray-400 mr-2" />
@@ -178,6 +132,7 @@ const MesInterview = () => {
                           </div>
                         </div>
                       </td>
+
                       <td className="px-6 py-4 whitespace-nowrap">
                         {candidature.jobDetails?.company || "N/A"}
                       </td>
@@ -196,39 +151,47 @@ const MesInterview = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          {statusIcons[candidature.statut] ||
-                            statusIcons["Accepté"]}
+                          {statusIcons[candidature.statut]}
                           <span className="ml-2">
-                            {statusLabels[candidature.statut] || "N/A"}
+                            {statusLabels[candidature.statut] ||
+                              candidature.statut}
+                            {candidature.entretien.id}
                           </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button
-                          onClick={() => handleInterviewAction(candidature)}
-                          disabled={generatingInterview}
+                          onClick={() => {
+                            if (candidature.entretien?.id) {
+                              navigate(
+                                `/entretienpourc/${candidature.entretien.id}`
+                              );
+                            } else {
+                              toast.error(
+                                "Aucun entretien disponible pour cette candidature"
+                              );
+                            }
+                          }}
+                          disabled={
+                            !candidature.entretien?.id ||
+                            candidature.statut !== "Accepté"
+                          }
                           className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-                            candidature.statut === "Accepté"
+                            candidature.statut === "Accepté" &&
+                            candidature.entretien?.id
                               ? "bg-blue-600 hover:bg-blue-700"
-                              
-                              : candidature.statut === "Terminé"
-                              ? "bg-gray-400 cursor-not-allowed"
                               : "bg-gray-400 cursor-not-allowed"
                           }`}
                         >
-                          {generatingInterview ? (
-                            <>
-                              <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                              Génération...
-                            </>
-                          ) : (
-                            <>
-                              <PlayCircle className="h-4 w-4 mr-2" />
-                              {candidature.statut === "Accepté"
-                                ? "Passer l'entretien"
-                                : "Entretien terminé"}
-                            </>
-                          )}
+                          <>
+                            <PlayCircle className="h-4 w-4 mr-2" />
+                            {candidature.statut === "Accepté" &&
+                            candidature.entretien?.id
+                              ? "Passer l'entretien"
+                              : candidature.statut === "Terminé"
+                              ? "Entretien terminé"
+                              : "Action non disponible"}
+                          </>
                         </button>
                       </td>
                     </tr>

@@ -56,7 +56,7 @@ function Router() {
         <Route path="/" element={<Layout />}>
           <Route path="offres" element={<OffresEmploi />} />
           <Route path="offres/:id" element={<DetailsOffreEmploi />} />
-          <Route path="/interview/:interviewId" element={<Interview />} />
+          <Route path="/entretienpourc/:interviewId" element={<Interview />} />
 
           {/* Routes protégées pour les candidats */}
           <Route
@@ -85,7 +85,6 @@ function Router() {
               </ProtectedRoute>
             }
           />
-         
         </Route>
       </Routes>
     </>

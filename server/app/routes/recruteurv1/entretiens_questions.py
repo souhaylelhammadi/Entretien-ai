@@ -265,31 +265,4 @@ Format de réponse souhaité (en JSON):
 
     except Exception as e:
         logger.error(f"Erreur lors de la génération des questions: {str(e)}")
-        return ['error']
-
-@entretiens_questions_bp.route('/interviews/generate', methods=['POST'])
-def generate_interview():
-    """Endpoint pour générer des questions d'entretien"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Données manquantes"}), 400
-
-        candidature_id = data.get('candidature_id')
-        offre_id = data.get('offre_id')
-        cv_text = data.get('cv_text')
-        job_offer = data.get('job_offer')
-
-        if not all([candidature_id, offre_id, cv_text, job_offer]):
-            return jsonify({"error": "Tous les champs sont requis"}), 400
-
-        questions = generate_interview_questions(cv_text, job_offer, candidature_id, offre_id)
-        
-        if questions == ['error']:
-            return jsonify({"error": "Erreur lors de la génération des questions"}), 500
-
-        return jsonify({"questions": questions}), 200
-
-    except Exception as e:
-        logger.error(f"Erreur lors de la génération de l'entretien: {str(e)}")
-        return jsonify({"error": str(e)}), 500 
+        return ['error'] 

@@ -137,6 +137,7 @@ const Navbar = () => {
               Interview AI
             </span>
           </Link>
+          
 
           {/* Mobile menu button */}
           <div className="flex md:hidden">

@@ -1,7 +1,23 @@
-// interviewsSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { BASE_URL } from "../../config";
+
+// Helper to validate and log token
+const getValidToken = () => {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    console.error("No token found in localStorage");
+    throw new Error("No token found");
+  }
+  const cleanToken = token.replace(/^Bearer\s+/i, "").trim();
+  try {
+    const payload = JSON.parse(atob(cleanToken.split(".")[1]));
+    console.log("Token payload:", payload);
+  } catch (error) {
+    console.error("Failed to decode token payload:", error);
+  }
+  return cleanToken;
+};
 
 // Action pour récupérer les détails de l'entretien
 export const fetchInterviewDetails = createAsyncThunk(
@@ -9,25 +25,47 @@ export const fetchInterviewDetails = createAsyncThunk(
   async (interviewId, { rejectWithValue }) => {
     try {
       console.log("Début du chargement de l'entretien:", interviewId);
+      const token = getValidToken();
+      console.log("Token utilisé:", token);
+
       const response = await axios.get(
         `${BASE_URL}/api/candidates/entretiens/${interviewId}`,
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
       console.log("Réponse du serveur:", response.status);
+      console.log("Données de l'entretien:", response.data);
 
       if (response.data.success) {
-        console.log("Données de l'entretien:", response.data.data);
         return response.data.data;
       } else {
         return rejectWithValue(response.data.error || "Erreur inconnue");
       }
     } catch (error) {
       console.error("Erreur lors du chargement:", error);
+      console.error("Détails de l'erreur:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        headers: error.response?.headers,
+      });
+
+      if (error.response?.status === 404) {
+        return rejectWithValue(
+          "Cet entretien n'existe pas ou n'est pas accessible."
+        );
+      }
+      if (error.response?.status === 403) {
+        return rejectWithValue("Accès à cet entretien interdit.");
+      }
+      if (error.response?.status === 401) {
+        console.error("401 Unauthorized: Invalid or unauthorized token");
+        localStorage.removeItem("token");
+        return rejectWithValue("Session expirée. Veuillez vous reconnecter.");
+      }
       return rejectWithValue(
         error.response?.data?.error ||
           "Erreur lors de la récupération des détails de l'entretien"
@@ -41,14 +79,20 @@ export const fetchRecordings = createAsyncThunk(
   "interview/fetchRecordings",
   async (interviewId, { rejectWithValue }) => {
     try {
+      const token = getValidToken();
+      console.log("Fetching recordings for interview:", interviewId);
+
       const response = await axios.get(
-        `http://localhost:5000/api/candidates/entretiens/${interviewId}/recordings`,
+        `${BASE_URL}/api/candidates/entretiens/${interviewId}/recordings`,
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
+
+      console.log("Recordings response:", response.status);
+      console.log("Recordings data:", response.data);
 
       if (response.data.success) {
         return response.data.recordings || [];
@@ -56,6 +100,26 @@ export const fetchRecordings = createAsyncThunk(
         return rejectWithValue(response.data.error || "Erreur inconnue");
       }
     } catch (error) {
+      console.error("Erreur lors du chargement des enregistrements:", error);
+      console.error("Détails de l'erreur:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        headers: error.response?.headers,
+      });
+
+      if (error.response?.status === 404) {
+        return rejectWithValue(
+          "Enregistrements non trouvés pour cet entretien."
+        );
+      }
+      if (error.response?.status === 403) {
+        return rejectWithValue("Accès aux enregistrements interdit.");
+      }
+      if (error.response?.status === 401) {
+        console.error("401 Unauthorized: Invalid or unauthorized token");
+        localStorage.removeItem("token");
+        return rejectWithValue("Session expirée. Veuillez vous reconnecter.");
+      }
       return rejectWithValue(
         error.response?.data?.error ||
           "Erreur lors de la récupération des enregistrements"
@@ -67,85 +131,37 @@ export const fetchRecordings = createAsyncThunk(
 // Action pour sauvegarder l'entretien
 export const saveInterviewToDatabase = createAsyncThunk(
   "interview/saveInterviewToDatabase",
-  async ({ interviewId, recordedBlob, recordings }, { rejectWithValue }) => {
+  async ({ interviewId, formData }, { rejectWithValue }) => {
     try {
-      // Convertir le blob en base64
-      const reader = new FileReader();
-      reader.readAsDataURL(recordedBlob);
+      const token = getValidToken();
 
-      const base64Video = await new Promise((resolve, reject) => {
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-      });
-
-      // Préparer les données à envoyer
-      const data = {
-        video: base64Video,
-        recordings: recordings.map((recording) => ({
-          questionIndex: recording.questionIndex,
-          question: recording.question,
-          transcript: recording.transcript || "",
-          timestamp: recording.timestamp || new Date().toISOString(),
-        })),
-        completedAt: new Date().toISOString(),
-      };
-
-      console.log("Données à envoyer:", {
-        videoSize: recordedBlob.size,
-        recordingsCount: recordings.length,
-        interviewId: interviewId,
-      });
-
-      // Envoyer les données au serveur
       const response = await axios.post(
         `${BASE_URL}/api/candidates/entretiens/${interviewId}/recordings`,
-        data,
+        formData,
         {
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-          onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-            console.log(`Progression de l'upload: ${percentCompleted}%`);
+            "Content-Type": "multipart/form-data",
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
-      console.log("Réponse du serveur:", response.data);
-
-      if (response.data.success) {
-        return {
-          success: true,
-          data: response.data.data,
-        };
-      } else {
-        throw new Error(
-          response.data.error || "Erreur lors de la sauvegarde de l'entretien"
-        );
-      }
+      return response.data;
     } catch (error) {
       console.error("Erreur lors de la sauvegarde:", error);
-      if (error.response) {
-        console.error("Détails de l'erreur:", {
-          status: error.response.status,
-          data: error.response.data,
-          headers: error.response.headers,
-          config: {
-            url: error.config.url,
-            method: error.config.method,
-            headers: error.config.headers,
-          },
-        });
+      if (error.response?.status === 404) {
+        return rejectWithValue("Entretien non trouvé pour la sauvegarde.");
+      }
+      if (error.response?.status === 403) {
+        return rejectWithValue("Sauvegarde interdite pour cet entretien.");
+      }
+      if (error.response?.status === 401) {
+        console.error("401 Unauthorized: Invalid or unauthorized token");
+        localStorage.removeItem("token");
+        return rejectWithValue("Session expirée. Veuillez vous reconnecter.");
       }
       return rejectWithValue(
-        error.response?.data?.error ||
-          error.message ||
-          "Erreur lors de la sauvegarde de l'entretien"
+        error.response?.data?.error || "Erreur lors de la sauvegarde"
       );
     }
   }
@@ -169,6 +185,8 @@ const initialState = {
   interviewStarted: false,
   questions: [],
   loading: false,
+  loadingRecordings: false,
+  savingInterview: false,
   error: null,
   interviewDetails: null,
 };
@@ -201,7 +219,11 @@ const interviewSlice = createSlice({
       state.isRecording = false;
     },
     setRecordedBlob: (state, action) => {
-      state.recordedBlob = action.payload;
+      state.recordedBlob = {
+        size: action.payload.size,
+        type: action.payload.type,
+        timestamp: new Date().toISOString(),
+      };
     },
     goToNextQuestion: (state) => {
       const questionsLength = state.questions?.length || 0;
@@ -224,7 +246,6 @@ const interviewSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Gestion de fetchInterviewDetails
       .addCase(fetchInterviewDetails.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -246,7 +267,6 @@ const interviewSlice = createSlice({
         state.questions = [];
         state.currentQuestionIndex = 0;
       })
-      // Gestion de fetchRecordings
       .addCase(fetchRecordings.pending, (state) => {
         state.loadingRecordings = true;
       })
@@ -259,7 +279,6 @@ const interviewSlice = createSlice({
         state.error =
           action.payload || "Erreur lors du chargement des enregistrements";
       })
-      // Gestion de saveInterviewToDatabase
       .addCase(saveInterviewToDatabase.pending, (state) => {
         state.savingInterview = true;
         state.error = null;
@@ -267,9 +286,7 @@ const interviewSlice = createSlice({
       .addCase(saveInterviewToDatabase.fulfilled, (state, action) => {
         state.savingInterview = false;
         state.interviewCompleted = true;
-        state.status = "succeeded";
         state.error = null;
-        // Mettre à jour les statuts
         if (action.payload.data) {
           state.interviewDetails = {
             ...state.interviewDetails,
@@ -279,7 +296,6 @@ const interviewSlice = createSlice({
       })
       .addCase(saveInterviewToDatabase.rejected, (state, action) => {
         state.savingInterview = false;
-        state.status = "failed";
         state.error = action.payload;
       });
   },
