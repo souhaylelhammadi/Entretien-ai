@@ -1,0 +1,26 @@
+# Ignorer les environnements virtuels
+venv/
+server/venv/
+
+# Ignorer les fichiers Python compilés
+__pycache__/
+*.py[cod]
+*.so
+
+# Ignorer les fichiers de logs, .env et autres temporaires
+*.log
+.env
+*.sqlite3
+
+# Ignorer les fichiers système
+.DS_Store
+Thumbs.db
+
+# Ignorer les fichiers de l'éditeur
+.vscode/
+.idea/
+
+# Ignorer les fichiers/dossiers générés
+node_modules/
+dist/
+build/
