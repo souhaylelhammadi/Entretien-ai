@@ -25,7 +25,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Pagination,
 } from "@mui/material";
 import { PlayArrow, Visibility } from "@mui/icons-material";
 import { format } from "date-fns";
@@ -35,10 +34,10 @@ import { useNavigate } from "react-router-dom";
 const InterviewSection = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { interviews, selectedInterview, loading, error, pagination } =
-    useSelector((state) => state.entretiens);
+  const { interviews, selectedInterview, loading, error } = useSelector(
+    (state) => state.entretiens
+  );
   const [openDialog, setOpenDialog] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -47,16 +46,22 @@ const InterviewSection = () => {
       return;
     }
 
-    dispatch(fetchRecruiterInterviews({ page: currentPage, perPage: 10 }));
+    console.log("Fetching interviews...");
+    dispatch(fetchRecruiterInterviews());
 
     return () => {
       dispatch(clearError());
       dispatch(clearSelectedInterview());
     };
-  }, [dispatch, currentPage, navigate]);
+  }, [dispatch, navigate]);
+
+  useEffect(() => {
+    console.log("Current interviews state:", interviews);
+  }, [interviews]);
 
   const handleViewDetails = async (interviewId) => {
     try {
+      console.log("Fetching details for interview:", interviewId);
       await dispatch(fetchInterviewDetails(interviewId)).unwrap();
       setOpenDialog(true);
     } catch (error) {
@@ -67,10 +72,6 @@ const InterviewSection = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     dispatch(clearSelectedInterview());
-  };
-
-  const handlePageChange = (event, value) => {
-    setCurrentPage(value);
   };
 
   const getStatusColor = (status) => {
@@ -90,7 +91,7 @@ const InterviewSection = () => {
     switch (status) {
       case "termine":
         return "Terminé";
-      case "En attente":
+      case "en_attente":
         return "En attente";
       case "planifie":
         return "Planifié";
@@ -133,101 +134,87 @@ const InterviewSection = () => {
       {interviews.length === 0 ? (
         <Alert severity="info">Aucun entretien passé trouvé</Alert>
       ) : (
-        <>
-          <TableContainer component={Paper} sx={{ mt: 2 }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Offre</TableCell>
-                  <TableCell>Candidat</TableCell>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {interviews.map((interview) => (
-                  <TableRow
-                    key={interview.id}
-                    sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
-                  >
-                    <TableCell>
-                      <Typography variant="body1">
-                        {interview.offre?.titre || "Non défini"}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {interview.offre?.entreprise || "Non définie"}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body1">
-                        {interview.candidat?.nom || "Non défini"}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {interview.candidat?.email || "Non défini"}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {interview.datePrevue
-                        ? format(
-                            new Date(interview.datePrevue),
-                            "dd MMMM yyyy",
-                            {
-                              locale: fr,
-                            }
-                          )
-                        : interview.dateCreation
-                        ? format(
-                            new Date(interview.dateCreation),
-                            "dd MMMM yyyy",
-                            {
-                              locale: fr,
-                            }
-                          )
-                        : "Non définie"}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={getStatusLabel(interview.statut)}
-                        color={getStatusColor(interview.statut)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      {interview.video?.url && (
-                        <IconButton
-                          color="primary"
-                          onClick={() =>
-                            window.open(interview.video.url, "_blank")
+        <TableContainer component={Paper} sx={{ mt: 2 }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Offre</TableCell>
+                <TableCell>Candidat</TableCell>
+                <TableCell>Date</TableCell>
+                <TableCell>Statut</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {interviews.map((interview) => (
+                <TableRow
+                  key={interview.id}
+                  sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
+                >
+                  <TableCell>
+                    <Typography variant="body1">
+                      {interview.offre?.titre || "Non défini"}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {interview.offre?.entreprise || "Non définie"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body1">
+                      {interview.candidat?.nom || "Non défini"}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {interview.candidat?.email || "Non défini"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    {interview.datePrevue
+                      ? format(new Date(interview.datePrevue), "dd MMMM yyyy", {
+                          locale: fr,
+                        })
+                      : interview.dateCreation
+                      ? format(
+                          new Date(interview.dateCreation),
+                          "dd MMMM yyyy",
+                          {
+                            locale: fr,
                           }
-                          size="small"
-                          sx={{ mr: 1 }}
-                        >
-                          <PlayArrow />
-                        </IconButton>
-                      )}
+                        )
+                      : "Non définie"}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={getStatusLabel(interview.statut)}
+                      color={getStatusColor(interview.statut)}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    {interview.video?.url && (
                       <IconButton
                         color="primary"
-                        onClick={() => handleViewDetails(interview.id)}
+                        onClick={() =>
+                          window.open(interview.video.url, "_blank")
+                        }
                         size="small"
+                        sx={{ mr: 1 }}
                       >
-                        <Visibility />
+                        <PlayArrow />
                       </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
-            <Pagination
-              count={pagination.pages}
-              page={currentPage}
-              onChange={handlePageChange}
-              color="primary"
-            />
-          </Box>
-        </>
+                    )}
+                    <IconButton
+                      color="primary"
+                      onClick={() => handleViewDetails(interview.id)}
+                      size="small"
+                    >
+                      <Visibility />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
       <Dialog
@@ -249,27 +236,43 @@ const InterviewSection = () => {
                 </Typography>
                 <Typography variant="body1">
                   Date prévue:{" "}
-                  {selectedInterview.datePrevue
+                  {selectedInterview.date_prevue
                     ? format(
-                        new Date(selectedInterview.datePrevue),
+                        new Date(selectedInterview.date_prevue),
                         "dd MMMM yyyy",
-                        {
-                          locale: fr,
-                        }
+                        { locale: fr }
                       )
                     : "Non définie"}
                 </Typography>
                 <Typography variant="body1">
                   Date de création:{" "}
-                  {selectedInterview.dateCreation
+                  {selectedInterview.date_creation
                     ? format(
-                        new Date(selectedInterview.dateCreation),
+                        new Date(selectedInterview.date_creation),
                         "dd MMMM yyyy",
-                        {
-                          locale: fr,
-                        }
+                        { locale: fr }
                       )
                     : "Non définie"}
+                </Typography>
+                <Typography variant="body1">
+                  Dernière mise à jour:{" "}
+                  {selectedInterview.date_maj
+                    ? format(
+                        new Date(selectedInterview.date_maj),
+                        "dd MMMM yyyy",
+                        { locale: fr }
+                      )
+                    : "Non définie"}
+                </Typography>
+                <Typography variant="body1">
+                  Terminé le:{" "}
+                  {selectedInterview.completed_at
+                    ? format(
+                        new Date(selectedInterview.completed_at),
+                        "dd MMMM yyyy",
+                        { locale: fr }
+                      )
+                    : "Non défini"}
                 </Typography>
 
                 <Typography variant="h6" sx={{ mt: 3 }} gutterBottom>
@@ -317,6 +320,91 @@ const InterviewSection = () => {
                     </Box>
                   </>
                 )}
+
+                {selectedInterview.qa_pairs &&
+                  selectedInterview.qa_pairs.length > 0 && (
+                    <>
+                      <Typography variant="h6" sx={{ mt: 3 }} gutterBottom>
+                        Questions et Réponses
+                      </Typography>
+                      <Box sx={{ mt: 2 }}>
+                        {selectedInterview.qa_pairs.map((qa, index) => (
+                          <Paper
+                            key={index}
+                            sx={{
+                              p: 2,
+                              mb: 2,
+                              backgroundColor: "#f5f5f5",
+                              "&:hover": {
+                                backgroundColor: "#eeeeee",
+                              },
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "flex-start",
+                                mb: 1,
+                              }}
+                            >
+                              <Typography
+                                variant="subtitle1"
+                                sx={{
+                                  fontWeight: "bold",
+                                  color: "#1976d2",
+                                  flex: 1,
+                                }}
+                              >
+                                Question {qa.questionIndex + 1}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ ml: 2 }}
+                              >
+                                {qa.timestamp
+                                  ? new Date(qa.timestamp).toLocaleString(
+                                      "fr-FR"
+                                    )
+                                  : "Non défini"}
+                              </Typography>
+                            </Box>
+
+                            <Typography
+                              variant="body1"
+                              sx={{
+                                mb: 2,
+                                color: "#424242",
+                                fontStyle: "italic",
+                              }}
+                            >
+                              {qa.question}
+                            </Typography>
+
+                            <Box
+                              sx={{
+                                backgroundColor: "white",
+                                p: 2,
+                                borderRadius: 1,
+                                border: "1px solid #e0e0e0",
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ mb: 1 }}
+                              >
+                                Réponse:
+                              </Typography>
+                              <Typography variant="body1">
+                                {qa.answer || "Pas de réponse disponible"}
+                              </Typography>
+                            </Box>
+                          </Paper>
+                        ))}
+                      </Box>
+                    </>
+                  )}
               </Box>
             </DialogContent>
             <DialogActions>

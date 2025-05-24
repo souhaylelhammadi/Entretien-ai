@@ -151,11 +151,10 @@ const MesInterview = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          {statusIcons[candidature.statut]}
+                          {statusIcons[candidature.entretien.statut]}
                           <span className="ml-2">
-                            {statusLabels[candidature.statut] ||
-                              candidature.statut}
-                            {candidature.entretien.id}
+                            {statusLabels[candidature.entretien?.statut] ||
+                              candidature.entretien?.statut}
                           </span>
                         </div>
                       </td>
@@ -177,7 +176,7 @@ const MesInterview = () => {
                             candidature.statut !== "Accepté"
                           }
                           className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-                            candidature.statut === "Accepté" &&
+                            candidature.entretien?.statut === "Accepté" &&
                             candidature.entretien?.id
                               ? "bg-blue-600 hover:bg-blue-700"
                               : "bg-gray-400 cursor-not-allowed"
@@ -185,12 +184,12 @@ const MesInterview = () => {
                         >
                           <>
                             <PlayCircle className="h-4 w-4 mr-2" />
-                            {candidature.statut === "Accepté" &&
+                            {candidature.entretien?.statut === "Accepté" &&
                             candidature.entretien?.id
                               ? "Passer l'entretien"
-                              : candidature.statut === "Terminé"
-                              ? "Entretien terminé"
-                              : "Action non disponible"}
+                              : candidature.statut === "terminé"
+                              ? ""
+                              : "Entretien terminé"}
                           </>
                         </button>
                       </td>

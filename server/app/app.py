@@ -10,6 +10,7 @@ from routes.recruteurv1 import recruteurv1_bp
 from routes.postuler import candidatures_bp
 from routes.entretiens import entretiens_bp
 from routes.interviews_pour_candidates import interviews_bp
+from routes.recruteurv1.entre1 import entretiensection_bp
 from pymongo import MongoClient
 import logging
 from datetime import datetime, timezone
@@ -113,8 +114,9 @@ def create_app():
     app.register_blueprint(Dashboard_recruteur_bp, url_prefix='/api/recruteur')
     app.register_blueprint(recruteurv1_bp, url_prefix='/api/recruteur')
     app.register_blueprint(candidates_bp, url_prefix='/api/candidates')
-    app.register_blueprint(entretiens_bp)
-
+    app.register_blueprint(entretiens_bp,url_prefix='/api/candidates/entretiens')
+    app.register_blueprint(entretiensection_bp,url_prefix='/api/recruteur/entretiens')
+    
     # Log des routes enregistrées
     logger.info("Routes enregistrées:")
     for rule in app.url_map.iter_rules():

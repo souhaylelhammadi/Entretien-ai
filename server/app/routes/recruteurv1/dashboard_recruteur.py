@@ -136,6 +136,7 @@ def get_dashboard_data(auth_payload):
                 {"recruteur_id": ObjectId(recruteur_id)},
             {"_id": 1, "titre": 1, "departement": 1, "statut": 1}
         ))
+        logger.info(f"Offres récupérées: {offres}")
         offre_ids = [offre["_id"] for offre in offres]
 
         # Statistiques des offres
@@ -162,6 +163,7 @@ def get_dashboard_data(auth_payload):
         # Récupérer tous les entretiens
         entretiens = list(db[ENTRETIENS_COLLECTION].find(interview_query))
         total_interviews = len(entretiens)
+        logger.info('entretjen',entretiens)
         
         # Prochains entretiens
         upcoming_interviews = sum(1 for e in entretiens if e.get("date", datetime.utcnow()) >= datetime.utcnow())

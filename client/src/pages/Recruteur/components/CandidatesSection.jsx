@@ -441,7 +441,7 @@ const CandidatesSection = () => {
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-500">
-                    {offre.candidats.length} candidat(s)
+                    {Array.isArray(offre.candidats) ? offre.candidats.length : 0} candidat(s)
                   </span>
                   {expandedOffers[offre.id] ? (
                     <ChevronDown className="w-5 h-5 text-gray-400" />
@@ -474,7 +474,7 @@ const CandidatesSection = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
-                      {getFilteredCandidates(offre.candidats).map(
+                      {Array.isArray(offre.candidats) && getFilteredCandidates(offre.candidats).map(
                         (candidat) => (
                           <tr key={candidat.id} className="hover:bg-blue-50">
                             <td className="px-6 py-4 whitespace-nowrap">

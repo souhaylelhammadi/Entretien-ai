@@ -1,22 +1,14 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
-import { BASE_URL } from "../../config";
+import { BASE_URL } from "../../config"; // e.g., "http://localhost:5000"
 
 // Helper to validate and log token
 const getValidToken = () => {
   const token = localStorage.getItem("token");
   if (!token) {
-    console.error("No token found in localStorage");
     throw new Error("No token found");
   }
-  const cleanToken = token.replace(/^Bearer\s+/i, "").trim();
-  try {
-    const payload = JSON.parse(atob(cleanToken.split(".")[1]));
-    console.log("Token payload:", payload);
-  } catch (error) {
-    console.error("Failed to decode token payload:", error);
-  }
-  return cleanToken;
+  return token.replace(/^Bearer\s+/i, "").trim();
 };
 
 // Action to fetch interview details
@@ -24,9 +16,12 @@ export const fetchInterviewDetails = createAsyncThunk(
   "interview/fetchDetails",
   async (interviewId, { rejectWithValue }) => {
     try {
-      console.log("Starting to fetch interview:", interviewId);
+      console.log(
+        "Début de la récupération des détails de l'entretien:",
+        interviewId
+      );
       const token = getValidToken();
-      console.log("Token used:", token);
+      console.log("Token validé:", token ? "Présent" : "Absent");
 
       const response = await axios.get(
         `${BASE_URL}/api/candidates/entretiens/${interviewId}`,
@@ -37,36 +32,60 @@ export const fetchInterviewDetails = createAsyncThunk(
         }
       );
 
-      console.log("Server response:", response.status, response.data);
+      console.log("Réponse du serveur:", response.status, response.data);
 
-      if (response.data.success) {
-        return response.data.data;
-      } else {
-        return rejectWithValue(response.data.error || "Unknown error");
-      }
-    } catch (error) {
-      console.error("Error fetching interview details:", error);
-      console.error("Error details:", {
-        status: error.response?.status,
-        data: error.response?.data,
-        headers: error.response?.headers,
-      });
-
-      if (error.response?.status === 404) {
+      if (!response.data.success) {
+        console.error("Erreur serveur:", response.data.error);
         return rejectWithValue(
-          "This interview does not exist or is not accessible."
+          response.data.error || "Erreur lors de la récupération de l'entretien"
         );
       }
-      if (error.response?.status === 403) {
-        return rejectWithValue("Access to this interview is forbidden.");
+
+      const data = response.data.data;
+      console.log("Données de l'entretien:", data);
+
+      if (!data || !data.entretien) {
+        console.error("Aucune donnée d'entretien dans la réponse");
+        return rejectWithValue("Données d'entretien manquantes");
       }
+
+      if (!data.questions || !Array.isArray(data.questions)) {
+        console.error("Format de questions invalide:", data.questions);
+        return rejectWithValue("Format de questions invalide");
+      }
+
+      if (data.questions.length === 0) {
+        console.error("Aucune question trouvée dans l'entretien");
+        return rejectWithValue("Aucune question disponible pour cet entretien");
+      }
+
+      console.log("Questions récupérées:", data.questions.length);
+      return {
+        entretien: data.entretien,
+        questions: data.questions,
+      };
+    } catch (error) {
+      console.error("Erreur lors de la récupération:", error);
+
       if (error.response?.status === 401) {
-        console.error("401 Unauthorized: Invalid or unauthorized token");
+        console.error("Session expirée");
         localStorage.removeItem("token");
-        return rejectWithValue("Session expired. Please log in again.");
+        return rejectWithValue("Session expirée. Veuillez vous reconnecter.");
       }
+
+      if (error.response?.status === 403) {
+        console.error("Accès non autorisé");
+        return rejectWithValue("Vous n'avez pas accès à cet entretien.");
+      }
+
+      if (error.response?.status === 404) {
+        console.error("Entretien non trouvé");
+        return rejectWithValue("Entretien non trouvé.");
+      }
+
       return rejectWithValue(
-        error.response?.data?.error || "Error fetching interview details"
+        error.response?.data?.error ||
+          "Erreur lors de la récupération de l'entretien"
       );
     }
   }
@@ -129,12 +148,14 @@ export const saveInterviewToDatabase = createAsyncThunk(
     try {
       const token = getValidToken();
 
+      const metadata = JSON.parse(formData.get("metadata"));
+
       const response = await axios.post(
-        `${BASE_URL}/api/candidates/entretiens/${interviewId}/recordings`,
-        formData,
+        `${BASE_URL}/api/candidates/entretiens/${interviewId}/update`,
+        metadata,
         {
           headers: {
-            "Content-Type": "multipart/form-data",
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         }
@@ -168,27 +189,19 @@ export const saveInterviewToDatabase = createAsyncThunk(
 );
 
 const initialState = {
-  webcamActive: false,
-  isMuted: false,
-  callTime: 0,
   currentQuestionIndex: 0,
-  cameraError: false,
-  transcript: "",
-  isTranscribing: false,
-  isRecording: false,
-  recordedBlob: null,
+  transcript: {},
   isSpeaking: false,
-  recordings: [],
-  interviewCompleted: false,
   showModal: false,
   errorMessage: "",
   interviewStarted: false,
   questions: [],
   loading: false,
-  loadingRecordings: false,
   savingInterview: false,
   error: null,
   interviewDetails: null,
+  showConfirmModal: false,
+  isProcessing: false,
 };
 
 const interviewSlice = createSlice({
@@ -196,38 +209,42 @@ const interviewSlice = createSlice({
   initialState,
   reducers: {
     setState: (state, action) => {
-      return { ...state, ...action.payload };
+      Object.keys(action.payload).forEach((key) => {
+        if (key !== "transcript") {
+          state[key] = action.payload[key];
+        } else {
+          state.transcript = {
+            ...state.transcript,
+            ...action.payload.transcript,
+          };
+        }
+      });
     },
-    incrementCallTime: (state) => {
-      state.callTime += 1;
+    startInterview: (state) => {
+      return {
+        ...state,
+        interviewStarted: true,
+        currentQuestionIndex: 0,
+        transcript: {},
+        error: null,
+        showModal: false,
+        isSpeaking: false,
+        isProcessing: false,
+      };
     },
-    toggleMute: (state) => {
-      state.isMuted = !state.isMuted;
-    },
-    hangUp: (state) => {
-      state.webcamActive = false;
-      state.callTime = 0;
-      state.currentQuestionIndex = 0;
-      state.isRecording = false;
-      state.recordedBlob = null;
-      state.recordings = [];
-    },
-    startRecording: (state) => {
-      state.isRecording = true;
-    },
-    stopRecording: (state) => {
-      state.isRecording = false;
-    },
-    setRecordedBlob: (state, action) => {
-      state.recordedBlob = {
-        size: action.payload.size,
-        type: action.payload.type,
-        timestamp: action.payload.timestamp,
+    stopInterview: (state) => {
+      return {
+        ...state,
+        interviewStarted: false,
+        currentQuestionIndex: 0,
+        transcript: {},
+        error: null,
+        isSpeaking: false,
+        isProcessing: false,
       };
     },
     goToNextQuestion: (state) => {
-      const questionsLength = state.questions?.length || 0;
-      if (state.currentQuestionIndex < questionsLength - 1) {
+      if (state.currentQuestionIndex < state.questions.length - 1) {
         state.currentQuestionIndex += 1;
       }
     },
@@ -236,12 +253,21 @@ const interviewSlice = createSlice({
         state.currentQuestionIndex -= 1;
       }
     },
-    goToQuestion: (state, action) => {
-      const index = action.payload;
-      const questionsLength = state.questions?.length || 0;
-      if (index >= 0 && index < questionsLength) {
-        state.currentQuestionIndex = index;
-      }
+    setTranscript: (state, action) => {
+      const { questionIndex, text } = action.payload;
+      state.transcript[questionIndex] = text;
+    },
+    clearTranscript: (state) => {
+      state.transcript = {};
+    },
+    setSpeaking: (state, action) => {
+      state.isSpeaking = action.payload;
+    },
+    setConfirmModal: (state, action) => {
+      state.showConfirmModal = action.payload;
+    },
+    setProcessing: (state, action) => {
+      state.isProcessing = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -251,20 +277,24 @@ const interviewSlice = createSlice({
         state.error = null;
         state.questions = [];
         state.currentQuestionIndex = 0;
+        state.isProcessing = true;
       })
       .addCase(fetchInterviewDetails.fulfilled, (state, action) => {
+        console.log("Questions reçues:", action.payload.questions);
         state.loading = false;
-        state.interviewDetails = action.payload;
-        state.questions = Array.isArray(action.payload?.questions)
-          ? action.payload.questions
-          : [];
+        state.interviewDetails = action.payload.entretien;
+        state.questions = action.payload.questions || [];
         state.currentQuestionIndex = 0;
+        state.error = null;
+        state.isProcessing = false;
       })
       .addCase(fetchInterviewDetails.rejected, (state, action) => {
+        console.error("Erreur lors de la récupération:", action.payload);
         state.loading = false;
-        state.error = action.payload || "Error fetching interview details";
+        state.error = action.payload;
         state.questions = [];
         state.currentQuestionIndex = 0;
+        state.isProcessing = false;
       })
       .addCase(fetchRecordings.pending, (state) => {
         state.loadingRecordings = true;
@@ -289,6 +319,9 @@ const interviewSlice = createSlice({
           state.interviewDetails = {
             ...state.interviewDetails,
             statut: action.payload.data.statut,
+            transcription_completed:
+              action.payload.data.transcription_completed,
+            last_updated_by: action.payload.data.last_updated_by,
           };
         }
       })
@@ -301,15 +334,15 @@ const interviewSlice = createSlice({
 
 export const {
   setState,
-  incrementCallTime,
-  toggleMute,
-  hangUp,
-  startRecording,
-  stopRecording,
-  setRecordedBlob,
+  startInterview,
+  stopInterview,
   goToNextQuestion,
   goToPreviousQuestion,
-  goToQuestion,
+  setTranscript,
+  clearTranscript,
+  setSpeaking,
+  setConfirmModal,
+  setProcessing,
 } = interviewSlice.actions;
 
 export default interviewSlice.reducer;

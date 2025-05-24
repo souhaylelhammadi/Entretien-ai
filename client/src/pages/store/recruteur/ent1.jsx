@@ -20,9 +20,7 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Fonction utilitaire pour valider les données d'entretien
@@ -33,8 +31,6 @@ const validateInterviewData = (interview) => {
     "offreId",
     "recruteurId",
     "statut",
-    "candidat",
-    "offre",
   ];
   const missingFields = requiredFields.filter((field) => !interview[field]);
 
@@ -46,66 +42,34 @@ const validateInterviewData = (interview) => {
     );
   }
 
-  // Vérifier les sous-champs critiques
-  if (!interview.candidat.email || interview.candidat.email === "Non défini") {
-    throw new Error(
-      `Email du candidat manquant pour l'entretien ${interview.id}`
-    );
-  }
-  if (!interview.offre.titre || interview.offre.titre === "Non défini") {
-    throw new Error(
-      `Titre de l'offre manquant pour l'entretien ${interview.id}`
-    );
-  }
-
   return true;
 };
 
 // Thunk pour récupérer les entretiens passés d'un recruteur
 export const fetchRecruiterInterviews = createAsyncThunk(
   "entretiens/fetchRecruiterInterviews",
-  async ({ page = 1, perPage = 10 }, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("token");
       if (!token) {
-        return rejectWithValue("Token d'authentification manquant");
+        throw new Error("Token non trouvé");
       }
 
-      const response = await api.get(
-        `/api/recruteur/entretiens?page=${page}&per_page=${perPage}`
-      );
+      console.log("Fetching interviews...");
+      const response = await api.get("/api/recruteur/entretiens");
+      console.log("API Response:", response.data);
 
       if (!response.data.interviews) {
-        return rejectWithValue(
-          response.data.error ||
-            "Erreur lors de la récupération des entretiens passés"
-        );
+        console.error("No interviews array in response:", response.data);
+        return rejectWithValue("Format de réponse invalide");
       }
 
-      // Valider chaque entretien
-      const validInterviews = response.data.interviews.filter((interview) => {
-        try {
-          validateInterviewData(interview);
-          return true;
-        } catch (error) {
-          console.warn(`Entretien invalide (${interview.id}):`, error.message);
-          return false;
-        }
-      });
-
-      return {
-        interviews: validInterviews,
-        pagination: response.data.pagination,
-      };
+      return response.data;
     } catch (error) {
-      if (error.response?.status === 401) {
-        localStorage.removeItem("token");
-        window.location.href = "/login";
-      }
+      console.error("Error fetching interviews:", error);
       return rejectWithValue(
         error.response?.data?.error ||
-          error.message ||
-          "Erreur lors de la récupération des entretiens passés"
+          "Erreur lors de la récupération des entretiens"
       );
     }
   }
@@ -135,10 +99,16 @@ export const fetchInterviewDetails = createAsyncThunk(
       try {
         validateInterviewData(response.data.interview);
       } catch (error) {
-        return rejectWithValue(`Entretien invalide: ${error.message}`);
+        console.error("Erreur de validation:", error);
+        // On continue même si la validation échoue
       }
 
-      return response.data.interview;
+      return {
+        ...response.data.interview,
+        candidat: response.data.candidat,
+        offre: response.data.offre,
+        video: response.data.video,
+      };
     } catch (error) {
       if (error.response?.status === 401) {
         localStorage.removeItem("token");
@@ -155,7 +125,6 @@ export const fetchInterviewDetails = createAsyncThunk(
 
 const initialState = {
   interviews: [],
-  pagination: { page: 1, per_page: 10, total: 0, pages: 1 },
   selectedInterview: null,
   loading: false,
   error: null,
@@ -181,7 +150,6 @@ const entretiensSlice = createSlice({
       .addCase(fetchRecruiterInterviews.fulfilled, (state, action) => {
         state.loading = false;
         state.interviews = action.payload.interviews;
-        state.pagination = action.payload.pagination;
       })
       .addCase(fetchRecruiterInterviews.rejected, (state, action) => {
         state.loading = false;
