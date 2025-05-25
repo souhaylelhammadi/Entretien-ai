@@ -274,98 +274,82 @@ def get_interview_details(interview_id, auth_payload):
             return jsonify({"error": "Candidat non trouvé", "code": "CANDIDATE_NOT_FOUND"}), 404
 
         # Récupérer les questions
-        questions_doc = db["questions"].find_one({"_id": entretien.get("questions_id")})
-        logger.info(f"Questions document trouvé: {questions_doc}")
-        
-        # Récupérer les questions directement depuis l'entretien
-        questions_list = entretien.get("questions", [])
-        if not questions_list and questions_doc:
-            questions_list = questions_doc.get("questions", [])
-        
-        logger.info(f"Liste des questions: {questions_list}")
-        
-        # Créer un dictionnaire des questions indexées
-        questions_dict = {}
-        for i, q in enumerate(questions_list):
-            # Gérer différents formats possibles de questions
-            if isinstance(q, str):
-                questions_dict[i] = q
-            elif isinstance(q, dict):
-                question_index = q.get("index", i)
-                question_text = q.get("text", q.get("question", "Question non trouvée"))
-                questions_dict[question_index] = question_text
-            else:
-                questions_dict[i] = str(q)
-            
-            logger.info(f"Question {i}: {questions_dict.get(i)}")
+        questions = []
+        if "questions" in entretien and entretien["questions"]:
+            questions = entretien["questions"]
+        elif "questions_id" in entretien:
+            questions_doc = db["questions"].find_one({"_id": ObjectId(entretien["questions_id"])})
+            if questions_doc and "questions" in questions_doc:
+                questions = questions_doc["questions"]
 
-        # Récupérer les enregistrements
-        recordings = entretien.get("recordings", [])
-        logger.info(f"Enregistrements trouvés: {recordings}")
-        
-        # Organiser les questions et réponses
-        qa_pairs = []
-        for i, recording in enumerate(recordings):
-            question_index = recording.get("questionIndex", i)
-            question = questions_dict.get(question_index, f"Question {i + 1}")
-            answer = recording.get("transcript", "Pas de transcription disponible")
-            timestamp = recording.get("timestamp")
-            
-            logger.info(f"Traitement de l'enregistrement {i} - Index: {question_index}, Question: {question}")
-            
-            qa_pairs.append({
-                "question": question,
-                "answer": answer,
-                "timestamp": timestamp,
-                "questionIndex": question_index
-            })
+        # Formater les questions
+        formatted_questions = []
+        for i, q in enumerate(questions):
+            if isinstance(q, str):
+                formatted_questions.append({
+                    "id": i,
+                    "question": q,
+                    "index": i
+                })
+            elif isinstance(q, dict):
+                formatted_questions.append({
+                    "id": i,
+                    "question": q.get("text", q.get("question", "Question non trouvée")),
+                    "index": q.get("index", i)
+                })
+            else:
+                formatted_questions.append({
+                    "id": i,
+                    "question": str(q),
+                    "index": i
+                })
+
+        logger.info(f"Questions formatées: {formatted_questions}")
 
         video = db["videos"].find_one({"entretien_id": entretien["_id"]})
 
         response_data = {
-            "interview": {
-                "id": str(entretien["_id"]),
-                "candidatId": str(entretien["candidat_id"]),
-                "offreId": str(entretien["offre_id"]),
-                "recruteurId": str(entretien["recruteur_id"]),
-                "statut": entretien.get("statut"),
-                "date_prevue": entretien.get("date_prevue"),
-                "date_creation": entretien.get("date_creation"),
-                "date_maj": entretien.get("date_maj"),
-                "completed_at": entretien.get("completed_at"),
-                "last_updated_by": entretien.get("last_updated_by"),
-                "qa_pairs": qa_pairs,
-                "transcription_completed": entretien.get("transcription_completed", False),
-            },
-            "offre": {
-                "titre": offre.get("titre"),
-                "description": offre.get("description"),
-                "entreprise": offre.get("entreprise"),
-                "localisation": offre.get("localisation"),
-            },
-            "candidat": {
-                "nom": candidat.get("nom"),
-                "prenom": candidat.get("prenom"),
-                "email": candidat.get("email"),
-                "telephone": candidat.get("telephone"),
-            },
-            "video": {
-                "url": video.get("video_url") if video else None,
-                "transcription": video.get("transcription") if video else None
-            } if video else None
+            "success": True,
+            "data": {
+                "entretien": {
+                    "id": str(entretien["_id"]),
+                    "candidatId": str(entretien["candidat_id"]),
+                    "offreId": str(entretien["offre_id"]),
+                    "recruteurId": str(entretien["recruteur_id"]),
+                    "statut": entretien.get("statut"),
+                    "date_prevue": entretien.get("date_prevue"),
+                    "date_creation": entretien.get("date_creation"),
+                    "date_maj": entretien.get("date_maj"),
+                    "completed_at": entretien.get("completed_at"),
+                    "last_updated_by": entretien.get("last_updated_by"),
+                    "transcription_completed": entretien.get("transcription_completed", False),
+                },
+                "offre": {
+                    "titre": offre.get("titre"),
+                    "description": offre.get("description"),
+                    "entreprise": offre.get("entreprise"),
+                    "localisation": offre.get("localisation"),
+                },
+                "candidat": {
+                    "nom": candidat.get("nom"),
+                    "prenom": candidat.get("prenom"),
+                    "email": candidat.get("email"),
+                    "telephone": candidat.get("telephone"),
+                },
+                "questions": formatted_questions,
+                "video": {
+                    "url": video.get("video_url") if video else None,
+                    "transcription": video.get("transcription") if video else None
+                } if video else None
+            }
         }
 
-        return jsonify({
-            "success": True,
-            "interview": response_data["interview"],
-            "offre": response_data["offre"],
-            "candidat": response_data["candidat"],
-            "video": response_data["video"]
-        }), 200
+        return jsonify(response_data), 200
 
     except Exception as e:
         logger.error(f"Erreur lors de la récupération des détails de l'entretien: {str(e)}")
         return jsonify({
+            "success": False,
             "error": "Erreur lors de la récupération des détails de l'entretien",
             "code": "INTERVIEW_DETAILS_ERROR"
         }), 500
@@ -490,3 +474,141 @@ def get_interview_video(interview_id, auth_payload):
     except Exception as e:
         logger.error(f"Erreur lors de la récupération de la vidéo: {str(e)}")
         return jsonify({"error": "Erreur lors de la récupération de la vidéo"}), 500
+
+@entretiensection_bp.route("/<string:interview_id>/save", methods=["POST"])
+@require_auth("recruteur")
+def save_interview(interview_id, auth_payload):
+    """Sauvegarder la vidéo et les métadonnées d'un entretien."""
+    try:
+        # Vérifier que l'entretien existe et appartient au recruteur
+        entretien = current_app.mongo.db.entretiens.find_one({
+            "_id": ObjectId(interview_id),
+            "recruteur_id": ObjectId(auth_payload["recruteur_id"])
+        })
+        
+        if not entretien:
+            return jsonify({
+                "success": False,
+                "error": "Entretien non trouvé",
+                "code": "INTERVIEW_NOT_FOUND"
+            }), 404
+
+        # Vérifier si une vidéo est fournie
+        if 'video' not in request.files:
+            return jsonify({
+                "success": False,
+                "error": "Aucune vidéo fournie",
+                "code": "NO_VIDEO"
+            }), 400
+
+        video_file = request.files['video']
+        if not video_file.filename:
+            return jsonify({
+                "success": False,
+                "error": "Fichier vidéo invalide",
+                "code": "INVALID_VIDEO"
+            }), 400
+
+        # Récupérer et valider les métadonnées
+        try:
+            metadata = json.loads(request.form.get('metadata', '{}'))
+        except json.JSONDecodeError:
+            return jsonify({
+                "success": False,
+                "error": "Métadonnées invalides",
+                "code": "INVALID_METADATA"
+            }), 400
+
+        # Créer un dossier pour les vidéos si nécessaire
+        video_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'videos')
+        os.makedirs(video_dir, exist_ok=True)
+
+        # Générer un nom de fichier unique
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"interview_{interview_id}_{timestamp}.webm"
+        video_path = os.path.join(video_dir, filename)
+
+        # Sauvegarder la vidéo
+        try:
+            video_file.save(video_path)
+        except Exception as e:
+            logger.error(f"Erreur lors de la sauvegarde de la vidéo: {str(e)}")
+            return jsonify({
+                "success": False,
+                "error": "Erreur lors de la sauvegarde de la vidéo",
+                "code": "VIDEO_SAVE_ERROR"
+            }), 500
+
+        # Générer l'URL de la vidéo
+        video_url = f"/api/recruteur/entretiens/videos/{interview_id}"
+
+        # Générer la transcription avec Whisper
+        try:
+            model = whisper.load_model("base")
+            result = model.transcribe(video_path)
+            transcription = result["text"]
+        except Exception as e:
+            logger.error(f"Erreur lors de la transcription: {str(e)}")
+            transcription = None
+
+        # Sauvegarder les métadonnées de la vidéo dans la base de données
+        try:
+            video_doc = {
+                "entretien_id": ObjectId(interview_id),
+                "video_path": video_path,
+                "video_url": video_url,
+                "transcription": transcription,
+                "created_at": datetime.now(timezone.utc),
+                "metadata": metadata
+            }
+            video_id = current_app.mongo.db.videos.insert_one(video_doc).inserted_id
+        except Exception as e:
+            logger.error(f"Erreur lors de la sauvegarde des métadonnées: {str(e)}")
+            return jsonify({
+                "success": False,
+                "error": "Erreur lors de la sauvegarde des métadonnées",
+                "code": "METADATA_SAVE_ERROR"
+            }), 500
+
+        # Mettre à jour l'entretien
+        try:
+            update_data = {
+                "video_id": video_id,
+                "video_url": video_url,
+                "transcription": transcription,
+                "transcription_completed": transcription is not None,
+                "statut": "termine",
+                "completed_at": datetime.now(timezone.utc),
+                "date_maj": datetime.now(timezone.utc),
+                "last_updated_by": auth_payload["sub"]
+            }
+
+            if metadata.get("recordings"):
+                update_data["recordings"] = metadata["recordings"]
+
+            current_app.mongo.db.entretiens.update_one(
+                {"_id": ObjectId(interview_id)},
+                {"$set": update_data}
+            )
+        except Exception as e:
+            logger.error(f"Erreur lors de la mise à jour de l'entretien: {str(e)}")
+            return jsonify({
+                "success": False,
+                "error": "Erreur lors de la mise à jour de l'entretien",
+                "code": "INTERVIEW_UPDATE_ERROR"
+            }), 500
+
+        return jsonify({
+            "success": True,
+            "message": "Entretien sauvegardé avec succès",
+            "videoUrl": video_url,
+            "transcription": transcription
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la sauvegarde de l'entretien: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": "Erreur lors de la sauvegarde de l'entretien",
+            "code": "SAVE_ERROR"
+        }), 500

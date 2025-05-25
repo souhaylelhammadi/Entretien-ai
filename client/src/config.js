@@ -1,5 +1,13 @@
 // Configuration de l'API
 export const BASE_URL = "http://localhost:5000";
+export const API_BASE_URL = "http://localhost:5000";
+
+// Configuration pour le développement
+export const config = {
+  apiUrl: "http://localhost:5000",
+  wsUrl: "ws://localhost:5000",
+  environment: "development",
+};
 
 // Configuration des routes
 export const ROUTES = {

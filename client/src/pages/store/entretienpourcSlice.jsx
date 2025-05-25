@@ -59,10 +59,11 @@ export const fetchInterviewDetails = createAsyncThunk(
         return rejectWithValue("Aucune question disponible pour cet entretien");
       }
 
-      console.log("Questions récupérées:", data.questions.length);
+      console.log("Questions reçues:", data.questions);
       return {
         entretien: data.entretien,
         questions: data.questions,
+        video: data.video,
       };
     } catch (error) {
       console.error("Erreur lors de la récupération:", error);
@@ -147,21 +148,28 @@ export const saveInterviewToDatabase = createAsyncThunk(
   async ({ interviewId, formData }, { rejectWithValue }) => {
     try {
       const token = getValidToken();
-
-      const metadata = JSON.parse(formData.get("metadata"));
+      console.log("Saving interview with data:", {
+        interviewId,
+        metadata: JSON.parse(formData.get("metadata")),
+      });
 
       const response = await axios.post(
-        `${BASE_URL}/api/candidates/entretiens/${interviewId}/update`,
-        metadata,
+        `${BASE_URL}/api/candidates/entretiens/${interviewId}/save`,
+        formData,
         {
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
           },
         }
       );
 
       console.log("Save interview response:", response.data);
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || "Failed to save interview");
+      }
+
       return response.data;
     } catch (error) {
       console.error("Error saving interview:", error);
@@ -182,7 +190,7 @@ export const saveInterviewToDatabase = createAsyncThunk(
         return rejectWithValue("Session expired. Please log in again.");
       }
       return rejectWithValue(
-        error.response?.data?.error || "Error saving interview"
+        error.response?.data?.error || error.message || "Error saving interview"
       );
     }
   }
@@ -202,6 +210,8 @@ const initialState = {
   interviewDetails: null,
   showConfirmModal: false,
   isProcessing: false,
+  videoUrl: null,
+  transcription: null,
 };
 
 const interviewSlice = createSlice({
@@ -269,6 +279,12 @@ const interviewSlice = createSlice({
     setProcessing: (state, action) => {
       state.isProcessing = action.payload;
     },
+    setVideoUrl: (state, action) => {
+      state.videoUrl = action.payload;
+    },
+    setTranscription: (state, action) => {
+      state.transcription = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -283,10 +299,14 @@ const interviewSlice = createSlice({
         console.log("Questions reçues:", action.payload.questions);
         state.loading = false;
         state.interviewDetails = action.payload.entretien;
-        state.questions = action.payload.questions || [];
+        state.questions = Array.isArray(action.payload.questions)
+          ? action.payload.questions
+          : [];
         state.currentQuestionIndex = 0;
         state.error = null;
         state.isProcessing = false;
+        state.videoUrl = action.payload.video?.url || null;
+        state.transcription = action.payload.video?.transcription || null;
       })
       .addCase(fetchInterviewDetails.rejected, (state, action) => {
         console.error("Erreur lors de la récupération:", action.payload);
@@ -315,6 +335,12 @@ const interviewSlice = createSlice({
         state.savingInterview = false;
         state.interviewCompleted = true;
         state.error = null;
+        if (action.payload.videoUrl) {
+          state.videoUrl = action.payload.videoUrl;
+        }
+        if (action.payload.transcription) {
+          state.transcription = action.payload.transcription;
+        }
         if (action.payload.data) {
           state.interviewDetails = {
             ...state.interviewDetails,
@@ -343,6 +369,8 @@ export const {
   setSpeaking,
   setConfirmModal,
   setProcessing,
+  setVideoUrl,
+  setTranscription,
 } = interviewSlice.actions;
 
 export default interviewSlice.reducer;

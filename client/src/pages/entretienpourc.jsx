@@ -1,650 +1,793 @@
-import React, {
-  useRef,
-  useEffect,
-  useCallback,
-  useState,
-  useMemo,
-} from "react";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
+import { Mic, MicOff, PhoneOff, Volume2, Loader2 } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { useParams, useNavigate } from "react-router-dom";
 import {
   fetchInterviewDetails,
   saveInterviewToDatabase,
   setState,
+  startInterview,
+  stopInterview,
   goToNextQuestion,
   goToPreviousQuestion,
-  startInterview,
-  setProcessing,
+  setSpeaking,
   setConfirmModal,
+  setProcessing,
 } from "./store/entretienpourcSlice";
+import { toast } from "react-hot-toast";
+import { BASE_URL } from "../config";
 
-// Mock toast for notifications
-const toast = {
-  error: (msg) => console.error("Toast Error:", msg),
-  success: (msg) => console.log("Toast Success:", msg),
-  info: (msg) => console.log("Toast Info:", msg),
-};
+const API_BASE_URL = BASE_URL;
 
-// Status Indicator Component
-const StatusIndicator = ({ isActive }) => (
-  <div className="flex items-center space-x-2 bg-blue-700/30 px-4 py-2 rounded-full w-full md:w-auto justify-center md:justify-start">
-    <span
-      className={`w-2 h-2 ${
-        isActive ? "bg-green-400 animate-pulse" : "bg-gray-400"
-      } rounded-full`}
-    />
-    <span className="text-sm text-white">
-      {isActive ? "En cours" : "Hors ligne"}
-    </span>
-  </div>
-);
-
-// Progress Bar Component
-const ProgressBar = ({ current, total }) => (
-  <div className="mt-4">
-    <div className="flex justify-between text-sm mb-1 text-white">
-      <span className="font-medium">
-        Question {current + 1}/{total || 0}
-      </span>
-    </div>
-    <div className="relative h-2 bg-blue-300/30 rounded-full overflow-hidden">
-      <div
-        style={{ width: `${((current + 1) / total) * 100}%` }}
-        className="absolute top-0 left-0 h-full bg-white transition-all duration-300 rounded-full"
-      />
-    </div>
-  </div>
-);
-
-// Question Card Component
-const QuestionCard = ({
-  currentQuestion,
-  currentIndex,
-  isSpeaking,
-  transcript,
-  interviewStarted,
-  totalQuestions,
-  onNext,
-  onPrevious,
-  onFinish,
-  isLastQuestion,
-}) => {
-  const transcriptText = useMemo(() => {
-    if (!transcript) return "";
-    if (typeof transcript === "object") {
-      return transcript[currentIndex] || "";
-    }
-    return String(transcript);
-  }, [transcript, currentIndex]);
-
-  return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl shadow-sm border border-blue-100/50">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center">
-          <h3 className="text-lg font-bold text-blue-800">
-            Question {currentIndex + 1}/{totalQuestions}
-          </h3>
-          <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-            {currentQuestion?.type || "Technique"}
-          </span>
-        </div>
-        {isSpeaking && (
-          <div className="flex items-center bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
-            <span className="mr-2">Lecture en cours</span>
-            <div className="flex space-x-1">
-              <span className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" />
-              <span
-                className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
-                style={{ animationDelay: "0.2s" }}
-              />
-              <span
-                className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"
-                style={{ animationDelay: "0.4s" }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="bg-white p-4 rounded-lg shadow-sm mb-4 border border-gray-100">
-        <p className="text-gray-800 leading-relaxed">
-          {currentQuestion?.text ||
-            currentQuestion?.question ||
-            "Chargement..."}
-        </p>
-      </div>
-      <div className="flex justify-between gap-2">
-        <button
-          onClick={onPrevious}
-          disabled={currentIndex === 0 || !interviewStarted}
-          className={`flex items-center px-4 py-2 rounded-lg transition-all shadow-sm ${
-            currentIndex === 0 || !interviewStarted
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-blue-600 text-white hover:bg-blue-700"
-          }`}
-        >
-          Précédent
-        </button>
-        {isLastQuestion ? (
-          <button
-            onClick={onFinish}
-            disabled={!interviewStarted}
-            className={`flex items-center px-4 py-2 rounded-lg transition-all shadow-sm ${
-              !interviewStarted
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-          >
-            Terminer et sauvegarder
-          </button>
-        ) : (
-          <button
-            onClick={onNext}
-            disabled={currentIndex === totalQuestions - 1 || !interviewStarted}
-            className={`flex items-center px-4 py-2 rounded-lg transition-all shadow-sm ${
-              currentIndex === totalQuestions - 1 || !interviewStarted
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-blue-600 text-white hover:bg-blue-700"
-            }`}
-          >
-            Suivant
-          </button>
-        )}
-      </div>
-      {transcriptText && (
-        <div className="mt-4">
-          <h4 className="text-sm font-medium text-gray-500 mb-2">
-            Votre réponse:
-          </h4>
-          <div className="bg-white p-3 rounded-lg border border-gray-200 text-gray-700 text-sm">
-            {transcriptText}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Error Modal Component
-const ErrorModal = ({ onClose, errorMessage }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-      <div className="bg-red-50 p-5 border-b border-red-100">
-        <h3 className="text-xl font-bold text-red-600">Erreur d'accès</h3>
-      </div>
-      <div className="p-6">
-        <p className="text-gray-700 mb-6">{errorMessage}</p>
-        <div className="flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
-          >
-            Fermer
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-// Confirm Modal Component
-const ConfirmModal = ({ isOpen, onClose, onConfirm, isSaving }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="bg-blue-50 p-5 border-b border-blue-100">
-          <h3 className="text-xl font-bold text-blue-600">Confirmer la fin</h3>
-        </div>
-        <div className="p-6">
-          <p className="text-gray-700 mb-6">
-            Êtes-vous sûr de vouloir terminer l'entretien ? Vos réponses seront
-            sauvegardées.
-          </p>
-          {isSaving && (
-            <div className="mb-4 flex items-center text-blue-600">
-              <Loader2 className="animate-spin mr-2 h-4 w-4" />
-              <span>Sauvegarde en cours...</span>
-            </div>
-          )}
-          <div className="flex justify-end space-x-3">
-            <button
-              onClick={onClose}
-              disabled={isSaving}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all disabled:opacity-50"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={onConfirm}
-              disabled={isSaving}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-all disabled:opacity-50"
-            >
-              {isSaving ? "Sauvegarde..." : "Terminer"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Main Interview Component
 const Interview = () => {
   const { interviewId } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
   const {
-    currentQuestionIndex,
-    transcript,
-    isSpeaking,
-    showModal,
-    errorMessage,
-    interviewStarted,
     questions,
+    currentQuestionIndex,
+    isSpeaking,
     loading,
-    savingInterview,
     error,
+    interviewStarted,
     interviewDetails,
+    savingInterview,
     showConfirmModal,
     isProcessing,
   } = useSelector((state) => state.interview);
 
-  const recognitionRef = useRef(null);
-  const [localIsSpeaking, setLocalIsSpeaking] = useState(false);
+  const localRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+
+  const [localState, setLocalState] = useState({
+    webcamActive: false,
+    isMuted: false,
+    callTime: 0,
+    localStream: null,
+    cameraError: false,
+    isRecording: false,
+    recordedBlob: null,
+    recordedVideoURL: "",
+    recordings: [],
+    interviewCompleted: false,
+    showModal: false,
+    errorMessage: "",
+  });
+
+  const maxDuration = 1800; // 30 minutes
+
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}:${secs < 10 ? "0" : ""}${secs}`;
+  };
 
   useEffect(() => {
     if (interviewId) {
-      console.log("Chargement des détails de l'entretien:", interviewId);
       dispatch(fetchInterviewDetails(interviewId));
     }
   }, [dispatch, interviewId]);
 
   useEffect(() => {
     if (error) {
-      console.error("Erreur détectée:", error);
-      toast.error(error);
+      setLocalState((prev) => ({
+        ...prev,
+        errorMessage: error,
+      }));
     }
   }, [error]);
 
-  // Fonction pour lire une question avec synthèse vocale
-  const speakQuestion = useCallback(
-    (questionText) => {
-      if (!window.speechSynthesis || !questionText) {
-        return;
-      }
-
-      // Arrêter toute lecture en cours
-      window.speechSynthesis.cancel();
-
-      const speech = new SpeechSynthesisUtterance(questionText);
-      speech.lang = "fr-FR";
-      speech.rate = 0.9;
-      speech.pitch = 1;
-      speech.volume = 1;
-
-      speech.onstart = () => {
-        setLocalIsSpeaking(true);
-        dispatch(setState({ isSpeaking: true }));
-      };
-
-      speech.onend = () => {
-        setLocalIsSpeaking(false);
-        dispatch(setState({ isSpeaking: false }));
-      };
-
-      speech.onerror = (e) => {
-        console.error("Erreur de synthèse vocale:", e);
-        toast.error("Erreur lors de la lecture");
-        setLocalIsSpeaking(false);
-        dispatch(setState({ isSpeaking: false }));
-      };
-
-      window.speechSynthesis.speak(speech);
-    },
-    [dispatch]
-  );
-
-  // Effet pour lire automatiquement la question courante quand elle change
   useEffect(() => {
-    if (
-      interviewStarted &&
-      questions.length > 0 &&
-      questions[currentQuestionIndex]
-    ) {
-      const currentQuestion = questions[currentQuestionIndex];
-      const questionText =
-        currentQuestion?.text || currentQuestion?.question || "";
-
-      if (questionText) {
-        // Délai court pour permettre à l'interface de se mettre à jour
-        setTimeout(() => {
-          speakQuestion(questionText);
-        }, 500);
-      }
+    let interval;
+    if (localState.webcamActive) {
+      interval = setInterval(() => {
+        setLocalState((prev) => {
+          const newTime = prev.callTime + 1;
+          if (newTime >= maxDuration) {
+            completeInterview();
+          }
+          return { ...prev, callTime: newTime };
+        });
+      }, 1000);
     }
-  }, [currentQuestionIndex, interviewStarted, questions, speakQuestion]);
+    return () => clearInterval(interval);
+  }, [localState.webcamActive]);
 
-  // Ajouter un nouvel useEffect pour gérer les transcriptions
   useEffect(() => {
-    if (interviewDetails?.qa_pairs) {
-      const currentQA = interviewDetails.qa_pairs[currentQuestionIndex];
-      if (currentQA) {
+    if (localState.interviewCompleted) {
+      navigate("/home");
+    }
+  }, [localState.interviewCompleted, navigate]);
+
+  const completeInterview = async () => {
+    try {
+      setProcessing(true);
+      const metadata = {
+        interviewId,
+        duration: Math.floor((Date.now() - startTime) / 1000),
+        questionCount: questions.length,
+        completedQuestions: currentQuestionIndex + 1,
+        recordings: [],
+      };
+
+      console.log("Saving interview with metadata:", metadata);
+
+      // Get the token and decode it to check the role
+      const token = localStorage.getItem("token");
+      // Remove any existing Bearer prefix
+      const cleanToken = token.replace(/^Bearer\s+/i, "");
+      const tokenData = JSON.parse(atob(cleanToken.split(".")[1]));
+      const isRecruiter = tokenData.role === "recruteur";
+
+      // Use the appropriate endpoint based on the role
+      const endpoint = isRecruiter
+        ? `/api/recruteur/entretiens/${interviewId}/save`
+        : `/api/candidates/entretiens/${interviewId}/save`;
+
+      // Prepare form data
+      const formData = new FormData();
+      formData.append("metadata", JSON.stringify(metadata));
+      if (localState.recordedBlob) {
+        formData.append("video", localState.recordedBlob, "interview.webm");
+      }
+
+      // Save the interview
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${cleanToken}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Interview saved successfully:", data);
+
+      // Update Redux state
+      dispatch(saveInterviewToDatabase(data));
+
+      // Navigate to success page
+      navigate("/interview-success");
+    } catch (error) {
+      console.error("Error saving interview:", error);
+      setLocalState((prev) => ({
+        ...prev,
+        errorMessage: "Failed to save interview. Please try again.",
+      }));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const setupSources = async () => {
+    try {
+      const constraints = { video: true, audio: true };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      if (stream.getVideoTracks().length === 0) {
+        throw new Error("No video track available");
+      }
+
+      setLocalState((prev) => ({ ...prev, localStream: stream }));
+
+      setTimeout(() => {
+        if (localRef.current) {
+          localRef.current.srcObject = stream;
+          localRef.current
+            .play()
+            .catch((e) => console.error("Error playing video:", e));
+        }
+      }, 100);
+
+      setLocalState((prev) => ({
+        ...prev,
+        webcamActive: true,
+        cameraError: false,
+      }));
+
+      dispatch(startInterview());
+
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "video/webm",
+      });
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, {
+          type: "video/webm",
+        });
+        setLocalState((prev) => ({
+          ...prev,
+          recordedBlob: blob,
+          recordedVideoURL: URL.createObjectURL(blob),
+        }));
+        recordedChunksRef.current = [];
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+
+      setTimeout(() => {
+        startRecording();
+        speakQuestion();
+      }, 1000);
+    } catch (error) {
+      console.error("Error setting up media sources:", error);
+      setLocalState((prev) => ({
+        ...prev,
+        cameraError: true,
+        webcamActive: true,
+        showModal:
+          error.name === "NotAllowedError" ||
+          error.name === "PermissionDeniedError",
+      }));
+    }
+  };
+
+  const toggleMute = () => {
+    if (localState.localStream) {
+      const audioTracks = localState.localStream.getAudioTracks();
+      audioTracks.forEach((track) => (track.enabled = !track.enabled));
+      setLocalState((prev) => ({
+        ...prev,
+        isMuted: !prev.isMuted,
+      }));
+    }
+  };
+
+  const hangUp = () => {
+    if (localState.isRecording) stopRecording();
+    if (localState.localStream)
+      localState.localStream.getTracks().forEach((track) => track.stop());
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      dispatch(setSpeaking(false));
+    }
+    setLocalState((prev) => ({
+      ...prev,
+      webcamActive: false,
+      localStream: null,
+      callTime: 0,
+      cameraError: false,
+      interviewStarted: false,
+    }));
+  };
+
+  const startRecording = () => {
+    if (mediaRecorderRef.current && !localState.isRecording) {
+      recordedChunksRef.current = [];
+      mediaRecorderRef.current.start();
+      setLocalState((prev) => ({ ...prev, isRecording: true }));
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && localState.isRecording) {
+      mediaRecorderRef.current.stop();
+      setLocalState((prev) => ({ ...prev, isRecording: false }));
+    }
+  };
+
+  const saveInterviewToDatabase = async () => {
+    if (!localState.recordedBlob) return;
+
+    try {
+      dispatch(setProcessing(true));
+      const formData = new FormData();
+
+      // Ajouter la vidéo
+      formData.append(
+        "video",
+        localState.recordedBlob,
+        `interview_${interviewId}_${Date.now()}.webm`
+      );
+
+      // Ajouter les métadonnées
+      const metadata = {
+        interviewId,
+        duration: localState.callTime,
+        questionCount: questions.length,
+        completedQuestions: currentQuestionIndex + 1,
+        recordings: localState.recordings.map((rec, index) => ({
+          questionIndex: rec.questionIndex,
+          question: rec.question,
+          timestamp: rec.timestamp,
+        })),
+      };
+      formData.append("metadata", JSON.stringify(metadata));
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/recruteur/entretiens/${interviewId}/save`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: localStorage.getItem("token"),
+          },
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to save interview");
+      }
+
+      // Mettre à jour l'état avec l'URL de la vidéo
+      if (data.videoUrl) {
         dispatch(
           setState({
-            transcript: {
-              ...transcript,
-              [currentQuestionIndex]: currentQA.answer || "",
+            interviewDetails: {
+              ...interviewDetails,
+              videoUrl: data.videoUrl,
+              status: "completed",
+              transcription: data.transcription,
             },
           })
         );
       }
-    }
-  }, [currentQuestionIndex, interviewDetails]);
 
-  const handleStartInterview = async () => {
-    try {
-      dispatch(setProcessing(true));
-      console.log("Démarrage de l'entretien...");
-
-      dispatch(startInterview());
-
-      // Démarrer la reconnaissance vocale
-      if (window.SpeechRecognition || window.webkitSpeechRecognition) {
-        const SpeechRecognition =
-          window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = true;
-        recognitionRef.current.interimResults = true;
-        recognitionRef.current.lang = "fr-FR";
-        recognitionRef.current.onresult = (event) => {
-          const transcriptions = Array.from(event.results)
-            .map((result) => result[0])
-            .map((result) => result.transcript)
-            .join("");
-          dispatch(
-            setState({
-              transcript: {
-                ...transcript,
-                [currentQuestionIndex]: transcriptions,
-              },
-            })
-          );
-        };
-        recognitionRef.current.start();
-      }
-
-      // La lecture de la première question sera automatiquement déclenchée
-      // par l'useEffect ci-dessus quand interviewStarted devient true
+      console.log("Interview saved successfully:", data);
+      setLocalState((prev) => ({ ...prev, errorMessage: "" }));
     } catch (error) {
-      console.error("Erreur lors du démarrage:", error);
-      dispatch(setState({ errorMessage: error.message, showModal: true }));
+      console.error("Error saving interview:", error);
+      setLocalState((prev) => ({
+        ...prev,
+        errorMessage: "Failed to save interview. Please try again.",
+      }));
     } finally {
       dispatch(setProcessing(false));
     }
   };
 
-  const handleNextQuestion = useCallback(() => {
-    if (currentQuestionIndex < questions.length - 1) {
-      dispatch(goToNextQuestion());
-      // La lecture automatique sera déclenchée par l'useEffect
+  const speakQuestion = useCallback(() => {
+    if (!("speechSynthesis" in window) || !questions.length) {
+      console.warn("Text-to-speech is not supported by this browser");
+      return;
     }
-  }, [dispatch, currentQuestionIndex, questions.length]);
 
-  const handlePreviousQuestion = useCallback(() => {
-    if (currentQuestionIndex > 0) {
-      dispatch(goToPreviousQuestion());
-      // La lecture automatique sera déclenchée par l'useEffect
-    }
-  }, [dispatch, currentQuestionIndex]);
-
-  const handleFinishInterview = useCallback(() => {
-    dispatch(setConfirmModal(true));
-  }, [dispatch]);
-
-  const handleEndCall = useCallback(async () => {
     try {
-      dispatch(setProcessing(true));
-      dispatch(setState({ savingInterview: true }));
-      console.log("Fin de l'entretien...");
+      // Annuler toute synthèse vocale en cours
+      window.speechSynthesis.cancel();
+      dispatch(setSpeaking(false));
 
-      // Arrêter la reconnaissance vocale
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
+      const currentQuestion = questions[currentQuestionIndex];
+      if (!currentQuestion) {
+        console.warn(
+          "No question available for current index:",
+          currentQuestionIndex
+        );
+        return;
       }
 
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      const questionText = currentQuestion.question || "No question available";
+      const speech = new SpeechSynthesisUtterance(questionText);
+      speech.lang = "fr-FR";
+      speech.rate = 0.9;
+      speech.pitch = 1;
 
-      // Préparer les données pour la sauvegarde
-      const formData = new FormData();
-
-      // Créer un objet pour les enregistrements
-      const recordings = questions.map((question, index) => {
-        const transcriptText = transcript[index] || "";
-        return {
-          questionIndex: index,
-          question: question?.text || question?.question || "",
-          transcript: transcriptText,
-          timestamp: new Date().toISOString(),
+      // Attendre que les voix soient chargées
+      const voices = window.speechSynthesis.getVoices();
+      const frenchVoices = voices.filter((voice) => voice.lang.includes("fr-"));
+      if (frenchVoices.length > 0) {
+        speech.voice = frenchVoices[0];
+      } else {
+        // Si les voix ne sont pas encore chargées, attendre
+        window.speechSynthesis.onvoiceschanged = () => {
+          const voices = window.speechSynthesis.getVoices();
+          const frenchVoices = voices.filter((voice) =>
+            voice.lang.includes("fr-")
+          );
+          if (frenchVoices.length > 0) {
+            speech.voice = frenchVoices[0];
+            try {
+              window.speechSynthesis.speak(speech);
+            } catch (error) {
+              console.error("Error starting speech synthesis:", error);
+              dispatch(setSpeaking(false));
+            }
+          }
         };
-      });
+      }
 
-      // Créer l'objet metadata avec les enregistrements
-      const metadata = {
-        recordings: recordings,
+      speech.onstart = () => {
+        console.log("Speech started for question:", currentQuestionIndex);
+        dispatch(setSpeaking(true));
       };
 
-      // Ajouter les données au FormData
-      formData.append("metadata", JSON.stringify(metadata));
+      speech.onend = () => {
+        console.log("Speech ended for question:", currentQuestionIndex);
+        dispatch(setSpeaking(false));
+      };
 
-      // Log des données envoyées pour le débogage
-      console.log("Données envoyées:", {
-        interviewId,
-        metadata: JSON.parse(formData.get("metadata")),
-      });
+      speech.onerror = (event) => {
+        console.error("Text-to-speech error:", event);
+        dispatch(setSpeaking(false));
+        // Ne pas propager l'erreur pour éviter d'interrompre le flux
+      };
 
-      // Envoyer les données au serveur
-      const response = await dispatch(
-        saveInterviewToDatabase({ interviewId, formData })
-      ).unwrap();
-
-      console.log("Réponse du serveur:", response);
-
-      toast.success("Entretien sauvegardé avec succès");
-      console.log("Entretien terminé et sauvegardé");
-      dispatch(setConfirmModal(false));
-      dispatch(
-        setState({
-          currentQuestionIndex: 0,
-          transcript: {},
-          interviewStarted: false,
-        })
-      );
-      navigate("/mesinterview"); // Redirect to dashboard after saving
+      // Lancer la synthèse vocale
+      try {
+        window.speechSynthesis.speak(speech);
+      } catch (error) {
+        console.error("Error starting speech synthesis:", error);
+        dispatch(setSpeaking(false));
+      }
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde:", error);
-      toast.error("Erreur lors de la sauvegarde de l'entretien");
-    } finally {
-      dispatch(setState({ savingInterview: false }));
-      dispatch(setProcessing(false));
+      console.error("Error in speakQuestion:", error);
+      dispatch(setSpeaking(false));
     }
-  }, [dispatch, interviewId, transcript, questions, navigate]);
+  }, [questions, currentQuestionIndex, dispatch]);
 
-  // Nettoyer la synthèse vocale lors du démontage du composant
-  useEffect(() => {
-    return () => {
+  // Navigate to next question
+  const handleNextQuestion = useCallback(async () => {
+    if (!interviewStarted || isProcessing) return;
+
+    try {
+      dispatch(setProcessing(true));
+
+      // Arrêter l'enregistrement en cours
+      if (localState.isRecording) {
+        await stopRecording();
+      }
+
+      // Annuler toute synthèse vocale en cours
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
+        dispatch(setSpeaking(false));
       }
-    };
-  }, []);
 
-  const isLastQuestion = currentQuestionIndex === questions.length - 1;
+      // Attendre un court instant pour s'assurer que tout est arrêté
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      if (currentQuestionIndex < questions.length - 1) {
+        dispatch(goToNextQuestion());
+
+        // Attendre un court instant avant de démarrer l'enregistrement et la synthèse vocale
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        startRecording();
+        speakQuestion();
+      } else {
+        await completeInterview();
+      }
+    } catch (error) {
+      console.error("Error in handleNextQuestion:", error);
+      setLocalState((prev) => ({
+        ...prev,
+        errorMessage: "Error moving to next question. Please try again.",
+      }));
+    } finally {
+      dispatch(setProcessing(false));
+    }
+  }, [
+    dispatch,
+    interviewStarted,
+    currentQuestionIndex,
+    questions.length,
+    stopRecording,
+    startRecording,
+    speakQuestion,
+    isProcessing,
+    localState.isRecording,
+    completeInterview,
+  ]);
+
+  // Navigate to previous question
+  const handlePreviousQuestion = useCallback(async () => {
+    if (!interviewStarted || currentQuestionIndex === 0 || isProcessing) return;
+
+    try {
+      dispatch(setProcessing(true));
+
+      // Arrêter l'enregistrement en cours
+      if (localState.isRecording) {
+        await stopRecording();
+      }
+
+      // Annuler toute synthèse vocale en cours
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        dispatch(setSpeaking(false));
+      }
+
+      // Attendre un court instant pour s'assurer que tout est arrêté
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      dispatch(goToPreviousQuestion());
+
+      // Attendre un court instant avant de démarrer l'enregistrement et la synthèse vocale
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      startRecording();
+      speakQuestion();
+    } catch (error) {
+      console.error("Error in handlePreviousQuestion:", error);
+      setLocalState((prev) => ({
+        ...prev,
+        errorMessage: "Error moving to previous question. Please try again.",
+      }));
+    } finally {
+      dispatch(setProcessing(false));
+    }
+  }, [
+    dispatch,
+    interviewStarted,
+    currentQuestionIndex,
+    stopRecording,
+    startRecording,
+    speakQuestion,
+    isProcessing,
+    localState.isRecording,
+  ]);
+
+  // Go to specific question
+  const handleGoToQuestion = useCallback(
+    async (index) => {
+      if (
+        !interviewStarted ||
+        index === currentQuestionIndex ||
+        index < 0 ||
+        index >= questions.length ||
+        isProcessing
+      )
+        return;
+
+      if (localState.isRecording) await stopRecording();
+      dispatch(setState({ currentQuestionIndex: index }));
+      setTimeout(() => {
+        startRecording();
+        speakQuestion();
+      }, 300);
+    },
+    [
+      dispatch,
+      interviewStarted,
+      currentQuestionIndex,
+      questions.length,
+      stopRecording,
+      startRecording,
+      speakQuestion,
+      isProcessing,
+      localState.isRecording,
+    ]
+  );
+
+  const timePercentage = (localState.callTime / maxDuration) * 100;
+
+  useEffect(() => {
+    if (localRef.current && localState.localStream) {
+      localRef.current.srcObject = localState.localStream;
+    }
+  }, [localState.localStream]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-3 sticky top-0 z-10 shadow-md">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-2">
-            <div className="w-full md:w-auto">
-              <h1 className="text-lg md:text-xl font-bold">
-                Simulation d'entretien technique
-              </h1>
-              <p className="text-blue-100 text-xs md:text-sm">
-                Répondez aux questions techniques pour vous entraîner
-              </p>
-            </div>
-            {interviewStarted && (
-              <StatusIndicator isActive={interviewStarted} />
-            )}
-          </div>
-          {interviewStarted && (
-            <ProgressBar
-              current={currentQuestionIndex}
-              total={questions.length}
-            />
+    <div className="flex flex-col items-center min-h-screen w-full bg-white">
+      <header className="w-full max-w-6xl p-2 text-center">
+        <div className="flex justify-between items-start">
+          {!localState.webcamActive && (
+            <button
+              onClick={setupSources}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-all shadow-md mb-6"
+              disabled={loading}
+            >
+              {loading ? "Loading..." : "Start Interview"}
+            </button>
           )}
-        </div>
-      </div>
-
-      <div className="flex-1 p-3 md:p-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-3">
-              <div className="bg-white rounded-lg shadow-lg p-3 h-[calc(100vh-12rem)] overflow-y-auto">
-                {!interviewStarted ? (
-                  <div className="text-center py-6">
-                    <h2 className="text-lg font-bold mb-4 text-gray-800">
-                      Prêt à commencer votre entretien ?
-                    </h2>
-                    <p className="text-gray-500 mb-6 text-sm">
-                      {loading ? (
-                        <span className="flex items-center justify-center">
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Chargement des questions...
-                        </span>
-                      ) : error ? (
-                        <span className="text-red-500 flex flex-col items-center">
-                          <span className="mb-2">{error}</span>
-                          <button
-                            onClick={() =>
-                              dispatch(fetchInterviewDetails(interviewId))
-                            }
-                            className="text-blue-600 hover:text-blue-700 underline"
-                          >
-                            Réessayer
-                          </button>
-                        </span>
-                      ) : questions.length === 0 ? (
-                        "Aucune question disponible pour cet entretien"
-                      ) : (
-                        `${questions.length} questions techniques vous attendent. Les questions seront lues automatiquement.`
-                      )}
-                    </p>
-                    <button
-                      onClick={handleStartInterview}
-                      disabled={loading || !questions.length || isProcessing}
-                      className={`bg-blue-600 text-white px-6 py-3 rounded-lg transition-all text-lg font-medium ${
-                        loading || !questions.length || isProcessing
-                          ? "opacity-50 cursor-not-allowed"
-                          : "hover:bg-blue-700 shadow-lg hover:shadow-xl"
-                      }`}
-                    >
-                      {loading ? (
-                        <span className="flex items-center">
-                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                          Chargement...
-                        </span>
-                      ) : isProcessing ? (
-                        <span className="flex items-center">
-                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                          Démarrage...
-                        </span>
-                      ) : (
-                        "Démarrer l'entretien"
-                      )}
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <h2 className="text-lg font-bold mb-3 text-gray-800">
-                      Questions d'entretien
-                    </h2>
-                    {questions.length === 0 ? (
-                      <div className="text-center py-6">
-                        <p className="text-red-500 mb-3 text-sm">
-                          Aucune question n'a été chargée.
-                        </p>
-                        <button
-                          onClick={() =>
-                            dispatch(fetchInterviewDetails(interviewId))
-                          }
-                          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all text-sm"
-                        >
-                          Réessayer de charger les questions
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <QuestionCard
-                          currentQuestion={questions[currentQuestionIndex]}
-                          currentIndex={currentQuestionIndex}
-                          isSpeaking={localIsSpeaking}
-                          transcript={transcript}
-                          interviewStarted={interviewStarted}
-                          totalQuestions={questions.length}
-                          onNext={handleNextQuestion}
-                          onPrevious={handlePreviousQuestion}
-                          onFinish={handleFinishInterview}
-                          isLastQuestion={isLastQuestion}
-                        />
-                        <div className="mt-3 p-2 bg-blue-50 rounded-lg border border-blue-100">
-                          <div className="flex items-center text-xs text-blue-700">
-                            <div className="flex items-center">
-                              <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                              <span>
-                                Entretien en cours - Questions lues
-                                automatiquement
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-2 text-xs text-blue-600">
-                            <p>• Écoutez attentivement chaque question</p>
-                            <p>
-                              • Utilisez les boutons pour naviguer entre les
-                              questions
-                            </p>
-                            <p>• Chaque question sera lue automatiquement</p>
-                            <p>
-                              • Cliquez sur "Terminer et sauvegarder" à la
-                              dernière question
-                            </p>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
+          <div className="flex-grow text-center">
+            <div className="text-blue-500 mt-2">
+              Question {currentQuestionIndex + 1} of {questions.length} (
+              {formatTime(localState.callTime)} elapsed)
+            </div>
+            <div className="w-full max-w-6xl mb-4">
+              <div className="relative pt-1">
+                <div className="overflow-hidden h-2 mb-1 text-xs flex rounded bg-blue-100">
+                  <div
+                    style={{ width: `${timePercentage}%` }}
+                    className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-500 transition-all duration-300"
+                  ></div>
+                </div>
+                <div className="flex justify-between text-xs text-blue-500">
+                  <span>0:00</span>
+                  <span>{formatTime(localState.callTime)}</span>
+                  <span>{formatTime(maxDuration)}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
+      </header>
+
+      <div className="w-full max-w-6xl flex flex-col md:flex-row gap-6">
+        <div className="md:w-1/2 bg-blue-50 rounded-xl p-6 shadow-md border border-blue-100">
+          <div className="aspect-video bg-black rounded-lg relative">
+            {localState.webcamActive ? (
+              localState.cameraError ? (
+                <div className="w-full h-full flex items-center justify-center text-white">
+                  Camera access denied
+                </div>
+              ) : (
+                <>
+                  <video
+                    ref={localRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                  {localState.isRecording && (
+                    <div className="absolute top-4 right-4 flex items-center bg-red-600 text-white px-3 py-1 rounded-full text-sm">
+                      <span className="animate-pulse w-3 h-3 bg-white rounded-full mr-2"></span>
+                      Recording
+                    </div>
+                  )}
+                </>
+              )
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-white">
+                Camera Off
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 flex justify-center space-x-4">
+            {localState.webcamActive && (
+              <>
+                <button
+                  onClick={toggleMute}
+                  className={`p-4 rounded-full transition-all shadow-md flex items-center justify-center ${
+                    localState.isMuted
+                      ? "bg-red-500 hover:bg-red-600"
+                      : "bg-blue-500 hover:bg-blue-600"
+                  } text-white`}
+                >
+                  {localState.isMuted ? (
+                    <MicOff size={24} />
+                  ) : (
+                    <Mic size={24} />
+                  )}
+                </button>
+
+                <button
+                  onClick={hangUp}
+                  className="bg-red-600 text-white p-4 rounded-full hover:bg-red-700 transition-all shadow-md flex items-center justify-center"
+                >
+                  <PhoneOff size={24} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="md:w-1/2 flex flex-col gap-6">
+          <div className="bg-blue-500 rounded-xl mb-4 p-6 shadow-lg">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-bold text-white">
+                Question {currentQuestionIndex + 1}
+              </h3>
+              {isSpeaking && (
+                <div className="flex items-center text-white text-sm">
+                  <span className="mr-2">Speaking</span>
+                  <div className="flex space-x-1">
+                    <span className="w-2 h-2 bg-white rounded-full animate-bounce"></span>
+                    <span
+                      className="w-2 h-2 bg-white rounded-full animate-bounce"
+                      style={{ animationDelay: "0.2s" }}
+                    ></span>
+                    <span
+                      className="w-2 h-2 bg-white rounded-full animate-bounce"
+                      style={{ animationDelay: "0.4s" }}
+                    ></span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <p className="text-white text-lg">
+              {questions[currentQuestionIndex]?.question ||
+                "Loading question..."}
+            </p>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={speakQuestion}
+                className="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 flex items-center"
+                disabled={!interviewStarted}
+              >
+                <Volume2 size={18} className="mr-2" />
+                {isSpeaking ? "Stop Speaking" : "Speak Question"}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <ConfirmModal
-        isOpen={showConfirmModal}
-        onClose={() => dispatch(setConfirmModal(false))}
-        onConfirm={handleEndCall}
-        isSaving={savingInterview || isProcessing}
-      />
+      <div className="w-full max-w-6xl flex justify-between mt-4">
+        <button
+          onClick={handlePreviousQuestion}
+          className={`px-6 py-3 rounded-lg ${
+            currentQuestionIndex === 0 || !interviewStarted
+              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+          }`}
+          disabled={
+            currentQuestionIndex === 0 || !interviewStarted || isProcessing
+          }
+        >
+          Précédent
+        </button>
 
-      {showModal && (
-        <ErrorModal
-          onClose={() => dispatch(setState({ showModal: false }))}
-          errorMessage={errorMessage}
-        />
+        <div className="flex">
+          {questions.map((_, index) => (
+            <button
+              key={index}
+              className={`w-8 h-8 rounded-full mx-1 ${
+                !interviewStarted
+                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                  : index === currentQuestionIndex
+                  ? "bg-blue-500 text-white"
+                  : "bg-blue-100 text-blue-700"
+              }`}
+              onClick={() => handleGoToQuestion(index)}
+              disabled={!interviewStarted || isProcessing}
+            >
+              {index + 1}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={handleNextQuestion}
+          className={`px-6 py-3 rounded-lg ${
+            !interviewStarted
+              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              : currentQuestionIndex === questions.length - 1
+              ? "bg-green-500 text-white hover:bg-green-600"
+              : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+          }`}
+          disabled={!interviewStarted || isProcessing}
+        >
+          {currentQuestionIndex === questions.length - 1
+            ? "Terminer"
+            : "Suivant"}
+        </button>
+      </div>
+
+      {localState.errorMessage && (
+        <p className="text-red-600 mt-4 text-center">
+          {localState.errorMessage}
+        </p>
+      )}
+
+      {localState.showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-11/12 max-w-md">
+            <h3 className="text-xl font-bold text-red-600 mb-4">
+              Permission Denied
+            </h3>
+            <p className="text-gray-700 mb-4">
+              Permission to access the microphone or camera has been denied.
+              Please allow access in your browser settings to continue.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() =>
+                  setLocalState((prev) => ({ ...prev, showModal: false }))
+                }
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
