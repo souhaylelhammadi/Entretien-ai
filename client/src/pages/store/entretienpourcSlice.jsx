@@ -153,16 +153,15 @@ export const saveInterviewToDatabase = createAsyncThunk(
         metadata: JSON.parse(formData.get("metadata")),
       });
 
-      const response = await axios.post(
-        `${BASE_URL}/api/candidates/entretiens/${interviewId}/save`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
+      // Always use the candidate endpoint for this component
+      const endpoint = `/api/candidates/entretiens/${interviewId}/save`;
+
+      const response = await axios.post(`${BASE_URL}${endpoint}`, formData, {
+        headers: {
+          Authorization: token,
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
       console.log("Save interview response:", response.data);
 

@@ -54,6 +54,7 @@ const Interview = () => {
     interviewCompleted: false,
     showModal: false,
     errorMessage: "",
+    startTime: null,
   });
 
   const maxDuration = 1800; // 30 minutes
@@ -104,27 +105,32 @@ const Interview = () => {
   const completeInterview = async () => {
     try {
       setProcessing(true);
+
+      // Arrêter l'enregistrement en cours
+      if (localState.isRecording) {
+        await stopRecording();
+      }
+
+      // Arrêter la webcam et nettoyer les ressources
+      if (localState.localStream) {
+        localState.localStream.getTracks().forEach((track) => track.stop());
+      }
+
+      // Annuler toute synthèse vocale en cours
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        dispatch(setSpeaking(false));
+      }
+
       const metadata = {
         interviewId,
-        duration: Math.floor((Date.now() - startTime) / 1000),
+        duration: Math.floor((Date.now() - localState.startTime) / 1000),
         questionCount: questions.length,
         completedQuestions: currentQuestionIndex + 1,
         recordings: [],
       };
 
       console.log("Saving interview with metadata:", metadata);
-
-      // Get the token and decode it to check the role
-      const token = localStorage.getItem("token");
-      // Remove any existing Bearer prefix
-      const cleanToken = token.replace(/^Bearer\s+/i, "");
-      const tokenData = JSON.parse(atob(cleanToken.split(".")[1]));
-      const isRecruiter = tokenData.role === "recruteur";
-
-      // Use the appropriate endpoint based on the role
-      const endpoint = isRecruiter
-        ? `/api/recruteur/entretiens/${interviewId}/save`
-        : `/api/candidates/entretiens/${interviewId}/save`;
 
       // Prepare form data
       const formData = new FormData();
@@ -133,27 +139,62 @@ const Interview = () => {
         formData.append("video", localState.recordedBlob, "interview.webm");
       }
 
-      // Save the interview
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${cleanToken}`,
-        },
-        body: formData,
-      });
+      // Get token and clean it
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
+
+      // Clean token (remove Bearer prefix if present)
+      const cleanToken = token.replace(/^Bearer\s+/i, "").trim();
+
+      // Make the request directly to the candidate endpoint
+      const response = await fetch(
+        `${API_BASE_URL}/api/candidates/entretiens/${interviewId}/save`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: cleanToken,
+          },
+          body: formData,
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to save interview");
       }
 
       const data = await response.json();
       console.log("Interview saved successfully:", data);
 
-      // Update Redux state
-      dispatch(saveInterviewToDatabase(data));
+      // Update Redux state with video URL and transcription
+      dispatch(
+        setState({
+          interviewDetails: {
+            ...interviewDetails,
+            videoUrl: data.videoUrl,
+            status: "completed",
+            transcription: data.transcription,
+            completed_at: new Date().toISOString(),
+            last_updated_by: data.last_updated_by,
+          },
+        })
+      );
+
+      // Mettre à jour l'état local pour désactiver la webcam
+      setLocalState((prev) => ({
+        ...prev,
+        webcamActive: false,
+        localStream: null,
+        isRecording: false,
+        recordedBlob: null,
+        recordedVideoURL: "",
+        errorMessage: "",
+      }));
 
       // Navigate to success page
-      navigate("/interview-success");
+      navigate("/mesinterview");
     } catch (error) {
       console.error("Error saving interview:", error);
       setLocalState((prev) => ({
@@ -174,7 +215,11 @@ const Interview = () => {
         throw new Error("No video track available");
       }
 
-      setLocalState((prev) => ({ ...prev, localStream: stream }));
+      setLocalState((prev) => ({
+        ...prev,
+        localStream: stream,
+        startTime: Date.now(),
+      }));
 
       setTimeout(() => {
         if (localRef.current) {
@@ -399,6 +444,7 @@ const Interview = () => {
         };
       }
 
+      // Gérer les événements du speech
       speech.onstart = () => {
         console.log("Speech started for question:", currentQuestionIndex);
         dispatch(setSpeaking(true));
@@ -412,7 +458,6 @@ const Interview = () => {
       speech.onerror = (event) => {
         console.error("Text-to-speech error:", event);
         dispatch(setSpeaking(false));
-        // Ne pas propager l'erreur pour éviter d'interrompre le flux
       };
 
       // Lancer la synthèse vocale
@@ -542,12 +587,39 @@ const Interview = () => {
       )
         return;
 
-      if (localState.isRecording) await stopRecording();
-      dispatch(setState({ currentQuestionIndex: index }));
-      setTimeout(() => {
+      try {
+        dispatch(setProcessing(true));
+
+        // Arrêter l'enregistrement en cours
+        if (localState.isRecording) {
+          await stopRecording();
+        }
+
+        // Annuler toute synthèse vocale en cours
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+          dispatch(setSpeaking(false));
+        }
+
+        // Attendre un court instant pour s'assurer que tout est arrêté
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        dispatch(setState({ currentQuestionIndex: index }));
+
+        // Attendre un court instant avant de démarrer l'enregistrement et la synthèse vocale
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
         startRecording();
         speakQuestion();
-      }, 300);
+      } catch (error) {
+        console.error("Error in handleGoToQuestion:", error);
+        setLocalState((prev) => ({
+          ...prev,
+          errorMessage: "Error moving to question. Please try again.",
+        }));
+      } finally {
+        dispatch(setProcessing(false));
+      }
     },
     [
       dispatch,
