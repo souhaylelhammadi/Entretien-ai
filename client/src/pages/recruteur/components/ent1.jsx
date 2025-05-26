@@ -5,7 +5,7 @@ import {
   fetchInterviewDetails,
   clearError,
   clearSelectedInterview,
-} from "../../store/recruteur/ent1";
+} from "../../store/recruteur/ent1slice";
 import {
   Box,
   Typography,
@@ -76,7 +76,11 @@ const InterviewSection = () => {
   const handleViewDetails = async (interviewId) => {
     try {
       console.log("Fetching details for interview:", interviewId);
-      await dispatch(fetchInterviewDetails(interviewId)).unwrap();
+      const result = await dispatch(
+        fetchInterviewDetails(interviewId)
+      ).unwrap();
+      console.log("Interview details received:", result);
+      console.log("Full interview object:", JSON.stringify(result, null, 2));
       setOpenDialog(true);
     } catch (error) {
       console.error("Erreur lors de la récupération des détails:", error);
@@ -145,14 +149,14 @@ const InterviewSection = () => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <Box component="main" sx={{ flexGrow: 1, pt: "64px"}}>
+      <Box component="main" sx={{ flexGrow: 1, pt: "64px" }}>
         {" "}
         {/* 64px est la hauteur standard d'une Toolbar */}
         <Container maxWidth="lg" sx={{ py: 4 }}>
           {interviews.length === 0 ? (
             <Alert severity="info">Aucun entretien trouvé</Alert>
           ) : (
-            <TableContainer component={Paper} sx={{ mt: 2 }}>
+            <TableContainer component={Paper}>
               <Table>
                 <TableHead>
                   <TableRow>
@@ -229,6 +233,131 @@ const InterviewSection = () => {
                 </div>
                 <div className="flex-1 overflow-auto p-4">
                   <Grid container spacing={3}>
+                    {/* Vidéo et Transcription */}
+                    <Grid item xs={12}>
+                      <Card>
+                        <CardContent>
+                          <Grid container spacing={2}>
+                            {/* Vidéo */}
+                            {selectedInterview.video?.url && (
+                              <Grid item xs={12} md={6}>
+                                <Typography variant="h6" gutterBottom>
+                                  Vidéo de l'entretien
+                                </Typography>
+                                <Box
+                                  sx={{
+                                    position: "relative",
+                                    width: "100%",
+                                    paddingTop: "56.25%",
+                                    backgroundColor: "#000",
+                                    borderRadius: 2,
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <video
+                                    controls
+                                    style={{
+                                      position: "absolute",
+                                      top: 0,
+                                      left: 0,
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "contain",
+                                    }}
+                                    src={`${
+                                      process.env.REACT_APP_API_URL ||
+                                      "http://localhost:5000"
+                                    }${
+                                      selectedInterview.video.url
+                                    }?token=${encodeURIComponent(
+                                      localStorage.getItem("token")
+                                    )}`}
+                                  />
+                                </Box>
+                              </Grid>
+                            )}
+
+                            {/* Transcription */}
+                            {selectedInterview.video?.transcription && (
+                              <Grid item xs={12} md={6}>
+                                <Typography
+                                  variant="h6"
+                                  gutterBottom
+                                  sx={{ display: "flex", alignItems: "center" }}
+                                >
+                                  <Description sx={{ mr: 1 }} /> Transcription
+                                </Typography>
+                                <Box
+                                  sx={{
+                                    height: "100%",
+                                    p: 2,
+                                    bgcolor: "grey.100",
+                                    borderRadius: 2,
+                                    maxHeight: "400px",
+                                    overflowY: "auto",
+                                  }}
+                                >
+                                  <Typography
+                                    variant="body2"
+                                    component="pre"
+                                    sx={{ whiteSpace: "pre-wrap" }}
+                                  >
+                                    {selectedInterview.video.transcription}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            )}
+                          </Grid>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Questions de l'entretien */}
+                    <Grid item xs={12}>
+                      <Card>
+                        <CardContent>
+                          <Typography variant="h6" gutterBottom>
+                            Questions de l'entretien
+                          </Typography>
+                          <Divider sx={{ my: 2 }} />
+                          {selectedInterview?.questions ? (
+                            selectedInterview.questions.map(
+                              (question, index) => (
+                                <Box key={index} sx={{ mb: 2 }}>
+                                  <Typography
+                                    variant="subtitle1"
+                                    color="primary"
+                                  >
+                                    Question {index + 1}
+                                  </Typography>
+                                  <Typography variant="body1" sx={{ mb: 1 }}>
+                                    {question.question}
+                                  </Typography>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    Type: {question.type}
+                                  </Typography>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    Objectif: {question.objectif}
+                                  </Typography>
+                                  <Divider sx={{ my: 1 }} />
+                                </Box>
+                              )
+                            )
+                          ) : (
+                            <Typography variant="body1" color="text.secondary">
+                              Aucune question disponible pour cet entretien
+                            </Typography>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
                     {/* Informations générales */}
                     <Grid item xs={12} md={4}>
                       <Card sx={{ height: "100%" }}>
@@ -359,85 +488,6 @@ const InterviewSection = () => {
                                 "Non définie"}
                             </Typography>
                           </Box>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-
-                    {/* Vidéo et Transcription */}
-                    <Grid item xs={12}>
-                      <Card>
-                        <CardContent>
-                          <Grid container spacing={2}>
-                            {/* Vidéo */}
-                            {selectedInterview.video?.url && (
-                              <Grid item xs={12} md={6}>
-                                <Typography variant="h6" gutterBottom>
-                                  Vidéo de l'entretien
-                                </Typography>
-                                <Box
-                                  sx={{
-                                    position: "relative",
-                                    width: "100%",
-                                    paddingTop: "56.25%",
-                                    backgroundColor: "#000",
-                                    borderRadius: 2,
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <video
-                                    controls
-                                    style={{
-                                      position: "absolute",
-                                      top: 0,
-                                      left: 0,
-                                      width: "100%",
-                                      height: "100%",
-                                      objectFit: "contain",
-                                    }}
-                                    src={`${
-                                      process.env.REACT_APP_API_URL ||
-                                      "http://localhost:5000"
-                                    }${
-                                      selectedInterview.video.url
-                                    }?token=${encodeURIComponent(
-                                      localStorage.getItem("token")
-                                    )}`}
-                                  />
-                                </Box>
-                              </Grid>
-                            )}
-
-                            {/* Transcription */}
-                            {selectedInterview.video?.transcription && (
-                              <Grid item xs={12} md={6}>
-                                <Typography
-                                  variant="h6"
-                                  gutterBottom
-                                  sx={{ display: "flex", alignItems: "center" }}
-                                >
-                                  <Description sx={{ mr: 1 }} /> Transcription
-                                </Typography>
-                                <Box
-                                  sx={{
-                                    height: "100%",
-                                    p: 2,
-                                    bgcolor: "grey.100",
-                                    borderRadius: 2,
-                                    maxHeight: "400px",
-                                    overflowY: "auto",
-                                  }}
-                                >
-                                  <Typography
-                                    variant="body2"
-                                    component="pre"
-                                    sx={{ whiteSpace: "pre-wrap" }}
-                                  >
-                                    {selectedInterview.video.transcription}
-                                  </Typography>
-                                </Box>
-                              </Grid>
-                            )}
-                          </Grid>
                         </CardContent>
                       </Card>
                     </Grid>

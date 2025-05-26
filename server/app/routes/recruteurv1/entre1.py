@@ -256,126 +256,78 @@ def get_interview_details(interview_id, auth_payload):
         db = current_app.mongo
         recruteur_id = auth_payload.get('recruteur_id')
         
-        if not recruteur_id:
-            return jsonify({"error": "ID recruteur non trouvé", "code": "MISSING_RECRUITER_ID"}), 400
-
-        entretien = db[ENTRETIENS_COLLECTION].find_one({
-            "_id": ObjectId(interview_id),
+        logger.info(f"Traitement de l'entretien: {interview_id}")
+        
+        # Convertir l'ID en ObjectId
+        interview_id = ObjectId(interview_id)
+        
+        # Récupérer l'entretien
+        interview = db[ENTRETIENS_COLLECTION].find_one({
+            "_id": interview_id,
             "recruteur_id": ObjectId(recruteur_id)
         })
         
-        if not entretien:
-            return jsonify({"error": "Entretien non trouvé", "code": "INTERVIEW_NOT_FOUND"}), 404
-
-        offre = db[OFFRES_COLLECTION].find_one({"_id": entretien["offre_id"]})
-        if not offre:
-            return jsonify({"error": "Offre non trouvée", "code": "OFFER_NOT_FOUND"}), 404
-
-        candidat = db[UTILISATEURS_COLLECTION].find_one({"_id": entretien["candidat_id"]})
-        if not candidat:
-            return jsonify({"error": "Candidat non trouvé", "code": "CANDIDATE_NOT_FOUND"}), 404
-
-        # Récupérer les questions
-        questions_doc = db["questions"].find_one({"_id": entretien.get("questions_id")})
-        logger.info(f"Questions document trouvé: {questions_doc}")
-        
-        # Récupérer les questions directement depuis l'entretien
-        questions_list = entretien.get("questions", [])
-        if not questions_list and questions_doc:
-            questions_list = questions_doc.get("questions", [])
-        
-        logger.info(f"Liste des questions: {questions_list}")
-        
-        # Créer un dictionnaire des questions indexées
-        questions_dict = {}
-        for i, q in enumerate(questions_list):
-            # Gérer différents formats possibles de questions
-            if isinstance(q, str):
-                questions_dict[i] = q
-            elif isinstance(q, dict):
-                question_index = q.get("index", i)
-                question_text = q.get("text", q.get("question", "Question non trouvée"))
-                questions_dict[question_index] = question_text
-            else:
-                questions_dict[i] = str(q)
+        if not interview:
+            return jsonify({"error": "Entretien non trouvé"}), 404
             
-            logger.info(f"Question {i}: {questions_dict.get(i)}")
-
-        # Récupérer les enregistrements
-        recordings = entretien.get("recordings", [])
-        logger.info(f"Enregistrements trouvés: {recordings}")
+        logger.info(f"Entretien ajouté au résultat: {interview_id}")
         
-        # Organiser les questions et réponses
-        qa_pairs = []
-        for i, recording in enumerate(recordings):
-            question_index = recording.get("questionIndex", i)
-            question = questions_dict.get(question_index, f"Question {i + 1}")
-            answer = recording.get("transcript", "Pas de transcription disponible")
-            timestamp = recording.get("timestamp")
-            
-            logger.info(f"Traitement de l'enregistrement {i} - Index: {question_index}, Question: {question}")
-            
-            qa_pairs.append({
-                "question": question,
-                "answer": answer,
-                "timestamp": timestamp,
-                "questionIndex": question_index
-            })
-
-        video = db["videos"].find_one({"entretien_id": entretien["_id"]})
+        # Récupérer les questions associées
+        questions = None
+        if interview.get('questions_id'):
+            questions_doc = db.questions.find_one({"_id": ObjectId(interview['questions_id'])})
+            if questions_doc:
+                questions = questions_doc.get('questions', [])
+                logger.info(f"Questions document trouvé: {questions_doc}")
+                logger.info(f"Liste des questions: {questions}")
+                for i, q in enumerate(questions):
+                    logger.info(f"Question {i}: {q['question']}")
         
-        # Construire l'URL complète de la vidéo
-        video_url = None
-        if video:
-            video_url = f"/api/recruteur/entretiens/videos/{str(entretien['_id'])}"
-
-        response_data = {
+        # Récupérer les informations du candidat
+        candidat = None
+        if interview.get('candidat_id'):
+            candidat = db[CANDIDATS_COLLECTION].find_one({"_id": ObjectId(interview['candidat_id'])})
+        
+        # Récupérer les informations de l'offre
+        offre = None
+        if interview.get('offre_id'):
+            offre = db[OFFRES_COLLECTION].find_one({"_id": ObjectId(interview['offre_id'])})
+        
+        # Récupérer les informations de la vidéo
+        video = None
+        if interview.get('video_id'):
+            video = db.videos.find_one({"_id": ObjectId(interview['video_id'])})
+        
+        # Préparer la réponse
+        response = {
             "interview": {
-                "id": str(entretien["_id"]),
-                "candidatId": str(entretien["candidat_id"]),
-                "offreId": str(entretien["offre_id"]),
-                "recruteurId": str(entretien["recruteur_id"]),
-                "statut": entretien.get("statut"),
-                "date_prevue": entretien.get("date_prevue"),
-                "date_creation": entretien.get("date_creation"),
-                "date_maj": entretien.get("date_maj"),
-                "completed_at": entretien.get("completed_at"),
-                "last_updated_by": entretien.get("last_updated_by"),
-                "qa_pairs": qa_pairs,
-                "transcription_completed": entretien.get("transcription_completed", False),
-            },
-            "offre": {
-                "titre": offre.get("titre"),
-                "description": offre.get("description"),
-                "entreprise": offre.get("entreprise"),
-                "localisation": offre.get("localisation"),
+                **interview,
+                "_id": str(interview["_id"]),
+                "candidat_id": str(interview["candidat_id"]) if interview.get("candidat_id") else None,
+                "offre_id": str(interview["offre_id"]) if interview.get("offre_id") else None,
+                "recruteur_id": str(interview["recruteur_id"]) if interview.get("recruteur_id") else None,
+                "questions_id": str(interview["questions_id"]) if interview.get("questions_id") else None,
+                "questions": questions,  # Ajouter les questions à la réponse
             },
             "candidat": {
-                "nom": candidat.get("nom"),
-                "prenom": candidat.get("prenom"),
-                "email": candidat.get("email"),
-                "telephone": candidat.get("telephone"),
-            },
+                **candidat,
+                "_id": str(candidat["_id"])
+            } if candidat else None,
+            "offre": {
+                **offre,
+                "_id": str(offre["_id"])
+            } if offre else None,
             "video": {
-                "url": video_url,
-                "transcription": video.get("transcription") if video else None
+                **video,
+                "_id": str(video["_id"])
             } if video else None
         }
-
-        return jsonify({
-            "success": True,
-            "interview": response_data["interview"],
-            "offre": response_data["offre"],
-            "candidat": response_data["candidat"],
-            "video": response_data["video"]
-        }), 200
-
+        
+        return jsonify(response)
+        
     except Exception as e:
-        logger.error(f"Erreur lors de la récupération des détails de l'entretien: {str(e)}")
-        return jsonify({
-            "error": "Erreur lors de la récupération des détails de l'entretien",
-            "code": "INTERVIEW_DETAILS_ERROR"
-        }), 500
+        logger.error(f"Erreur lors de la récupération des détails: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @entretiensection_bp.route("/<string:interview_id>/recordings", methods=["GET"])
 @require_auth("recruteur")

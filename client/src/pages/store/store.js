@@ -9,7 +9,7 @@ import candidatesReducer from "./candidatesSlice";
 import profileReducer from "./recruteur/profileSlice";
 import addjobsReducer from "./recruteur/addjobsSlice";
 import jobsReducer from "./recruteur/jobsSlice";
-import entretiensReducer from "./recruteur/ent1";
+import entretiensReducer from "./recruteur/ent1slice";
 
 // Configuration du root reducer
 const rootReducer = {
