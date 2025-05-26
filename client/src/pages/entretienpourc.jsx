@@ -19,6 +19,26 @@ import { BASE_URL } from "../config";
 
 const API_BASE_URL = BASE_URL;
 
+// Fonction pour initialiser la reconnaissance vocale
+const initializeSpeechRecognition = () => {
+  if ('webkitSpeechRecognition' in window) {
+    const recognition = new window.webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'fr-FR';
+    return recognition;
+  }
+  return null;
+};
+
+// Fonction pour initialiser la synthèse vocale
+const initializeSpeechSynthesis = () => {
+  if ('speechSynthesis' in window) {
+    return window.speechSynthesis;
+  }
+  return null;
+};
+
 const Interview = () => {
   const { interviewId } = useParams();
   const dispatch = useDispatch();
@@ -40,6 +60,8 @@ const Interview = () => {
   const localRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
+  const recognitionRef = useRef(null);
+  const synthesisRef = useRef(null);
 
   const [localState, setLocalState] = useState({
     webcamActive: false,
@@ -55,6 +77,9 @@ const Interview = () => {
     showModal: false,
     errorMessage: "",
     startTime: null,
+    isListening: false,
+    transcriptions: [],
+    currentTranscription: "",
   });
 
   const maxDuration = 1800; // 30 minutes
@@ -106,6 +131,9 @@ const Interview = () => {
     try {
       setProcessing(true);
 
+      // Sauvegarder la dernière transcription si elle existe
+      saveTranscription();
+
       // Arrêter l'enregistrement en cours
       if (localState.isRecording) {
         await stopRecording();
@@ -127,7 +155,7 @@ const Interview = () => {
         duration: Math.floor((Date.now() - localState.startTime) / 1000),
         questionCount: questions.length,
         completedQuestions: currentQuestionIndex + 1,
-        recordings: [],
+        transcriptions: localState.transcriptions,
       };
 
       console.log("Saving interview with metadata:", metadata);
@@ -175,7 +203,7 @@ const Interview = () => {
             ...interviewDetails,
             videoUrl: data.videoUrl,
             status: "completed",
-            transcription: data.transcription,
+            transcriptions: localState.transcriptions,
             completed_at: new Date().toISOString(),
             last_updated_by: data.last_updated_by,
           },
@@ -191,6 +219,8 @@ const Interview = () => {
         recordedBlob: null,
         recordedVideoURL: "",
         errorMessage: "",
+        transcriptions: [],
+        currentTranscription: "",
       }));
 
       // Navigate to success page
@@ -374,7 +404,7 @@ const Interview = () => {
             interviewDetails: {
               ...interviewDetails,
               videoUrl: data.videoUrl,
-              status: "completed",
+              status: "terminée",
               transcription: data.transcription,
             },
           })
@@ -419,7 +449,7 @@ const Interview = () => {
       speech.lang = "fr-FR";
       speech.rate = 0.9;
       speech.pitch = 1;
-
+      
       // Attendre que les voix soient chargées
       const voices = window.speechSynthesis.getVoices();
       const frenchVoices = voices.filter((voice) => voice.lang.includes("fr-"));
@@ -473,12 +503,111 @@ const Interview = () => {
     }
   }, [questions, currentQuestionIndex, dispatch]);
 
-  // Navigate to next question
+  // Initialiser la reconnaissance vocale
+  useEffect(() => {
+    if (interviewStarted && !recognitionRef.current) {
+      recognitionRef.current = initializeSpeechRecognition();
+      if (recognitionRef.current) {
+        recognitionRef.current.onresult = (event) => {
+          const transcript = Array.from(event.results)
+            .map((result) => result[0].transcript)
+            .join("");
+
+          setLocalState((prev) => ({
+            ...prev,
+            currentTranscription: transcript,
+          }));
+        };
+
+        recognitionRef.current.onend = () => {
+          if (localState.isListening) {
+            recognitionRef.current.start();
+          }
+        };
+
+        recognitionRef.current.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+          setLocalState((prev) => ({
+            ...prev,
+            isListening: false,
+            errorMessage: `Erreur de reconnaissance vocale: ${event.error}`,
+          }));
+        };
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+    };
+  }, [interviewStarted]);
+
+  // Démarrer la reconnaissance vocale après que la question a été posée
+  useEffect(() => {
+    if (
+      interviewStarted &&
+      !isSpeaking &&
+      recognitionRef.current &&
+      !localState.isListening
+    ) {
+      try {
+        recognitionRef.current.start();
+        setLocalState((prev) => ({
+          ...prev,
+          isListening: true,
+        }));
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+      }
+    }
+  }, [interviewStarted, isSpeaking]);
+
+  // Arrêter la reconnaissance vocale avant de passer à la question suivante
+  useEffect(() => {
+    if (!interviewStarted || isSpeaking) {
+      if (recognitionRef.current && localState.isListening) {
+        try {
+          recognitionRef.current.stop();
+          setLocalState((prev) => ({
+            ...prev,
+            isListening: false,
+          }));
+        } catch (error) {
+          console.error("Error stopping speech recognition:", error);
+        }
+      }
+    }
+  }, [interviewStarted, isSpeaking]);
+
+  // Sauvegarder la transcription quand on passe à la question suivante
+  const saveTranscription = useCallback(() => {
+    if (localState.currentTranscription) {
+      setLocalState((prev) => ({
+        ...prev,
+        transcriptions: [
+          ...prev.transcriptions,
+          {
+            questionIndex: currentQuestionIndex,
+            question: questions[currentQuestionIndex]?.question,
+            answer: localState.currentTranscription,
+          },
+        ],
+        currentTranscription: "",
+      }));
+    }
+  }, [currentQuestionIndex, questions, localState.currentTranscription]);
+
+  // Modifier handleNextQuestion pour sauvegarder la transcription
   const handleNextQuestion = useCallback(async () => {
     if (!interviewStarted || isProcessing) return;
 
     try {
       dispatch(setProcessing(true));
+
+      // Sauvegarder la transcription actuelle
+      saveTranscription();
 
       // Arrêter l'enregistrement en cours
       if (localState.isRecording) {
@@ -525,6 +654,7 @@ const Interview = () => {
     isProcessing,
     localState.isRecording,
     completeInterview,
+    saveTranscription,
   ]);
 
   // Navigate to previous question
@@ -776,6 +906,43 @@ const Interview = () => {
                 <Volume2 size={18} className="mr-2" />
                 {isSpeaking ? "Stop Speaking" : "Speak Question"}
               </button>
+            </div>
+            <div className="mt-6 bg-white rounded-lg p-4 max-h-48 overflow-y-auto text-black">
+              <h4 className="font-semibold mb-2">
+                Transcription de la réponse :
+              </h4>
+              {localState.currentTranscription ? (
+                <p className="whitespace-pre-wrap">
+                  {localState.currentTranscription}
+                </p>
+              ) : (
+                <p className="italic text-gray-600">
+                  En attente de votre réponse...
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4 bg-white rounded-lg p-4 max-h-48 overflow-y-auto text-black">
+              <h4 className="font-semibold mb-2">Historique des réponses :</h4>
+              {localState.transcriptions.length > 0 ? (
+                <div className="space-y-4">
+                  {localState.transcriptions.map((transcription, index) => (
+                    <div key={index} className="border-b pb-2">
+                      <p className="font-medium text-blue-600">
+                        Question {transcription.questionIndex + 1}:
+                      </p>
+                      <p className="text-gray-700 mb-1">
+                        {transcription.question}
+                      </p>
+                      <p className="text-gray-900">{transcription.answer}</p>
+          </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="italic text-gray-600">
+                  Aucune réponse enregistrée pour le moment.
+                </p>
+              )}
             </div>
           </div>
         </div>

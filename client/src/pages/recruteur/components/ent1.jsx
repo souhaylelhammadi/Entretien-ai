@@ -320,7 +320,7 @@ const InterviewSection = () => {
                           mb: 3,
                           position: "relative",
                           width: "100%",
-                          paddingTop: "56.25%", // Ratio 16:9
+                          paddingTop: "56.25%",
                           backgroundColor: "#000",
                           borderRadius: 2,
                           overflow: "hidden",
@@ -336,10 +336,43 @@ const InterviewSection = () => {
                             height: "100%",
                             objectFit: "contain",
                           }}
-                          src={selectedInterview.video.url}
-                        >
-                          Votre navigateur ne supporte pas la lecture de vidéos.
-                        </video>
+                          src={`${
+                            process.env.REACT_APP_API_URL ||
+                            "http://localhost:5000"
+                          }${
+                            selectedInterview.video.url
+                          }?token=${encodeURIComponent(
+                            localStorage.getItem("token")
+                          )}`}
+                          onError={(e) => {
+                            console.error(
+                              "Erreur de chargement de la vidéo:",
+                              e
+                            );
+                            const videoElement = e.target;
+                            videoElement.style.display = "none";
+                            const errorMessage = document.createElement("div");
+                            errorMessage.style.position = "absolute";
+                            errorMessage.style.top = "50%";
+                            errorMessage.style.left = "50%";
+                            errorMessage.style.transform =
+                              "translate(-50%, -50%)";
+                            errorMessage.style.color = "white";
+                            errorMessage.style.textAlign = "center";
+                            errorMessage.innerHTML =
+                              "Erreur de chargement de la vidéo.<br>Veuillez réessayer.";
+                            videoElement.parentNode.appendChild(errorMessage);
+                          }}
+                          onLoadedMetadata={(e) => {
+                            console.log("Métadonnées de la vidéo chargées");
+                          }}
+                          onLoadedData={(e) => {
+                            console.log("Données de la vidéo chargées");
+                          }}
+                          onCanPlay={(e) => {
+                            console.log("La vidéo peut être lue");
+                          }}
+                        />
                       </Box>
                     </>
                   )}
