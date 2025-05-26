@@ -479,47 +479,19 @@ def get_cv(candidature_id):
         return jsonify({"error": "Erreur lors de la récupération du CV", "code": "SERVER_ERROR"}), 500
 
 @candidates_bp.route("/lettre/<candidature_id>", methods=["GET"])
-def get_lettre_motivation(candidature_id):
+@require_auth("recruteur")
+def get_lettre_motivation(candidature_id, auth_payload):
     """Récupérer la lettre de motivation d'une candidature."""
     try:
-        # Récupérer le token depuis l'URL ou les headers
-        token = request.args.get('token')
-        logger.info(f"Token reçu dans l'URL: {token[:20]}...")  # Log seulement le début du token pour la sécurité
-
-        if not token:
-            logger.error("Aucun token d'authentification fourni")
-            return jsonify({"error": "Authentification requise", "code": "NO_TOKEN"}), 401
-
-        # Nettoyer le token
-        if token.startswith("Bearer "):
-            token = token[7:]
-            logger.info("Préfixe 'Bearer ' retiré du token")
-        elif "Bearer " in token:
-            token = token.split("Bearer ")[1]
-            logger.info("Token extrait après 'Bearer '")
-
-        # Vérifier le token
-        jwt_manager = get_jwt_manager()
-        if not jwt_manager:
-            logger.error("JWT manager non disponible")
-            return jsonify({"error": "Erreur de configuration", "code": "JWT_ERROR"}), 500
-
-        user_id = jwt_manager.verify_token(token)
-        if not user_id:
-            logger.error("Token invalide ou expiré")
-            return jsonify({"error": "Token invalide ou expiré", "code": "INVALID_TOKEN"}), 401
-
-        logger.info(f"User ID extrait du token: {user_id}")
-        
         db = current_app.mongo
-        # D'abord, récupérer l'utilisateur
-        user = db[UTILISATEURS_COLLECTION].find_one({"_id": ObjectId(str(user_id))})
-        if not user:
-            logger.error(f"Utilisateur non trouvé pour l'ID: {user_id}")
-            return jsonify({"error": "Utilisateur non trouvé", "code": "USER_NOT_FOUND"}), 404
+        user_id = auth_payload.get('sub')
+        
+        if not user_id:
+            logger.error("ID utilisateur non trouvé dans le token")
+            return jsonify({"error": "Token invalide", "code": "INVALID_TOKEN"}), 401
 
-        # Ensuite, chercher le recruteur correspondant
-        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(str(user_id))})
+        # Récupérer le recruteur
+        recruteur = db[RECRUTEURS_COLLECTION].find_one({"utilisateur_id": ObjectId(user_id)})
         if not recruteur:
             logger.error(f"Recruteur non trouvé pour l'utilisateur: {user_id}")
             return jsonify({"error": "Recruteur non trouvé", "code": "RECRUITER_NOT_FOUND"}), 404
@@ -550,13 +522,38 @@ def get_lettre_motivation(candidature_id):
                 "code": "LETTER_NOT_FOUND"
             }), 404
 
-        # Retourner la lettre de motivation
+        # Récupérer les informations du candidat
+        user_email = candidature.get("user_email")
+        if not user_email:
+            logger.warning(f"Email utilisateur non trouvé pour la candidature: {candidature_id}")
+            return jsonify({
+                "error": "Informations candidat incomplètes",
+                "code": "INCOMPLETE_CANDIDATE_INFO"
+            }), 400
+
+        utilisateur = db[UTILISATEURS_COLLECTION].find_one({"email": user_email})
+        if not utilisateur:
+            logger.warning(f"Utilisateur non trouvé pour l'email: {user_email}")
+            return jsonify({
+                "error": "Utilisateur non trouvé",
+                "code": "USER_NOT_FOUND"
+            }), 404
+
+        candidat = db[CANDIDATS_COLLECTION].find_one({"utilisateur_id": utilisateur["_id"]})
+        if not candidat:
+            logger.warning(f"Candidat non trouvé pour l'utilisateur: {user_email}")
+            return jsonify({
+                "error": "Candidat non trouvé",
+                "code": "CANDIDATE_NOT_FOUND"
+            }), 404
+
+        # Retourner la lettre de motivation avec les informations du candidat
         return jsonify({
             "lettre_motivation": lettre_motivation,
             "candidat": {
-                "nom": candidature.get("nom", "Inconnu"),
-                "prenom": candidature.get("prenom", ""),
-                "email": candidature.get("email", "")
+                "nom": candidat.get("nom", "Inconnu"),
+                "prenom": candidat.get("prenom", ""),
+                "email": user_email
             }
         }), 200
 

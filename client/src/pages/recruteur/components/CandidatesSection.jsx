@@ -441,7 +441,10 @@ const CandidatesSection = () => {
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-500">
-                    {Array.isArray(offre.candidats) ? offre.candidats.length : 0} candidat(s)
+                    {Array.isArray(offre.candidats)
+                      ? offre.candidats.length
+                      : 0}{" "}
+                    candidat(s)
                   </span>
                   {expandedOffers[offre.id] ? (
                     <ChevronDown className="w-5 h-5 text-gray-400" />
@@ -474,7 +477,8 @@ const CandidatesSection = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
-                      {Array.isArray(offre.candidats) && getFilteredCandidates(offre.candidats).map(
+                      {Array.isArray(offre.candidats) &&
+                        getFilteredCandidates(offre.candidats).map(
                         (candidat) => (
                           <tr key={candidat.id} className="hover:bg-blue-50">
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -513,7 +517,9 @@ const CandidatesSection = () => {
                                   <Eye className="h-4 w-4 mr-1" /> CV
                                 </button>
                                 <button
-                                  onClick={() => handleViewLettre(candidat.id)}
+                                    onClick={() =>
+                                      handleViewLettre(candidat.id)
+                                    }
                                   className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-green-50 text-green-700 hover:bg-green-100"
                                 >
                                   <FileText className="h-4 w-4 mr-1" /> Lettre
@@ -534,7 +540,10 @@ const CandidatesSection = () => {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleStatusChange(candidat.id, "Accepté");
+                                      handleStatusChange(
+                                        candidat.id,
+                                        "Accepté"
+                                      );
                                   }}
                                   className={`px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 ${
                                     statusUpdateStates[candidat.id]
@@ -664,7 +673,7 @@ const CandidatesSection = () => {
 
       {/* Modal pour le CV */}
       {showCVModal && selectedCV && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-4xl h-[90vh] flex flex-col">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">

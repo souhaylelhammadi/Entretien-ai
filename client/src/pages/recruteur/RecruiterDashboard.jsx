@@ -418,150 +418,87 @@ const RecruiterDashboard = () => {
         {/* Sidebar */}
         <Box
           sx={{
-            width: {
-              xs: isSidebarOpen ? "100%" : 0,
-              sm: isSidebarOpen ? 320 : 0,
-            },
-            maxWidth: "320px",
-            transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+            width: isSidebarOpen ? 280 : 0,
+            maxWidth: "280px",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
             overflow: "hidden",
             bgcolor: "background.paper",
             borderRight: "1px solid",
             borderColor: "divider",
             display: "flex",
             flexDirection: "column",
-            position: { xs: "fixed", sm: "relative" },
-            height: { xs: "100vh", sm: "auto" },
-            zIndex: 1200,
+            position: "fixed",
+            top: 0,
+            left: 0,
+            height: "100vh",
+            zIndex: 9999,
             boxShadow: "2px 0 20px rgba(0, 0, 0, 0.05)",
           }}
         >
           {/* Sidebar Header */}
           <Box
             sx={{
-              p: 4,
+              p: 2,
               borderBottom: "1px solid",
               borderColor: "divider",
               bgcolor: "white",
               backdropFilter: "blur(10px)",
+              position: "sticky",
+              top: 0,
+              zIndex: 2,
             }}
           >
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                mb: 3,
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <Box
-                  sx={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: "12px",
-                    background: "linear-gradient(to right, #14b8a6, #2563eb)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 4px 12px rgba(13, 148, 136, 0.3)",
-                  }}
-                >
-                  <LayoutDashboard
-                    sx={{ fontSize: "1.5rem", color: "white" }}
-                  />
-                </Box>
-                <Box>
-                  
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "text.secondary",
-                      fontSize: "0.75rem",
-                      fontWeight: 500,
-                    }}
-                  >
-                    Espace Recruteur
-                  </Typography>
-                </Box>
-              </Box>
-              <IconButton
-                onClick={() => setIsSidebarOpen(false)}
-                aria-label="Close sidebar"
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Box
                 sx={{
                   width: 40,
                   height: 40,
-                  borderRadius: "12px",
-                  bgcolor: "grey.100",
+                  borderRadius: "10px",
+                  background: "linear-gradient(to right, #14b8a6, #2563eb)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 4px 12px rgba(13, 148, 136, 0.3)",
+                }}
+              >
+                <LayoutDashboard sx={{ fontSize: "1.25rem", color: "white" }} />
+              </Box>
+              <Typography
+                variant="body2"
+                sx={{
                   color: "text.secondary",
-                  "&:hover": { bgcolor: "grey.200", color: "text.primary" },
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
                 }}
               >
-                <ChevronLeft sx={{ fontSize: "1.25rem" }} />
-              </IconButton>
-            </Box>
-            <Box sx={{ display: "flex", gap: 2 }}>
-              <Card
-                sx={{
-                  flex: 1,
-                  p: 2,
-                  borderRadius: "12px",
-                  bgcolor: "grey.50",
-                  textAlign: "center",
-                  border: "1px solid",
-                  borderColor: "divider",
-                }}
-              >
-                <Typography
-                  variant="h6"
-                  sx={{ fontWeight: 700, color: "text.primary" }}
-                >
-                  24
-                </Typography>
-                <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  Offres
-                </Typography>
-              </Card>
-              <Card
-                sx={{
-                  flex: 1,
-                  p: 2,
-                  borderRadius: "12px",
-                  bgcolor: "grey.50",
-                  textAlign: "center",
-                  border: "1px solid",
-                  borderColor: "divider",
-                }}
-              >
-                <Typography
-                  variant="h6"
-                  sx={{ fontWeight: 700, color: "text.primary" }}
-                >
-                  142
-                </Typography>
-                <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  Candidats
-                </Typography>
-              </Card>
+                Espace Recruteur
+              </Typography>
             </Box>
           </Box>
 
           {/* Navigation */}
-          <Box sx={{ flex: 1, p: 3, bgcolor: "#ffffff" }}>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "text.secondary",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                mb: 3,
-                px: 2,
-                fontSize: "0.6875rem",
-              }}
-            >
-              Navigation
-            </Typography>
+          <Box
+            sx={{
+              flex: 1,
+              p: 2,
+              bgcolor: "#ffffff",
+              overflowY: "auto",
+              "&::-webkit-scrollbar": {
+                width: "4px",
+              },
+              "&::-webkit-scrollbar-track": {
+                background: "#f1f1f1",
+                borderRadius: "4px",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                background: "#888",
+                borderRadius: "4px",
+                "&:hover": {
+                  background: "#555",
+                },
+              },
+            }}
+          >
             {menuItems.map((item) => (
               <Button
                 key={item.tab}
@@ -570,39 +507,19 @@ const RecruiterDashboard = () => {
                 sx={{
                   width: "100%",
                   justifyContent: "flex-start",
-                  px: 3,
+                  px: 2,
                   py: 1.5,
                   mb: 1,
-                  borderRadius: "12px",
-                  bgcolor: activeTab === item.tab ? "primary.main" : "#ffffff",
-                  color:
-                    activeTab === item.tab
-                      ? "primary.contrastText"
-                      : "text.secondary",
+                  borderRadius: "10px",
+                  bgcolor:
+                    activeTab === item.tab ? "primary.main" : "transparent",
+                  color: activeTab === item.tab ? "white" : "text.secondary",
                   "&:hover": {
                     bgcolor:
-                      activeTab === item.tab ? "primary.dark" : "#ccfbf1",
-                    color:
-                      activeTab === item.tab
-                        ? "primary.contrastText"
-                        : "text.primary",
+                      activeTab === item.tab ? "primary.dark" : "grey.100",
                     transform: "translateX(4px)",
-                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
                   },
-                  "&::before":
-                    activeTab === item.tab
-                      ? {
-                          content: '""',
-                          position: "absolute",
-                          left: 0,
-                          top: 0,
-                          bottom: 0,
-                          width: 4,
-                          bgcolor: "primary.main",
-                          borderRadius: "0 2px 2px 0",
-                        }
-                      : {},
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                  transition: "all 0.2s ease",
                 }}
               >
                 <Box
@@ -615,12 +532,12 @@ const RecruiterDashboard = () => {
                 >
                   <Box
                     sx={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "10px",
+                      width: 32,
+                      height: 32,
+                      borderRadius: "8px",
                       bgcolor:
                         activeTab === item.tab
-                          ? "linear-gradient(to right, #14b8a6, #2563eb)"
+                          ? "rgba(255,255,255,0.2)"
                           : "grey.100",
                       display: "flex",
                       alignItems: "center",
@@ -629,7 +546,9 @@ const RecruiterDashboard = () => {
                   >
                     {React.cloneElement(item.icon, {
                       style: {
-                        color: activeTab === item.tab ? "#ffffff" : "#4b5563",
+                        color: activeTab === item.tab ? "white" : "#4b5563",
+                        width: "18px",
+                        height: "18px",
                       },
                     })}
                   </Box>
@@ -637,7 +556,6 @@ const RecruiterDashboard = () => {
                     sx={{
                       fontWeight: activeTab === item.tab ? 600 : 500,
                       fontSize: "0.875rem",
-                      color: activeTab === item.tab ? "#ffffff" : "inherit",
                     }}
                   >
                     {item.label}
@@ -652,9 +570,10 @@ const RecruiterDashboard = () => {
                         fontWeight: 600,
                         bgcolor:
                           activeTab === item.tab
-                            ? "rgba(255, 255, 255, 0.3)"
+                            ? "rgba(255,255,255,0.2)"
                             : "primary.main",
-                        color: "#ffffff",
+                        color: "white",
+                        ml: "auto",
                       }}
                     />
                   )}
@@ -664,7 +583,7 @@ const RecruiterDashboard = () => {
           </Box>
 
           {/* Profile Section */}
-          <Box sx={{ p: 3, borderTop: "1px solid", borderColor: "divider" }}>
+          <Box sx={{ p: 2, borderTop: "1px solid", borderColor: "divider" }}>
             <Card
               sx={{
                 p: 2,
@@ -679,10 +598,10 @@ const RecruiterDashboard = () => {
               >
                 <Avatar
                   sx={{
-                    width: 40,
-                    height: 40,
-                    bgcolor: "linear-gradient(to right, #14b8a6, #2563eb)",
-                    fontSize: "1rem",
+                    width: 36,
+                    height: 36,
+                    bgcolor: "primary.main",
+                    fontSize: "0.875rem",
                     fontWeight: 600,
                   }}
                 >
@@ -690,7 +609,7 @@ const RecruiterDashboard = () => {
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
-                    variant="body1"
+                    variant="body2"
                     sx={{
                       fontWeight: 600,
                       fontSize: "0.875rem",
@@ -700,10 +619,11 @@ const RecruiterDashboard = () => {
                     {user?.name || "Utilisateur"}
                   </Typography>
                   <Typography
-                    variant="body2"
+                    variant="caption"
                     sx={{
                       color: "text.secondary",
                       fontSize: "0.75rem",
+                      display: "block",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -720,7 +640,7 @@ const RecruiterDashboard = () => {
                 sx={{
                   color: "text.secondary",
                   bgcolor: "transparent",
-                  borderRadius: "12px",
+                  borderRadius: "8px",
                   py: 1,
                   fontSize: "0.8125rem",
                   fontWeight: 500,
@@ -740,6 +660,9 @@ const RecruiterDashboard = () => {
             display: "flex",
             flexDirection: "column",
             bgcolor: "background.default",
+            marginLeft: isSidebarOpen ? "280px" : 0,
+            transition: "margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            width: "100%",
           }}
         >
           {/* Content Area */}
@@ -749,25 +672,26 @@ const RecruiterDashboard = () => {
               p: 4,
               bgcolor: "background.default",
               overflow: "auto",
-              mt: 10,
             }}
           >
-            <Box sx={{ mb: 3, display: isSidebarOpen ? "none" : "block" }}>
-              <IconButton
-                onClick={() => setIsSidebarOpen(true)}
-                aria-label="Open sidebar"
-                sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: "12px",
-                  bgcolor: "grey.100",
-                  color: "text.secondary",
-                  "&:hover": { bgcolor: "grey.200", color: "text.primary" },
-                }}
-              >
-                <Menu sx={{ fontSize: "1.25rem" }} />
-              </IconButton>
-            </Box>
+            {!isSidebarOpen && (
+              <Box sx={{ mb: 3 }}>
+                <IconButton
+                  onClick={() => setIsSidebarOpen(true)}
+                  aria-label="Open sidebar"
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "10px",
+                    bgcolor: "grey.100",
+                    color: "text.secondary",
+                    "&:hover": { bgcolor: "grey.200", color: "text.primary" },
+                  }}
+                >
+                  <Menu sx={{ fontSize: "1.25rem" }} />
+                </IconButton>
+              </Box>
+            )}
             {loading || profileLoading ? (
               <Box
                 sx={{

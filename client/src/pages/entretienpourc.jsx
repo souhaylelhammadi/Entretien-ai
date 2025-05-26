@@ -8,7 +8,6 @@ import {
   setState,
   startInterview,
   stopInterview,
-  goToNextQuestion,
   goToPreviousQuestion,
   setSpeaking,
   setConfirmModal,
@@ -21,11 +20,11 @@ const API_BASE_URL = BASE_URL;
 
 // Fonction pour initialiser la reconnaissance vocale
 const initializeSpeechRecognition = () => {
-  if ('webkitSpeechRecognition' in window) {
+  if ("webkitSpeechRecognition" in window) {
     const recognition = new window.webkitSpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'fr-FR';
+    recognition.lang = "fr-FR";
     return recognition;
   }
   return null;
@@ -33,7 +32,7 @@ const initializeSpeechRecognition = () => {
 
 // Fonction pour initialiser la synthèse vocale
 const initializeSpeechSynthesis = () => {
-  if ('speechSynthesis' in window) {
+  if ("speechSynthesis" in window) {
     return window.speechSynthesis;
   }
   return null;
@@ -90,6 +89,31 @@ const Interview = () => {
     return `${minutes}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
+  const saveTranscription = useCallback(() => {
+    if (localState.currentTranscription) {
+      console.log("Saving transcription for question:", currentQuestionIndex);
+      console.log("Current transcription:", localState.currentTranscription);
+
+      setLocalState((prev) => {
+        const newTranscriptions = [
+          ...prev.transcriptions,
+          {
+            questionIndex: currentQuestionIndex,
+            question: questions[currentQuestionIndex]?.question || "",
+            answer: prev.currentTranscription,
+          },
+        ];
+        console.log("Updated transcriptions:", newTranscriptions);
+
+        return {
+          ...prev,
+          transcriptions: newTranscriptions,
+          currentTranscription: "",
+        };
+      });
+    }
+  }, [currentQuestionIndex, questions, localState.currentTranscription]);
+
   useEffect(() => {
     if (interviewId) {
       dispatch(fetchInterviewDetails(interviewId));
@@ -129,23 +153,31 @@ const Interview = () => {
 
   const completeInterview = async () => {
     try {
-      setProcessing(true);
+      dispatch(setProcessing(true));
+      console.log("Starting interview completion process...");
 
       // Sauvegarder la dernière transcription si elle existe
-      saveTranscription();
+      if (localState.currentTranscription) {
+        console.log("Saving final transcription...");
+        saveTranscription();
+      }
+      console.log("Current transcriptions:", localState.transcriptions);
 
       // Arrêter l'enregistrement en cours
       if (localState.isRecording) {
+        console.log("Stopping current recording...");
         await stopRecording();
       }
 
       // Arrêter la webcam et nettoyer les ressources
       if (localState.localStream) {
+        console.log("Stopping webcam stream...");
         localState.localStream.getTracks().forEach((track) => track.stop());
       }
 
       // Annuler toute synthèse vocale en cours
       if (window.speechSynthesis) {
+        console.log("Cancelling speech synthesis...");
         window.speechSynthesis.cancel();
         dispatch(setSpeaking(false));
       }
@@ -158,13 +190,16 @@ const Interview = () => {
         transcriptions: localState.transcriptions,
       };
 
-      console.log("Saving interview with metadata:", metadata);
+      console.log("Preparing to save interview with metadata:", metadata);
 
       // Prepare form data
       const formData = new FormData();
       formData.append("metadata", JSON.stringify(metadata));
       if (localState.recordedBlob) {
+        console.log("Adding video blob to form data...");
         formData.append("video", localState.recordedBlob, "interview.webm");
+      } else {
+        console.warn("No video blob available!");
       }
 
       // Get token and clean it
@@ -176,6 +211,7 @@ const Interview = () => {
       // Clean token (remove Bearer prefix if present)
       const cleanToken = token.replace(/^Bearer\s+/i, "").trim();
 
+      console.log("Sending save request to server...");
       // Make the request directly to the candidate endpoint
       const response = await fetch(
         `${API_BASE_URL}/api/candidates/entretiens/${interviewId}/save`,
@@ -188,24 +224,24 @@ const Interview = () => {
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to save interview");
-      }
+      console.log("Server response status:", response.status);
+      const responseData = await response.json();
+      console.log("Server response data:", responseData);
 
-      const data = await response.json();
-      console.log("Interview saved successfully:", data);
+      if (!response.ok) {
+        throw new Error(responseData.error || "Failed to save interview");
+      }
 
       // Update Redux state with video URL and transcription
       dispatch(
         setState({
           interviewDetails: {
             ...interviewDetails,
-            videoUrl: data.videoUrl,
+            videoUrl: responseData.videoUrl,
             status: "completed",
             transcriptions: localState.transcriptions,
             completed_at: new Date().toISOString(),
-            last_updated_by: data.last_updated_by,
+            last_updated_by: responseData.last_updated_by,
           },
         })
       );
@@ -223,6 +259,9 @@ const Interview = () => {
         currentTranscription: "",
       }));
 
+      console.log(
+        "Interview saved successfully, navigating to mesinterview..."
+      );
       // Navigate to success page
       navigate("/mesinterview");
     } catch (error) {
@@ -232,7 +271,7 @@ const Interview = () => {
         errorMessage: "Failed to save interview. Please try again.",
       }));
     } finally {
-      setProcessing(false);
+      dispatch(setProcessing(false));
     }
   };
 
@@ -424,86 +463,7 @@ const Interview = () => {
     }
   };
 
-  const speakQuestion = useCallback(() => {
-    if (!("speechSynthesis" in window) || !questions.length) {
-      console.warn("Text-to-speech is not supported by this browser");
-      return;
-    }
-
-    try {
-      // Annuler toute synthèse vocale en cours
-      window.speechSynthesis.cancel();
-      dispatch(setSpeaking(false));
-
-      const currentQuestion = questions[currentQuestionIndex];
-      if (!currentQuestion) {
-        console.warn(
-          "No question available for current index:",
-          currentQuestionIndex
-        );
-        return;
-      }
-
-      const questionText = currentQuestion.question || "No question available";
-      const speech = new SpeechSynthesisUtterance(questionText);
-      speech.lang = "fr-FR";
-      speech.rate = 0.9;
-      speech.pitch = 1;
-      
-      // Attendre que les voix soient chargées
-      const voices = window.speechSynthesis.getVoices();
-      const frenchVoices = voices.filter((voice) => voice.lang.includes("fr-"));
-      if (frenchVoices.length > 0) {
-        speech.voice = frenchVoices[0];
-      } else {
-        // Si les voix ne sont pas encore chargées, attendre
-        window.speechSynthesis.onvoiceschanged = () => {
-          const voices = window.speechSynthesis.getVoices();
-          const frenchVoices = voices.filter((voice) =>
-            voice.lang.includes("fr-")
-          );
-          if (frenchVoices.length > 0) {
-            speech.voice = frenchVoices[0];
-            try {
-              window.speechSynthesis.speak(speech);
-            } catch (error) {
-              console.error("Error starting speech synthesis:", error);
-              dispatch(setSpeaking(false));
-            }
-          }
-        };
-      }
-
-      // Gérer les événements du speech
-      speech.onstart = () => {
-        console.log("Speech started for question:", currentQuestionIndex);
-        dispatch(setSpeaking(true));
-      };
-
-      speech.onend = () => {
-        console.log("Speech ended for question:", currentQuestionIndex);
-        dispatch(setSpeaking(false));
-      };
-
-      speech.onerror = (event) => {
-        console.error("Text-to-speech error:", event);
-        dispatch(setSpeaking(false));
-      };
-
-      // Lancer la synthèse vocale
-      try {
-        window.speechSynthesis.speak(speech);
-      } catch (error) {
-        console.error("Error starting speech synthesis:", error);
-        dispatch(setSpeaking(false));
-      }
-    } catch (error) {
-      console.error("Error in speakQuestion:", error);
-      dispatch(setSpeaking(false));
-    }
-  }, [questions, currentQuestionIndex, dispatch]);
-
-  // Initialiser la reconnaissance vocale
+  // Modifier la gestion de la reconnaissance vocale
   useEffect(() => {
     if (interviewStarted && !recognitionRef.current) {
       recognitionRef.current = initializeSpeechRecognition();
@@ -516,90 +476,111 @@ const Interview = () => {
           setLocalState((prev) => ({
             ...prev,
             currentTranscription: transcript,
+            isListening: true,
           }));
         };
 
         recognitionRef.current.onend = () => {
-          if (localState.isListening) {
-            recognitionRef.current.start();
+          if (localState.isListening && recognitionRef.current) {
+            try {
+              recognitionRef.current.start();
+            } catch (error) {
+              console.error("Error restarting speech recognition:", error);
+              setLocalState((prev) => ({
+                ...prev,
+                isListening: false,
+              }));
+            }
           }
         };
 
         recognitionRef.current.onerror = (event) => {
           console.error("Speech recognition error:", event.error);
-          setLocalState((prev) => ({
-            ...prev,
-            isListening: false,
-            errorMessage: `Erreur de reconnaissance vocale: ${event.error}`,
-          }));
+          if (event.error !== "aborted") {
+            setLocalState((prev) => ({
+              ...prev,
+              isListening: false,
+              errorMessage: `Erreur de reconnaissance vocale: ${event.error}`,
+            }));
+          }
         };
+
+        // Démarrer la reconnaissance vocale
+        try {
+          recognitionRef.current.start();
+          setLocalState((prev) => ({ ...prev, isListening: true }));
+        } catch (error) {
+          console.error("Error starting speech recognition:", error);
+        }
       }
     }
 
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch (error) {
+          console.error("Error stopping speech recognition:", error);
+        }
         recognitionRef.current = null;
       }
     };
   }, [interviewStarted]);
 
-  // Démarrer la reconnaissance vocale après que la question a été posée
-  useEffect(() => {
-    if (
-      interviewStarted &&
-      !isSpeaking &&
-      recognitionRef.current &&
-      !localState.isListening
-    ) {
-      try {
-        recognitionRef.current.start();
-        setLocalState((prev) => ({
-          ...prev,
-          isListening: true,
-        }));
-      } catch (error) {
-        console.error("Error starting speech recognition:", error);
-      }
+  const speakQuestion = useCallback(() => {
+    if (!("speechSynthesis" in window) || !questions.length) {
+      console.warn("Text-to-speech is not supported by this browser");
+      return;
     }
-  }, [interviewStarted, isSpeaking]);
 
-  // Arrêter la reconnaissance vocale avant de passer à la question suivante
-  useEffect(() => {
-    if (!interviewStarted || isSpeaking) {
-      if (recognitionRef.current && localState.isListening) {
-        try {
-          recognitionRef.current.stop();
-          setLocalState((prev) => ({
-            ...prev,
-            isListening: false,
-          }));
-        } catch (error) {
-          console.error("Error stopping speech recognition:", error);
-        }
-      }
+    // Annuler toute synthèse vocale en cours
+    window.speechSynthesis.cancel();
+    dispatch(setSpeaking(false));
+
+    const currentQuestion = questions[currentQuestionIndex];
+    if (!currentQuestion) {
+      console.warn(
+        "No question available for current index:",
+        currentQuestionIndex
+      );
+      return;
     }
-  }, [interviewStarted, isSpeaking]);
 
-  // Sauvegarder la transcription quand on passe à la question suivante
-  const saveTranscription = useCallback(() => {
-    if (localState.currentTranscription) {
-      setLocalState((prev) => ({
-        ...prev,
-        transcriptions: [
-          ...prev.transcriptions,
-          {
-            questionIndex: currentQuestionIndex,
-            question: questions[currentQuestionIndex]?.question,
-            answer: localState.currentTranscription,
-          },
-        ],
-        currentTranscription: "",
-      }));
+    const questionText = currentQuestion.question || "No question available";
+    const speech = new SpeechSynthesisUtterance(questionText);
+    speech.lang = "fr-FR";
+    speech.rate = 0.9;
+    speech.pitch = 1;
+
+    // Attendre que les voix soient chargées
+    const voices = window.speechSynthesis.getVoices();
+    const frenchVoices = voices.filter((voice) => voice.lang.includes("fr-"));
+    if (frenchVoices.length > 0) {
+      speech.voice = frenchVoices[0];
     }
-  }, [currentQuestionIndex, questions, localState.currentTranscription]);
 
-  // Modifier handleNextQuestion pour sauvegarder la transcription
+    speech.onstart = () => {
+      console.log("Speech started for question:", currentQuestionIndex);
+      dispatch(setSpeaking(true));
+    };
+
+    speech.onend = () => {
+      console.log("Speech ended for question:", currentQuestionIndex);
+      dispatch(setSpeaking(false));
+    };
+
+    speech.onerror = (event) => {
+      console.error("Text-to-speech error:", event);
+      dispatch(setSpeaking(false));
+    };
+
+    // Attendre un court instant avant de démarrer la synthèse vocale
+    setTimeout(() => {
+      window.speechSynthesis.speak(speech);
+    }, 100);
+  }, [questions, currentQuestionIndex, dispatch]);
+
+  // Modifier handleNextQuestion pour inclure la logique de goToNextQuestion
   const handleNextQuestion = useCallback(async () => {
     if (!interviewStarted || isProcessing) return;
 
@@ -607,7 +588,10 @@ const Interview = () => {
       dispatch(setProcessing(true));
 
       // Sauvegarder la transcription actuelle
-      saveTranscription();
+      if (localState.currentTranscription) {
+        console.log("Saving transcription before next question...");
+        saveTranscription();
+      }
 
       // Arrêter l'enregistrement en cours
       if (localState.isRecording) {
@@ -620,17 +604,28 @@ const Interview = () => {
         dispatch(setSpeaking(false));
       }
 
-      // Attendre un court instant pour s'assurer que tout est arrêté
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
       if (currentQuestionIndex < questions.length - 1) {
-        dispatch(goToNextQuestion());
+        // Mettre à jour l'index de la question directement dans le state
+        dispatch(
+          setState({
+            currentQuestionIndex: currentQuestionIndex + 1,
+            isSpeaking: false,
+          })
+        );
 
-        // Attendre un court instant avant de démarrer l'enregistrement et la synthèse vocale
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        // Réinitialiser la transcription courante
+        setLocalState((prev) => ({
+          ...prev,
+          currentTranscription: "",
+        }));
 
+        // Démarrer l'enregistrement
         startRecording();
-        speakQuestion();
+
+        // Démarrer la synthèse vocale après un court délai
+        setTimeout(() => {
+          speakQuestion();
+        }, 500);
       } else {
         await completeInterview();
       }
@@ -653,6 +648,7 @@ const Interview = () => {
     speakQuestion,
     isProcessing,
     localState.isRecording,
+    localState.currentTranscription,
     completeInterview,
     saveTranscription,
   ]);
@@ -663,6 +659,9 @@ const Interview = () => {
 
     try {
       dispatch(setProcessing(true));
+
+      // Sauvegarder la transcription actuelle
+      saveTranscription();
 
       // Arrêter l'enregistrement en cours
       if (localState.isRecording) {
@@ -675,16 +674,21 @@ const Interview = () => {
         dispatch(setSpeaking(false));
       }
 
-      // Attendre un court instant pour s'assurer que tout est arrêté
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
       dispatch(goToPreviousQuestion());
 
-      // Attendre un court instant avant de démarrer l'enregistrement et la synthèse vocale
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Réinitialiser la transcription courante
+      setLocalState((prev) => ({
+        ...prev,
+        currentTranscription: "",
+      }));
 
+      // Démarrer l'enregistrement
       startRecording();
-      speakQuestion();
+
+      // Démarrer la synthèse vocale après un court délai
+      setTimeout(() => {
+        speakQuestion();
+      }, 500);
     } catch (error) {
       console.error("Error in handlePreviousQuestion:", error);
       setLocalState((prev) => ({
@@ -935,7 +939,7 @@ const Interview = () => {
                         {transcription.question}
                       </p>
                       <p className="text-gray-900">{transcription.answer}</p>
-          </div>
+                    </div>
                   ))}
                 </div>
               ) : (

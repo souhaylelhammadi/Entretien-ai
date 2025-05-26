@@ -500,39 +500,21 @@ def get_interview_video(interview_id):
             logger.error(f"ID d'entretien invalide: {interview_id}")
             return jsonify({"error": "ID d'entretien invalide"}), 400
 
-        # Récupérer l'entretien
-        entretien = current_app.mongo.db.entretiens.find_one({
-            "_id": interview_object_id
-        })
-        
-        if not entretien:
-            logger.error(f"Entretien non trouvé pour l'ID: {interview_id}")
-            return jsonify({"error": "Entretien non trouvé"}), 404
-
-        logger.info(f"Entretien trouvé: {entretien}")
-
-        # Récupérer la vidéo
-        video = current_app.mongo.db.videos.find_one({
-            "entretien_id": interview_object_id
-        })
-        
-        if not video:
-            logger.error(f"Vidéo non trouvée pour l'entretien: {interview_id}")
-            return jsonify({"error": "Vidéo non trouvée"}), 404
-
-        logger.info(f"Vidéo trouvée: {video}")
-
         # Chemin exact du dossier des vidéos
         VIDEOS_DIR = r"C:\Users\souhayl\OneDrive\Bureau\interview-ai\server\app\Uploads\videos"
         
-        # 1. Essayer de trouver la vidéo dans le dossier Uploads/videos
+        # Chercher tous les fichiers correspondant au pattern
         try:
-            # Chercher tous les fichiers correspondant au pattern
             video_files = [f for f in os.listdir(VIDEOS_DIR) if f.startswith(f"interview_{interview_id}")]
             if video_files:
                 latest_video = max(video_files, key=lambda x: os.path.getctime(os.path.join(VIDEOS_DIR, x)))
                 video_path = os.path.join(VIDEOS_DIR, latest_video)
                 logger.info(f"Fichier vidéo trouvé dans Uploads/videos: {video_path}")
+                
+                if not os.path.exists(video_path):
+                    logger.error(f"Le fichier vidéo n'existe pas: {video_path}")
+                    return jsonify({"error": "Fichier vidéo non trouvé"}), 404
+                
                 response = send_file(
                     video_path,
                     mimetype='video/webm',
@@ -546,47 +528,10 @@ def get_interview_video(interview_id):
                 return response
             else:
                 logger.error(f"Aucun fichier vidéo trouvé dans {VIDEOS_DIR} pour l'ID {interview_id}")
+            return jsonify({"error": "Vidéo non trouvée"}), 404
         except Exception as e:
             logger.error(f"Erreur lors de la recherche dans Uploads/videos: {str(e)}")
-
-        # 2. Vérifier si la vidéo est stockée dans GridFS
-        if video.get("file_id"):
-            try:
-                fs = gridfs.GridFS(current_app.mongo.db)
-                video_file = fs.get(video["file_id"])
-                response = send_file(
-                    io.BytesIO(video_file.read()),
-                    mimetype='video/webm',
-                    as_attachment=False,''
-                    download_name=f"interview_{interview_id}.webm"
-                )
-                response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-                response.headers['Access-Control-Allow-Credentials'] = 'true'
-                response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
-                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-                return response
-            except Exception as e:
-                logger.error(f"Erreur lors de la récupération de la vidéo depuis GridFS: {str(e)}")
-
-        # 3. Si la vidéo est stockée en base64
-        if video.get("video_data"):
-            try:
-                video_data = base64.b64decode(video["video_data"])
-                response = send_file(
-                    io.BytesIO(video_data),
-                    mimetype='video/webm',
-                    as_attachment=False,
-                    download_name=f"interview_{interview_id}.webm"
-                )
-                response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-                response.headers['Access-Control-Allow-Credentials'] = 'true'
-                response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
-                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-                return response
-            except Exception as e:
-                logger.error(f"Erreur lors du décodage de la vidéo: {str(e)}")
-
-        return jsonify({"error": "Format de vidéo non supporté"}), 400
+            return jsonify({"error": "Erreur lors de la recherche de la vidéo"}), 500
 
     except Exception as e:
         logger.error(f"Erreur lors de la récupération de la vidéo: {str(e)}")

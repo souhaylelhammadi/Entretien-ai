@@ -252,11 +252,6 @@ const interviewSlice = createSlice({
         isProcessing: false,
       };
     },
-    goToNextQuestion: (state) => {
-      if (state.currentQuestionIndex < state.questions.length - 1) {
-        state.currentQuestionIndex += 1;
-      }
-    },
     goToPreviousQuestion: (state) => {
       if (state.currentQuestionIndex > 0) {
         state.currentQuestionIndex -= 1;
@@ -361,7 +356,6 @@ export const {
   setState,
   startInterview,
   stopInterview,
-  goToNextQuestion,
   goToPreviousQuestion,
   setTranscript,
   clearTranscript,

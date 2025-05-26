@@ -166,16 +166,19 @@ const InterviewsSection = () => {
                     <Eye className="h-5 w-5 mr-1" />
                     <span className="text-xs">Détails</span>
                   </button>
-                  {interview.status !== "Terminé" && interview.status !== "Annulé" && (
-                    <button
-                      className="flex items-center text-red-600 hover:text-red-800"
-                      title="Annuler l'entretien"
-                      onClick={() => console.log("Annuler entretien", interview.id)}
-                    >
-                      <X className="h-5 w-5 mr-1" />
-                      <span className="text-xs">Annuler</span>
-                    </button>
-                  )}
+                  {interview.status !== "Terminé" &&
+                    interview.status !== "Annulé" && (
+                      <button
+                        className="flex items-center text-red-600 hover:text-red-800"
+                        title="Annuler l'entretien"
+                        onClick={() =>
+                          console.log("Annuler entretien", interview.id)
+                        }
+                      >
+                        <X className="h-5 w-5 mr-1" />
+                        <span className="text-xs">Annuler</span>
+                      </button>
+                    )}
                 </div>
               </td>
             </tr>
@@ -310,21 +313,34 @@ const InterviewsSection = () => {
                   <h4 className="font-medium text-md mb-2">Enregistrement</h4>
                   <div className="relative bg-gray-800 rounded-lg overflow-hidden">
                     <div className="aspect-w-16 aspect-h-9">
-                      <img
-                        src="/api/placeholder/400/300"
-                        alt="Interview recording preview"
+                      <video
+                        controls
                         className="w-full h-64 object-cover"
+                        src={`${process.env.REACT_APP_API_URL || "http://localhost:5000"}${selectedInterview.recording_url}?token=${encodeURIComponent(localStorage.getItem("token"))}`}
+                        onError={(e) => {
+                          console.error("Erreur de chargement de la vidéo:", e);
+                          const videoElement = e.target;
+                          videoElement.style.display = "none";
+                          const errorMessage = document.createElement("div");
+                          errorMessage.style.position = "absolute";
+                          errorMessage.style.top = "50%";
+                          errorMessage.style.left = "50%";
+                          errorMessage.style.transform = "translate(-50%, -50%)";
+                          errorMessage.style.color = "white";
+                          errorMessage.style.textAlign = "center";
+                          errorMessage.innerHTML = "Erreur de chargement de la vidéo.<br>Veuillez réessayer.";
+                          videoElement.parentNode.appendChild(errorMessage);
+                        }}
+                        onLoadedMetadata={(e) => {
+                          console.log("Métadonnées de la vidéo chargées");
+                        }}
+                        onLoadedData={(e) => {
+                          console.log("Données de la vidéo chargées");
+                        }}
+                        onCanPlay={(e) => {
+                          console.log("La vidéo peut être lue");
+                        }}
                       />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <a
-                          href={selectedInterview.recording_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="bg-white bg-opacity-80 hover:bg-opacity-100 rounded-full p-3"
-                        >
-                          <Video className="h-6 w-6 text-blue-600" />
-                        </a>
-                      </div>
                     </div>
                   </div>
                 </div>
