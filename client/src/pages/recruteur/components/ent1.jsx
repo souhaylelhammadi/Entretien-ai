@@ -220,192 +220,242 @@ const InterviewSection = () => {
       <Dialog
         open={openDialog}
         onClose={handleCloseDialog}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
       >
         {selectedInterview && (
           <>
             <DialogTitle>Détails de l'entretien</DialogTitle>
             <DialogContent>
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Informations générales
-                </Typography>
-                <Typography variant="body1">
-                  Statut: {getStatusLabel(selectedInterview.statut)}
-                </Typography>
-                <Typography variant="body1">
-                  Date prévue:{" "}
-                  {selectedInterview.date_prevue
-                    ? format(
-                        new Date(selectedInterview.date_prevue),
-                        "dd MMMM yyyy",
-                        { locale: fr }
-                      )
-                    : "Non définie"}
-                </Typography>
-                <Typography variant="body1">
-                  Date de création:{" "}
-                  {selectedInterview.date_creation
-                    ? format(
-                        new Date(selectedInterview.date_creation),
-                        "dd MMMM yyyy",
-                        { locale: fr }
-                      )
-                    : "Non définie"}
-                </Typography>
-                <Typography variant="body1">
-                  Dernière mise à jour:{" "}
-                  {selectedInterview.date_maj
-                    ? format(
-                        new Date(selectedInterview.date_maj),
-                        "dd MMMM yyyy",
-                        { locale: fr }
-                      )
-                    : "Non définie"}
-                </Typography>
-                <Typography variant="body1">
-                  Terminé le:{" "}
-                  {selectedInterview.completed_at
-                    ? format(
-                        new Date(selectedInterview.completed_at),
-                        "dd MMMM yyyy",
-                        { locale: fr }
-                      )
-                    : "Non défini"}
-                </Typography>
+              <Box sx={{ display: "flex", gap: 3, mt: 2 }}>
+                {/* Colonne de gauche - Informations */}
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Informations générales
+                  </Typography>
+                  <Typography variant="body1">
+                    Statut: {getStatusLabel(selectedInterview.statut)}
+                  </Typography>
+                  <Typography variant="body1">
+                    Date prévue:{" "}
+                    {selectedInterview.date_prevue
+                      ? format(
+                          new Date(selectedInterview.date_prevue),
+                          "dd MMMM yyyy",
+                          { locale: fr }
+                        )
+                      : "Non définie"}
+                  </Typography>
+                  <Typography variant="body1">
+                    Date de création:{" "}
+                    {selectedInterview.date_creation
+                      ? format(
+                          new Date(selectedInterview.date_creation),
+                          "dd MMMM yyyy",
+                          { locale: fr }
+                        )
+                      : "Non définie"}
+                  </Typography>
+                  <Typography variant="body1">
+                    Dernière mise à jour:{" "}
+                    {selectedInterview.date_maj
+                      ? format(
+                          new Date(selectedInterview.date_maj),
+                          "dd MMMM yyyy",
+                          { locale: fr }
+                        )
+                      : "Non définie"}
+                  </Typography>
+                  <Typography variant="body1">
+                    Terminé le:{" "}
+                    {selectedInterview.completed_at
+                      ? format(
+                          new Date(selectedInterview.completed_at),
+                          "dd MMMM yyyy",
+                          { locale: fr }
+                        )
+                      : "Non défini"}
+                  </Typography>
 
-                <Typography variant="h6" sx={{ mt: 3 }} gutterBottom>
-                  Candidat
-                </Typography>
-                <Typography variant="body1">
-                  Nom: {selectedInterview.candidat?.nom || "Non défini"}
-                </Typography>
-                <Typography variant="body1">
-                  Email: {selectedInterview.candidat?.email || "Non défini"}
-                </Typography>
-                <Typography variant="body1">
-                  Téléphone:{" "}
-                  {selectedInterview.candidat?.telephone || "Non défini"}
-                </Typography>
+                  <Typography variant="h6" sx={{ mt: 3 }} gutterBottom>
+                    Candidat
+                  </Typography>
+                  <Typography variant="body1">
+                    Nom: {selectedInterview.candidat?.nom || "Non défini"}
+                  </Typography>
+                  <Typography variant="body1">
+                    Email: {selectedInterview.candidat?.email || "Non défini"}
+                  </Typography>
+                  <Typography variant="body1">
+                    Téléphone:{" "}
+                    {selectedInterview.candidat?.telephone || "Non défini"}
+                  </Typography>
 
-                <Typography variant="h6" sx={{ mt: 3 }} gutterBottom>
-                  Offre
-                </Typography>
-                <Typography variant="body1">
-                  Titre: {selectedInterview.offre?.titre || "Non défini"}
-                </Typography>
-                <Typography variant="body1">
-                  Entreprise:{" "}
-                  {selectedInterview.offre?.entreprise || "Non définie"}
-                </Typography>
-                <Typography variant="body1">
-                  Localisation:{" "}
-                  {selectedInterview.offre?.localisation || "Non définie"}
-                </Typography>
+                  <Typography variant="h6" sx={{ mt: 3 }} gutterBottom>
+                    Offre
+                  </Typography>
+                  <Typography variant="body1">
+                    Titre: {selectedInterview.offre?.titre || "Non défini"}
+                  </Typography>
+                  <Typography variant="body1">
+                    Entreprise:{" "}
+                    {selectedInterview.offre?.entreprise || "Non définie"}
+                  </Typography>
+                  <Typography variant="body1">
+                    Localisation:{" "}
+                    {selectedInterview.offre?.localisation || "Non définie"}
+                  </Typography>
+                </Box>
 
-                {selectedInterview.video?.url && (
-                  <>
-                    <Typography variant="h6" sx={{ mt: 3 }} gutterBottom>
-                      Vidéo
-                    </Typography>
-                    <Box sx={{ mt: 2 }}>
-                      <video
-                        controls
-                        width="100%"
-                        src={selectedInterview.video.url}
-                      >
-                        Votre navigateur ne supporte pas la lecture de vidéos.
-                      </video>
-                    </Box>
-                  </>
-                )}
-
-                {selectedInterview.qa_pairs &&
-                  selectedInterview.qa_pairs.length > 0 && (
+                {/* Colonne de droite - Vidéo et Transcription */}
+                <Box sx={{ flex: 1 }}>
+                  {selectedInterview.video?.url && (
                     <>
-                      <Typography variant="h6" sx={{ mt: 3 }} gutterBottom>
-                        Questions et Réponses
+                      <Typography variant="h6" gutterBottom>
+                        Vidéo de l'entretien
                       </Typography>
-                      <Box sx={{ mt: 2 }}>
-                        {selectedInterview.qa_pairs.map((qa, index) => (
-                          <Paper
-                            key={index}
-                            sx={{
-                              p: 2,
-                              mb: 2,
-                              backgroundColor: "#f5f5f5",
-                              "&:hover": {
-                                backgroundColor: "#eeeeee",
-                              },
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "flex-start",
-                                mb: 1,
-                              }}
-                            >
-                              <Typography
-                                variant="subtitle1"
-                                sx={{
-                                  fontWeight: "bold",
-                                  color: "#1976d2",
-                                  flex: 1,
-                                }}
-                              >
-                                Question {qa.questionIndex + 1}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{ ml: 2 }}
-                              >
-                                {qa.timestamp
-                                  ? new Date(qa.timestamp).toLocaleString(
-                                      "fr-FR"
-                                    )
-                                  : "Non défini"}
-                              </Typography>
-                            </Box>
-
-                            <Typography
-                              variant="body1"
-                              sx={{
-                                mb: 2,
-                                color: "#424242",
-                                fontStyle: "italic",
-                              }}
-                            >
-                              {qa.question}
-                            </Typography>
-
-                            <Box
-                              sx={{
-                                backgroundColor: "white",
-                                p: 2,
-                                borderRadius: 1,
-                                border: "1px solid #e0e0e0",
-                              }}
-                            >
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ mb: 1 }}
-                              >
-                                Réponse:
-                              </Typography>
-                              <Typography variant="body1">
-                                {qa.answer || "Pas de réponse disponible"}
-                              </Typography>
-                            </Box>
-                          </Paper>
-                        ))}
+                      <Box
+                        sx={{
+                          mt: 2,
+                          mb: 3,
+                          position: "relative",
+                          width: "100%",
+                          paddingTop: "56.25%", // Ratio 16:9
+                          backgroundColor: "#000",
+                          borderRadius: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <video
+                          controls
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "contain",
+                          }}
+                          src={selectedInterview.video.url}
+                        >
+                          Votre navigateur ne supporte pas la lecture de vidéos.
+                        </video>
                       </Box>
                     </>
                   )}
+
+                  {selectedInterview.video?.transcription && (
+                    <>
+                      <Typography variant="h6" gutterBottom>
+                        Transcription
+                      </Typography>
+                      <Box
+                        sx={{
+                          mt: 2,
+                          mb: 3,
+                          p: 2,
+                          bgcolor: "grey.100",
+                          borderRadius: 2,
+                          maxHeight: "300px",
+                          overflowY: "auto",
+                        }}
+                      >
+                        <Typography
+                          variant="body1"
+                          component="pre"
+                          sx={{ whiteSpace: "pre-wrap" }}
+                        >
+                          {selectedInterview.video.transcription}
+                        </Typography>
+                      </Box>
+                    </>
+                  )}
+                </Box>
               </Box>
+
+              {/* Questions et Réponses en bas */}
+              {selectedInterview.qa_pairs &&
+                selectedInterview.qa_pairs.length > 0 && (
+                  <Box sx={{ mt: 4 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Questions et Réponses
+                    </Typography>
+                    <Box sx={{ mt: 2 }}>
+                      {selectedInterview.qa_pairs.map((qa, index) => (
+                        <Paper
+                          key={index}
+                          sx={{
+                            p: 2,
+                            mb: 2,
+                            backgroundColor: "#f5f5f5",
+                            "&:hover": {
+                              backgroundColor: "#eeeeee",
+                            },
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "flex-start",
+                              mb: 1,
+                            }}
+                          >
+                            <Typography
+                              variant="subtitle1"
+                              sx={{
+                                fontWeight: "bold",
+                                color: "#1976d2",
+                                flex: 1,
+                              }}
+                            >
+                              Question {qa.questionIndex + 1}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ ml: 2 }}
+                            >
+                              {qa.timestamp
+                                ? new Date(qa.timestamp).toLocaleString("fr-FR")
+                                : "Non défini"}
+                            </Typography>
+                          </Box>
+
+                          <Typography
+                            variant="body1"
+                            sx={{
+                              mb: 2,
+                              color: "#424242",
+                              fontStyle: "italic",
+                            }}
+                          >
+                            {qa.question}
+                          </Typography>
+
+                          <Box
+                            sx={{
+                              backgroundColor: "white",
+                              p: 2,
+                              borderRadius: 1,
+                              border: "1px solid #e0e0e0",
+                            }}
+                          >
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mb: 1 }}
+                            >
+                              Réponse:
+                            </Typography>
+                            <Typography variant="body1">
+                              {qa.answer || "Pas de réponse disponible"}
+                            </Typography>
+                          </Box>
+                        </Paper>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
             </DialogContent>
             <DialogActions>
               <Button onClick={handleCloseDialog}>Fermer</Button>

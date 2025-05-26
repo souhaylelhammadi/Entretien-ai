@@ -15,6 +15,7 @@ import { Navigate } from "react-router-dom";
 import DashboardRecrutement from "../pages/recruteur/RecruiterDashboard"; 
 import Mesinterview from "../pages/Mesinterview";
 import Profile from "../layout/Navbar/profile";
+import Index from "../pages/homepage"
 
 
 
@@ -50,14 +51,15 @@ function Router() {
     <>
       <ToastContainer />
       <Routes>
-        {/* Routes publiques <Route index element={<Home />} />*/}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/*<Route index element={<Index />} /> */}
+
         <Route path="/" element={<Layout />}>
+          {" "}
+          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Login />} />
           <Route path="offres" element={<OffresEmploi />} />
           <Route path="offres/:id" element={<DetailsOffreEmploi />} />
           <Route path="/entretienpourc/:interviewId" element={<Interview />} />
-
           {/* Routes protégées pour les candidats */}
           <Route
             path="mesinterview"
@@ -75,7 +77,6 @@ function Router() {
               </ProtectedRoute>
             }
           />
-
           {/* Routes protégées pour les recruteurs */}
           <Route
             path="recrutement/*"
