@@ -248,6 +248,16 @@ def get_recruiter_interviews(auth_payload):
         logger.error(f"Erreur lors de la récupération des entretiens: {str(e)}")
         return jsonify({"error": str(e), "code": "SERVER_ERROR"}), 500
 
+def convert_objectid(obj):
+    """Convertit les ObjectId en chaînes de caractères."""
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_objectid(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_objectid(item) for item in obj]
+    return obj
+
 @entretiensection_bp.route("/<string:interview_id>", methods=["GET"])
 @require_auth("recruteur")
 def get_interview_details(interview_id, auth_payload):
@@ -270,7 +280,7 @@ def get_interview_details(interview_id, auth_payload):
         if not interview:
             return jsonify({"error": "Entretien non trouvé"}), 404
             
-        logger.info(f"Entretien ajouté au résultat: {interview_id}")
+        logger.info(f"Entretien trouvé: {interview_id}")
         
         # Récupérer les questions associées
         questions = None
@@ -278,10 +288,7 @@ def get_interview_details(interview_id, auth_payload):
             questions_doc = db.questions.find_one({"_id": ObjectId(interview['questions_id'])})
             if questions_doc:
                 questions = questions_doc.get('questions', [])
-                logger.info(f"Questions document trouvé: {questions_doc}")
-                logger.info(f"Liste des questions: {questions}")
-                for i, q in enumerate(questions):
-                    logger.info(f"Question {i}: {q['question']}")
+                logger.info(f"Questions trouvées: {len(questions)}")
         
         # Récupérer les informations du candidat
         candidat = None
@@ -293,37 +300,45 @@ def get_interview_details(interview_id, auth_payload):
         if interview.get('offre_id'):
             offre = db[OFFRES_COLLECTION].find_one({"_id": ObjectId(interview['offre_id'])})
         
-        # Récupérer les informations de la vidéo
-        video = None
-        if interview.get('video_id'):
-            video = db.videos.find_one({"_id": ObjectId(interview['video_id'])})
-        
+        # Récupérer la vidéo
+        video = db["videos"].find_one({"entretien_id": interview["_id"]})
+        logger.info(f"Vidéo trouvée: {video}")
+
+        # Construire l'URL complète de la vidéo
+        video_url = None
+        if video:
+            video_url = f"/api/recruteur/entretiens/videos/{str(interview['_id'])}"
+            logger.info(f"URL de la vidéo construite: {video_url}")
+
+        # Convertir l'entretien en dictionnaire
+        interview_dict = convert_objectid(interview)
+        logger.info(f"Entretien converti en dictionnaire: {interview_dict}")
+
         # Préparer la réponse
-        response = {
+        response_data = {
             "interview": {
-                **interview,
-                "_id": str(interview["_id"]),
-                "candidat_id": str(interview["candidat_id"]) if interview.get("candidat_id") else None,
-                "offre_id": str(interview["offre_id"]) if interview.get("offre_id") else None,
-                "recruteur_id": str(interview["recruteur_id"]) if interview.get("recruteur_id") else None,
-                "questions_id": str(interview["questions_id"]) if interview.get("questions_id") else None,
-                "questions": questions,  # Ajouter les questions à la réponse
+                **interview_dict,
+                "questions": questions
             },
-            "candidat": {
-                **candidat,
-                "_id": str(candidat["_id"])
-            } if candidat else None,
-            "offre": {
-                **offre,
-                "_id": str(offre["_id"])
-            } if offre else None,
+            "offre": convert_objectid(offre) if offre else None,
+            "candidat": convert_objectid(candidat) if candidat else None,
             "video": {
-                **video,
-                "_id": str(video["_id"])
+                "url": video_url,
+                "transcription": video.get("transcription") if video else None,
+                "metadata": video.get("metadata") if video else None,
+                "created_at": video.get("created_at") if video else None
             } if video else None
         }
-        
-        return jsonify(response)
+
+        logger.info(f"Réponse préparée: {response_data}")
+
+        return jsonify({
+            "success": True,
+            "interview": response_data["interview"],
+            "offre": response_data["offre"],
+            "candidat": response_data["candidat"],
+            "video": response_data["video"]
+        }), 200
         
     except Exception as e:
         logger.error(f"Erreur lors de la récupération des détails: {str(e)}")

@@ -80,7 +80,8 @@ const InterviewSection = () => {
         fetchInterviewDetails(interviewId)
       ).unwrap();
       console.log("Interview details received:", result);
-      console.log("Full interview object:", JSON.stringify(result, null, 2));
+      console.log("Video data:", result.video);
+      console.log("Video URL:", result.video?.url);
       setOpenDialog(true);
     } catch (error) {
       console.error("Erreur lors de la récupération des détails:", error);
@@ -222,7 +223,7 @@ const InterviewSection = () => {
           {/* Modal pour les détails de l'entretien */}
           {selectedInterview && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
-              <div className="bg-white rounded-xl shadow-lg w-full max-w-4xl h-[90vh] flex flex-col">
+              <div className="bg-white rounded-xl shadow-lg w-full max-w-6xl h-[95vh] flex flex-col">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                   <Typography variant="h5" component="div">
                     Détails de l'entretien
@@ -233,84 +234,46 @@ const InterviewSection = () => {
                 </div>
                 <div className="flex-1 overflow-auto p-4">
                   <Grid container spacing={3}>
-                    {/* Vidéo et Transcription */}
-                    <Grid item xs={12}>
-                      <Card>
-                        <CardContent>
-                          <Grid container spacing={2}>
-                            {/* Vidéo */}
-                            {selectedInterview.video?.url && (
-                              <Grid item xs={12} md={6}>
-                                <Typography variant="h6" gutterBottom>
-                                  Vidéo de l'entretien
-                                </Typography>
-                                <Box
-                                  sx={{
-                                    position: "relative",
-                                    width: "100%",
-                                    paddingTop: "56.25%",
-                                    backgroundColor: "#000",
-                                    borderRadius: 2,
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <video
-                                    controls
-                                    style={{
-                                      position: "absolute",
-                                      top: 0,
-                                      left: 0,
-                                      width: "100%",
-                                      height: "100%",
-                                      objectFit: "contain",
-                                    }}
-                                    src={`${
-                                      process.env.REACT_APP_API_URL ||
-                                      "http://localhost:5000"
-                                    }${
-                                      selectedInterview.video.url
-                                    }?token=${encodeURIComponent(
-                                      localStorage.getItem("token")
-                                    )}`}
-                                  />
-                                </Box>
-                              </Grid>
-                            )}
-
-                            {/* Transcription */}
-                            {selectedInterview.video?.transcription && (
-                              <Grid item xs={12} md={6}>
-                                <Typography
-                                  variant="h6"
-                                  gutterBottom
-                                  sx={{ display: "flex", alignItems: "center" }}
-                                >
-                                  <Description sx={{ mr: 1 }} /> Transcription
-                                </Typography>
-                                <Box
-                                  sx={{
-                                    height: "100%",
-                                    p: 2,
-                                    bgcolor: "grey.100",
-                                    borderRadius: 2,
-                                    maxHeight: "400px",
-                                    overflowY: "auto",
-                                  }}
-                                >
-                                  <Typography
-                                    variant="body2"
-                                    component="pre"
-                                    sx={{ whiteSpace: "pre-wrap" }}
-                                  >
-                                    {selectedInterview.video.transcription}
-                                  </Typography>
-                                </Box>
-                              </Grid>
-                            )}
-                          </Grid>
-                        </CardContent>
-                      </Card>
-                    </Grid>
+                    {/* Vidéo */}
+                    {selectedInterview?.video?.url && (
+                      <Grid item xs={12}>
+                        <Card>
+                          <CardContent>
+                            <Typography variant="h6" gutterBottom>
+                              Vidéo de l'entretien
+                            </Typography>
+                            <Box
+                              sx={{
+                                position: "relative",
+                                width: "100%",
+                                paddingTop: "56.25%",
+                                backgroundColor: "#000",
+                                borderRadius: 2,
+                                overflow: "hidden",
+                              }}
+                            >
+                              <video
+                                controls
+                                style={{
+                                  position: "absolute",
+                                  top: 0,
+                                  left: 0,
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "contain",
+                                }}
+                                src={`${
+                                  process.env.REACT_APP_API_URL ||
+                                  "http://localhost:5000"
+                                }/api/recruteur/entretiens/videos/${selectedInterview._id}?token=${encodeURIComponent(
+                                  localStorage.getItem("token")
+                                )}`}
+                              />
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    )}
 
                     {/* Questions de l'entretien */}
                     <Grid item xs={12}>
@@ -491,97 +454,6 @@ const InterviewSection = () => {
                         </CardContent>
                       </Card>
                     </Grid>
-
-                    {/* Questions et Réponses */}
-                    {selectedInterview.qa_pairs &&
-                      selectedInterview.qa_pairs.length > 0 && (
-                        <Grid item xs={12}>
-                          <Card>
-                            <CardContent>
-                              <Typography variant="h6" gutterBottom>
-                                Questions et Réponses
-                              </Typography>
-                              <Box sx={{ mt: 2 }}>
-                                {selectedInterview.qa_pairs.map((qa, index) => (
-                                  <Paper
-                                    key={index}
-                                    sx={{
-                                      p: 2,
-                                      mb: 2,
-                                      backgroundColor: "#f5f5f5",
-                                      "&:hover": {
-                                        backgroundColor: "#eeeeee",
-                                      },
-                                    }}
-                                  >
-                                    <Box
-                                      sx={{
-                                        display: "flex",
-                                        alignItems: "flex-start",
-                                        mb: 1,
-                                      }}
-                                    >
-                                      <Typography
-                                        variant="subtitle1"
-                                        sx={{
-                                          fontWeight: "bold",
-                                          color: "#1976d2",
-                                          flex: 1,
-                                        }}
-                                      >
-                                        Question {qa.questionIndex + 1}
-                                      </Typography>
-                                      <Typography
-                                        variant="caption"
-                                        color="text.secondary"
-                                        sx={{ ml: 2 }}
-                                      >
-                                        {qa.timestamp
-                                          ? new Date(
-                                              qa.timestamp
-                                            ).toLocaleString("fr-FR")
-                                          : "Non défini"}
-                                      </Typography>
-                                    </Box>
-
-                                    <Typography
-                                      variant="body1"
-                                      sx={{
-                                        mb: 2,
-                                        color: "#424242",
-                                        fontStyle: "italic",
-                                      }}
-                                    >
-                                      {qa.question}
-                                    </Typography>
-
-                                    <Box
-                                      sx={{
-                                        backgroundColor: "white",
-                                        p: 2,
-                                        borderRadius: 1,
-                                        border: "1px solid #e0e0e0",
-                                      }}
-                                    >
-                                      <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                        sx={{ mb: 1 }}
-                                      >
-                                        Réponse:
-                                      </Typography>
-                                      <Typography variant="body1">
-                                        {qa.answer ||
-                                          "Pas de réponse disponible"}
-                                      </Typography>
-                                    </Box>
-                                  </Paper>
-                                ))}
-                              </Box>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                      )}
                   </Grid>
                 </div>
               </div>
