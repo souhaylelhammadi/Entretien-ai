@@ -530,8 +530,7 @@ Veuillez fournir une évaluation détaillée au format JSON suivant :
     ],
     "score_global": 7,
     "points_forts": ["Point fort 1", "Point fort 2"],
-    "points_a_ameliorer": ["Point à améliorer 1", "Point à améliorer 2"],
-    "recommandations": ["Recommandation 1", "Recommandation 2"],
+    
     "conclusion": "Conclusion sur l'adéquation du candidat"
 }}"""
 
@@ -595,8 +594,7 @@ Veuillez fournir une évaluation détaillée au format JSON suivant :
                     "questions_analysees": evaluation.get("questions_analysees", []),
                     "score_global": evaluation.get("score_global", 0),
                     "points_forts": evaluation.get("points_forts", []),
-                    "points_a_ameliorer": evaluation.get("points_a_ameliorer", []),
-                    "recommandations": evaluation.get("recommandations", []),
+                   
                     "conclusion": evaluation.get("conclusion", ""),
                     "evaluation_complete": True,
                     "qa_pairs": qa_pairs,
@@ -630,3 +628,68 @@ Veuillez fournir une évaluation détaillée au format JSON suivant :
     except Exception as e:
         logger.error(f"Erreur lors de la génération du rapport: {str(e)}")
         return None
+
+@entretiens_bp.route("/rapports/<entretien_id>", methods=["GET"])
+@cross_origin(origins="http://localhost:3000")
+def get_rapport(entretien_id):
+    """Récupère le rapport d'un entretien spécifique."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({"error": "Authentification requise", "code": "NO_TOKEN"}), 401
+            
+        user = get_user_from_token(auth_header)
+        if not user:
+            return jsonify({"error": "Token invalide ou expiré", "code": "INVALID_TOKEN"}), 401
+            
+        if 'recruteur' not in user.get('roles', []):
+            return jsonify({"error": "Accès réservé aux recruteurs", "code": "UNAUTHORIZED_ROLE"}), 403
+
+        db = current_app.mongo
+        if db is None:
+            return jsonify({"error": "Base de données non initialisée", "code": "DB_NOT_INITIALIZED"}), 500
+
+        # Récupérer l'entretien
+        try:
+            entretien = db[ENTRETIENS_COLLECTION].find_one({"_id": ObjectId(entretien_id)})
+            if not entretien:
+                return jsonify({"error": "Entretien non trouvé", "code": "INTERVIEW_NOT_FOUND"}), 404
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération de l'entretien: {str(e)}")
+            return jsonify({"error": "Erreur lors de la récupération de l'entretien", "code": "FETCH_ERROR"}), 500
+
+        # Vérifier si l'entretien appartient au recruteur
+        if str(entretien.get('recruteur_id')) != user.get('id'):
+            return jsonify({"error": "Accès non autorisé à cet entretien", "code": "UNAUTHORIZED_ACCESS"}), 403
+
+        # Récupérer le rapport
+        rapport_id = entretien.get('rapport_id')
+        if not rapport_id:
+            return jsonify({"error": "Aucun rapport trouvé pour cet entretien", "code": "NO_REPORT"}), 404
+
+        try:
+            rapport = db[RAPPORTS_COLLECTION].find_one({"_id": ObjectId(rapport_id)})
+            if not rapport:
+                return jsonify({"error": "Rapport non trouvé", "code": "REPORT_NOT_FOUND"}), 404
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération du rapport: {str(e)}")
+            return jsonify({"error": "Erreur lors de la récupération du rapport", "code": "REPORT_FETCH_ERROR"}), 500
+
+        # Sérialiser les données
+        serialized_rapport = serialize_doc(rapport)
+        serialized_entretien = serialize_doc(entretien)
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "rapport": serialized_rapport,
+                "entretien": serialized_entretien
+            }
+        }), 200
+
+    except PyMongoError as e:
+        logger.error(f"Erreur MongoDB: {str(e)}")
+        return jsonify({"error": "Erreur de base de données", "code": "DB_ERROR"}), 500
+    except Exception as e:
+        logger.error(f"Erreur serveur: {str(e)}")
+        return jsonify({"error": "Erreur serveur", "code": "SERVER_ERROR"}), 500

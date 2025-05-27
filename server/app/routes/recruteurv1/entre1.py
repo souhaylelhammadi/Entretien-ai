@@ -217,22 +217,29 @@ def get_recruiter_interviews(auth_payload):
                 candidat = db[UTILISATEURS_COLLECTION].find_one({"_id": entretien.get("candidat_id")})
                 video = db["videos"].find_one({"entretien_id": entretien["_id"]})
                 
+                # Récupérer le rapport
+                rapport = None
+                if entretien.get("rapport_id"):
+                    rapport = db.rapports.find_one({"_id": ObjectId(entretien["rapport_id"])})
+                
                 result.append({
                     "id": str(entretien["_id"]),
                     "offre": {
                         "titre": offre.get("titre", "Non défini"),
                         "entreprise": offre.get("entreprise", "Non définie")
                     },
-                    "candidat": {
+                    "candidat_id": {
                         "nom": candidat.get("nom", "Candidat supprimé") if candidat else "Candidat supprimé",
-                        "email": candidat.get("email", "Non disponible") if candidat else "Non disponible"
+                        "email": candidat.get("email", "Non disponible") if candidat else "Non disponible",
+                        "telephone": candidat.get("telephone", "Non disponible") if candidat else "Non disponible"
                     },
                     "datePrevue": entretien.get("date_prevue"),
                     "dateCreation": entretien.get("date_creation"),
                     "statut": entretien.get("statut", "planifie"),
                     "video": {
                         "url": video.get("video_url") if video else None
-                    } if video else None
+                    } if video else None,
+                    "rapport": convert_objectid(rapport) if rapport else None
                 })
                 logger.info(f'Entretien ajouté au résultat: {entretien["_id"]}')
             except Exception as e:
@@ -507,3 +514,69 @@ def get_interview_video(interview_id):
     except Exception as e:
         logger.error(f"Erreur lors de la récupération de la vidéo: {str(e)}")
         return jsonify({"error": "Erreur lors de la récupération de la vidéo"}), 500
+
+@entretiensection_bp.route("/<string:interview_id>/rapport", methods=["GET"])
+@require_auth("recruteur")
+def get_interview_report(interview_id, auth_payload):
+    """Récupérer le rapport d'un entretien."""
+    try:
+        db = current_app.mongo
+        recruteur_id = auth_payload.get('recruteur_id')
+        
+        logger.info(f"Traitement du rapport pour l'entretien: {interview_id}")
+        
+        # Convertir l'ID en ObjectId
+        interview_id = ObjectId(interview_id)
+        
+        # Récupérer l'entretien
+        interview = db[ENTRETIENS_COLLECTION].find_one({
+            "_id": interview_id,
+            "recruteur_id": ObjectId(recruteur_id)
+        })
+        
+        if not interview:
+            return jsonify({"error": "Entretien non trouvé", "code": "INTERVIEW_NOT_FOUND"}), 404
+            
+        logger.info(f"Entretien trouvé: {interview_id}")
+        
+        # Récupérer le rapport
+        rapport_id = interview.get('rapport_id')
+        if not rapport_id:
+            return jsonify({"error": "Aucun rapport trouvé pour cet entretien", "code": "NO_REPORT"}), 404
+            
+        rapport = db.rapports.find_one({"_id": ObjectId(rapport_id)})
+        if not rapport:
+            return jsonify({"error": "Rapport non trouvé", "code": "REPORT_NOT_FOUND"}), 404
+            
+        logger.info(f"Rapport trouvé: {rapport_id}")
+        
+        # Convertir les ObjectId en chaînes
+        rapport_dict = convert_objectid(rapport)
+        
+        # Récupérer les informations du candidat
+        candidat = None
+        if rapport.get('candidat_id'):
+            candidat = db[CANDIDATS_COLLECTION].find_one({"_id": ObjectId(rapport['candidat_id'])})
+            
+        # Préparer la réponse
+        response_data = {
+            "rapport": rapport_dict,
+            "candidat": convert_objectid(candidat) if candidat else None,
+            "entretien": {
+                "id": str(interview["_id"]),
+                "statut": interview.get("statut"),
+                "date_creation": interview.get("date_creation"),
+                "completed_at": interview.get("completed_at")
+            }
+        }
+        
+        logger.info(f"Réponse préparée pour le rapport")
+        
+        return jsonify({
+            "success": True,
+            "data": response_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération du rapport: {str(e)}")
+        return jsonify({"error": str(e), "code": "SERVER_ERROR"}), 500
