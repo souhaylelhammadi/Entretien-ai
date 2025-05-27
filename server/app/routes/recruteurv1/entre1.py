@@ -467,38 +467,42 @@ def get_interview_video(interview_id):
             logger.error(f"ID d'entretien invalide: {interview_id}")
             return jsonify({"error": "ID d'entretien invalide"}), 400
 
-        # Chemin exact du dossier des vidéos
-        VIDEOS_DIR = r"C:\Users\souhayl\OneDrive\Bureau\interview-ai\server\app\Uploads\videos"
-        
-        # Chercher tous les fichiers correspondant au pattern
-        try:
-            video_files = [f for f in os.listdir(VIDEOS_DIR) if f.startswith(f"interview_{interview_id}")]
-            if video_files:
-                latest_video = max(video_files, key=lambda x: os.path.getctime(os.path.join(VIDEOS_DIR, x)))
-                video_path = os.path.join(VIDEOS_DIR, latest_video)
-                logger.info(f"Fichier vidéo trouvé dans Uploads/videos: {video_path}")
-                
-                if not os.path.exists(video_path):
-                    logger.error(f"Le fichier vidéo n'existe pas: {video_path}")
-                    return jsonify({"error": "Fichier vidéo non trouvé"}), 404
-                
-                response = send_file(
-                    video_path,
-                    mimetype='video/webm',
-                    as_attachment=False,
-                    download_name=f"interview_{interview_id}.webm"
-                )
-                response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-                response.headers['Access-Control-Allow-Credentials'] = 'true'
-                response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
-                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-                return response
-            else:
-                logger.error(f"Aucun fichier vidéo trouvé dans {VIDEOS_DIR} pour l'ID {interview_id}")
+        # Récupérer l'entretien pour obtenir le chemin de la vidéo
+        db = current_app.mongo
+        entretien = db[ENTRETIENS_COLLECTION].find_one({"_id": interview_object_id})
+        if not entretien:
+            logger.error(f"Entretien non trouvé: {interview_id}")
+            return jsonify({"error": "Entretien non trouvé"}), 404
+
+        video_path = entretien.get('video_path')
+        if not video_path:
+            logger.error(f"Chemin de la vidéo non trouvé pour l'entretien: {interview_id}")
             return jsonify({"error": "Vidéo non trouvée"}), 404
-        except Exception as e:
-            logger.error(f"Erreur lors de la recherche dans Uploads/videos: {str(e)}")
-            return jsonify({"error": "Erreur lors de la recherche de la vidéo"}), 500
+
+        # Normaliser le chemin du fichier et convertir les backslashes en forward slashes
+        video_path = video_path.replace('\\', '/')
+        if not os.path.isabs(video_path):
+            # Si le chemin est relatif, le convertir en chemin absolu
+            video_path = os.path.join(current_app.root_path, video_path)
+        
+        logger.info(f"Chemin de la vidéo normalisé: {video_path}")
+
+        if not os.path.exists(video_path):
+            logger.error(f"Le fichier vidéo n'existe pas: {video_path}")
+            return jsonify({"error": "Fichier vidéo non trouvé"}), 404
+
+        logger.info(f"Envoi du fichier vidéo: {video_path}")
+        response = send_file(
+            video_path,
+            mimetype='video/webm',
+            as_attachment=False,
+            download_name=f"interview_{interview_id}.webm"
+        )
+        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
 
     except Exception as e:
         logger.error(f"Erreur lors de la récupération de la vidéo: {str(e)}")

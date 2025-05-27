@@ -193,18 +193,6 @@ const InterviewSection = () => {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        {interview.video?.url && (
-                          <IconButton
-                            color="primary"
-                            onClick={() =>
-                              window.open(interview.video.url, "_blank")
-                            }
-                            size="small"
-                            sx={{ mr: 1 }}
-                          >
-                            <PlayArrow />
-                          </IconButton>
-                        )}
                         <IconButton
                           color="primary"
                           onClick={() => handleViewDetails(interview.id)}
@@ -235,7 +223,7 @@ const InterviewSection = () => {
                 <div className="flex-1 overflow-auto p-4">
                   <Grid container spacing={3}>
                     {/* Vidéo */}
-                    {selectedInterview?.video?.url && (
+                    {selectedInterview?.video_url && (
                       <Grid item xs={12}>
                         <Card>
                           <CardContent>
@@ -265,7 +253,9 @@ const InterviewSection = () => {
                                 src={`${
                                   process.env.REACT_APP_API_URL ||
                                   "http://localhost:5000"
-                                }/api/recruteur/entretiens/videos/${selectedInterview._id}?token=${encodeURIComponent(
+                                }/api/recruteur/entretiens/videos/${
+                                  selectedInterview._id
+                                }?token=${encodeURIComponent(
                                   localStorage.getItem("token")
                                 )}`}
                               />

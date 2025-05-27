@@ -9,7 +9,7 @@ from routes.recruteurv1.dashboard_recruteur import Dashboard_recruteur_bp
 from routes.recruteurv1 import recruteurv1_bp
 from routes.postuler import candidatures_bp
 from routes.entretiens import entretiens_bp
-from routes.interviews_pour_candidates import interviews_bp
+#from routes.interviews_pour_candidates import interviews_bp
 from routes.recruteurv1.entre1 import entretiensection_bp
 from pymongo import MongoClient
 import logging

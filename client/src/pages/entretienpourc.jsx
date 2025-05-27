@@ -30,14 +30,6 @@ const initializeSpeechRecognition = () => {
   return null;
 };
 
-// Fonction pour initialiser la synthèse vocale
-const initializeSpeechSynthesis = () => {
-  if ("speechSynthesis" in window) {
-    return window.speechSynthesis;
-  }
-  return null;
-};
-
 const Interview = () => {
   const { interviewId } = useParams();
   const dispatch = useDispatch();
@@ -46,7 +38,6 @@ const Interview = () => {
   const {
     questions,
     currentQuestionIndex,
-    isSpeaking,
     loading,
     error,
     interviewStarted,
@@ -60,7 +51,6 @@ const Interview = () => {
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const recognitionRef = useRef(null);
-  const synthesisRef = useRef(null);
 
   const [localState, setLocalState] = useState({
     webcamActive: false,
@@ -91,24 +81,32 @@ const Interview = () => {
 
   const saveTranscription = useCallback(() => {
     if (localState.currentTranscription) {
-      console.log("Saving transcription for question:", currentQuestionIndex);
-      console.log("Current transcription:", localState.currentTranscription);
-
       setLocalState((prev) => {
-        const newTranscriptions = [
-          ...prev.transcriptions,
-          {
+        const newTranscriptions = [...prev.transcriptions];
+        const existingIndex = newTranscriptions.findIndex(
+          (t) => t.questionIndex === currentQuestionIndex
+        );
+
+        if (existingIndex !== -1) {
+          // Mettre à jour la transcription existante
+          newTranscriptions[existingIndex] = {
             questionIndex: currentQuestionIndex,
             question: questions[currentQuestionIndex]?.question || "",
             answer: prev.currentTranscription,
-          },
-        ];
-        console.log("Updated transcriptions:", newTranscriptions);
+          };
+        } else {
+          // Ajouter une nouvelle transcription
+          newTranscriptions.push({
+            questionIndex: currentQuestionIndex,
+            question: questions[currentQuestionIndex]?.question || "",
+            answer: prev.currentTranscription,
+          });
+        }
 
         return {
           ...prev,
           transcriptions: newTranscriptions,
-          currentTranscription: "",
+          currentTranscription: "", // Réinitialiser la transcription courante
         };
       });
     }
@@ -156,31 +154,50 @@ const Interview = () => {
       dispatch(setProcessing(true));
       console.log("Starting interview completion process...");
 
-      // Sauvegarder la dernière transcription si elle existe
+      // Save final transcription if there is one
       if (localState.currentTranscription) {
         console.log("Saving final transcription...");
         saveTranscription();
       }
-      console.log("Current transcriptions:", localState.transcriptions);
 
-      // Arrêter l'enregistrement en cours
-      if (localState.isRecording) {
-        console.log("Stopping current recording...");
-        await stopRecording();
+      // Vérifier l'état de l'enregistrement
+      console.log("Recording state:", {
+        isRecording: localState.isRecording,
+        hasStream: !!localState.localStream,
+        hasBlob: !!localState.recordedBlob,
+        blobSize: localState.recordedBlob?.size || 0,
+        chunksCount: recordedChunksRef.current.length,
+      });
+
+      // Arrêter l'enregistrement si actif
+      if (localState.isRecording && mediaRecorderRef.current) {
+        console.log("Stopping final recording...");
+        try {
+          mediaRecorderRef.current.stop();
+          // Attendre que l'événement onstop soit déclenché
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (error) {
+          console.error("Error stopping recording:", error);
+        }
       }
 
-      // Arrêter la webcam et nettoyer les ressources
-      if (localState.localStream) {
-        console.log("Stopping webcam stream...");
-        localState.localStream.getTracks().forEach((track) => track.stop());
+      // Vérifier que nous avons un blob vidéo
+      if (!localState.recordedBlob) {
+        console.error("No video recording available");
+        throw new Error("No video recording available");
       }
 
-      // Annuler toute synthèse vocale en cours
-      if (window.speechSynthesis) {
-        console.log("Cancelling speech synthesis...");
-        window.speechSynthesis.cancel();
-        dispatch(setSpeaking(false));
+      // Vérifier la taille du blob
+      if (localState.recordedBlob.size === 0) {
+        console.error("Video recording is empty");
+        throw new Error("Video recording is empty");
       }
+
+      console.log("Video blob details:", {
+        size: localState.recordedBlob.size,
+        type: localState.recordedBlob.type,
+        lastModified: new Date().toISOString(),
+      });
 
       const metadata = {
         interviewId,
@@ -192,27 +209,28 @@ const Interview = () => {
 
       console.log("Preparing to save interview with metadata:", metadata);
 
-      // Prepare form data
       const formData = new FormData();
       formData.append("metadata", JSON.stringify(metadata));
-      if (localState.recordedBlob) {
-        console.log("Adding video blob to form data...");
-        formData.append("video", localState.recordedBlob, "interview.webm");
-      } else {
-        console.warn("No video blob available!");
-      }
 
-      // Get token and clean it
+      // Ajouter la vidéo avec un nom de fichier unique
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const videoFileName = `interview_${interviewId}_${timestamp}.webm`;
+      console.log("Appending video to FormData:", {
+        fileName: videoFileName,
+        size: localState.recordedBlob.size,
+      });
+      formData.append("video", localState.recordedBlob, videoFileName);
+
       const token = localStorage.getItem("token");
       if (!token) {
+        console.error("No authentication token found");
         throw new Error("No authentication token found");
       }
 
-      // Clean token (remove Bearer prefix if present)
       const cleanToken = token.replace(/^Bearer\s+/i, "").trim();
+      console.log("Token available:", !!cleanToken);
 
       console.log("Sending save request to server...");
-      // Make the request directly to the candidate endpoint
       const response = await fetch(
         `${API_BASE_URL}/api/candidates/entretiens/${interviewId}/save`,
         {
@@ -229,24 +247,46 @@ const Interview = () => {
       console.log("Server response data:", responseData);
 
       if (!response.ok) {
+        console.error("Server error response:", responseData);
         throw new Error(responseData.error || "Failed to save interview");
       }
 
-      // Update Redux state with video URL and transcription
+      // Vérifier que les transcriptions ont été sauvegardées
+      if (!responseData.data?.recordings) {
+        console.warn("No recordings found in server response");
+      } else {
+        console.log(
+          "Recordings saved successfully:",
+          responseData.data.recordings
+        );
+      }
+
+      // Vérifier que la vidéo a été sauvegardée
+      if (!responseData.data?.videoUrl) {
+        console.warn("No video URL in server response");
+      } else {
+        console.log("Video saved successfully:", responseData.data.videoUrl);
+      }
+
       dispatch(
         setState({
           interviewDetails: {
             ...interviewDetails,
-            videoUrl: responseData.videoUrl,
+            videoUrl: responseData.data.videoUrl,
             status: "completed",
             transcriptions: localState.transcriptions,
             completed_at: new Date().toISOString(),
-            last_updated_by: responseData.last_updated_by,
+            last_updated_by: responseData.data.last_updated_by,
           },
         })
       );
 
-      // Mettre à jour l'état local pour désactiver la webcam
+      // Arrêter le stream vidéo
+      if (localState.localStream) {
+        console.log("Stopping webcam stream...");
+        localState.localStream.getTracks().forEach((track) => track.stop());
+      }
+
       setLocalState((prev) => ({
         ...prev,
         webcamActive: false,
@@ -262,13 +302,17 @@ const Interview = () => {
       console.log(
         "Interview saved successfully, navigating to mesinterview..."
       );
-      // Navigate to success page
       navigate("/mesinterview");
     } catch (error) {
       console.error("Error saving interview:", error);
+      console.error("Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      });
       setLocalState((prev) => ({
         ...prev,
-        errorMessage: "Failed to save interview. Please try again.",
+        errorMessage: `Failed to save interview: ${error.message}`,
       }));
     } finally {
       dispatch(setProcessing(false));
@@ -290,14 +334,12 @@ const Interview = () => {
         startTime: Date.now(),
       }));
 
-      setTimeout(() => {
-        if (localRef.current) {
-          localRef.current.srcObject = stream;
-          localRef.current
-            .play()
-            .catch((e) => console.error("Error playing video:", e));
-        }
-      }, 100);
+      if (localRef.current) {
+        localRef.current.srcObject = stream;
+        await localRef.current
+          .play()
+          .catch((e) => console.error("Error playing video:", e));
+      }
 
       setLocalState((prev) => ({
         ...prev,
@@ -307,34 +349,67 @@ const Interview = () => {
 
       dispatch(startInterview());
 
+      // Attendre que le stream soit complètement initialisé
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Initialiser le MediaRecorder
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "video/webm",
+        mimeType: "video/webm;codecs=vp8,opus",
       });
 
+      mediaRecorderRef.current = mediaRecorder;
+      recordedChunksRef.current = [];
+
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
+          console.log("Received data chunk:", event.data.size, "bytes");
           recordedChunksRef.current.push(event.data);
+
+          // Mettre à jour le blob à chaque nouveau chunk
+          const blob = new Blob(recordedChunksRef.current, {
+            type: "video/webm;codecs=vp8,opus",
+          });
+          console.log("Updated blob size:", blob.size, "bytes");
+
+          setLocalState((prev) => ({
+            ...prev,
+            recordedBlob: blob,
+            recordedVideoURL: URL.createObjectURL(blob),
+          }));
         }
       };
 
       mediaRecorder.onstop = () => {
+        console.log("Recording stopped, creating final blob...");
         const blob = new Blob(recordedChunksRef.current, {
-          type: "video/webm",
+          type: "video/webm;codecs=vp8,opus",
         });
+        console.log("Final blob created:", blob.size, "bytes");
+
+        if (blob.size === 0) {
+          console.error("Created blob is empty");
+          return;
+        }
+
         setLocalState((prev) => ({
           ...prev,
           recordedBlob: blob,
           recordedVideoURL: URL.createObjectURL(blob),
+          isRecording: false,
         }));
-        recordedChunksRef.current = [];
       };
 
-      mediaRecorderRef.current = mediaRecorder;
+      // Démarrer l'enregistrement
+      mediaRecorder.start(1000); // Collect data every second
+      console.log("MediaRecorder started");
 
-      setTimeout(() => {
-        startRecording();
-        speakQuestion();
-      }, 1000);
+      setLocalState((prev) => ({
+        ...prev,
+        isRecording: true,
+      }));
+
+      // Démarrer la reconnaissance vocale
+      startSpeechRecognition();
     } catch (error) {
       console.error("Error setting up media sources:", error);
       setLocalState((prev) => ({
@@ -345,6 +420,71 @@ const Interview = () => {
           error.name === "NotAllowedError" ||
           error.name === "PermissionDeniedError",
       }));
+    }
+  };
+
+  const startSpeechRecognition = () => {
+    // S'assurer que l'ancienne instance est arrêtée
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      } catch (error) {
+        console.error("Error stopping previous speech recognition:", error);
+      }
+    }
+
+    // Créer une nouvelle instance
+    recognitionRef.current = initializeSpeechRecognition();
+    if (recognitionRef.current) {
+      recognitionRef.current.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map((result) => result[0].transcript)
+          .join("");
+
+        setLocalState((prev) => ({
+          ...prev,
+          currentTranscription: transcript,
+          isListening: true,
+        }));
+      };
+
+      recognitionRef.current.onstart = () => {
+        console.log("Speech recognition started");
+        setLocalState((prev) => ({
+          ...prev,
+          isListening: true,
+          currentTranscription: "", // Réinitialiser la transcription au démarrage
+        }));
+      };
+
+      recognitionRef.current.onend = () => {
+        console.log("Speech recognition ended");
+        setLocalState((prev) => ({
+          ...prev,
+          isListening: false,
+        }));
+
+        // Ne pas redémarrer automatiquement la reconnaissance vocale
+        // Laisser handleNextQuestion gérer le redémarrage
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        setLocalState((prev) => ({
+          ...prev,
+          isListening: false,
+        }));
+
+        // Ne pas redémarrer automatiquement en cas d'erreur
+        // Laisser handleNextQuestion gérer le redémarrage
+      };
+
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+      }
     }
   };
 
@@ -363,10 +503,6 @@ const Interview = () => {
     if (localState.isRecording) stopRecording();
     if (localState.localStream)
       localState.localStream.getTracks().forEach((track) => track.stop());
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      dispatch(setSpeaking(false));
-    }
     setLocalState((prev) => ({
       ...prev,
       webcamActive: false,
@@ -377,18 +513,99 @@ const Interview = () => {
     }));
   };
 
-  const startRecording = () => {
-    if (mediaRecorderRef.current && !localState.isRecording) {
-      recordedChunksRef.current = [];
-      mediaRecorderRef.current.start();
-      setLocalState((prev) => ({ ...prev, isRecording: true }));
+  const stopRecording = () => {
+    try {
+      if (mediaRecorderRef.current && localState.isRecording) {
+        console.log("Stopping recording...");
+        mediaRecorderRef.current.stop();
+
+        // Ne pas arrêter le stream ici
+        // localState.localStream.getTracks().forEach((track) => track.stop());
+
+        setLocalState((prev) => ({
+          ...prev,
+          isRecording: false,
+        }));
+      }
+    } catch (error) {
+      console.error("Error stopping recording:", error);
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && localState.isRecording) {
-      mediaRecorderRef.current.stop();
-      setLocalState((prev) => ({ ...prev, isRecording: false }));
+  const startRecording = async () => {
+    try {
+      if (!localState.localStream) {
+        console.error("No local stream available");
+        return;
+      }
+
+      // Vérifier si l'enregistrement est déjà en cours
+      if (localState.isRecording) {
+        console.log("Recording is already in progress");
+        return;
+      }
+
+      console.log("Starting recording...");
+      const mediaRecorder = new MediaRecorder(localState.localStream, {
+        mimeType: "video/webm;codecs=vp8,opus",
+      });
+
+      mediaRecorderRef.current = mediaRecorder;
+      recordedChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          console.log("Received data chunk:", event.data.size, "bytes");
+          recordedChunksRef.current.push(event.data);
+
+          // Mettre à jour le blob à chaque nouveau chunk
+          const blob = new Blob(recordedChunksRef.current, {
+            type: "video/webm;codecs=vp8,opus",
+          });
+          console.log("Updated blob size:", blob.size, "bytes");
+
+          setLocalState((prev) => ({
+            ...prev,
+            recordedBlob: blob,
+            recordedVideoURL: URL.createObjectURL(blob),
+          }));
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        console.log("Recording stopped, creating final blob...");
+        const blob = new Blob(recordedChunksRef.current, {
+          type: "video/webm;codecs=vp8,opus",
+        });
+        console.log("Final blob created:", blob.size, "bytes");
+
+        if (blob.size === 0) {
+          console.error("Created blob is empty");
+          return;
+        }
+
+        setLocalState((prev) => ({
+          ...prev,
+          recordedBlob: blob,
+          recordedVideoURL: URL.createObjectURL(blob),
+          isRecording: false,
+        }));
+      };
+
+      mediaRecorder.start(1000); // Collect data every second
+      console.log("MediaRecorder started");
+
+      setLocalState((prev) => ({
+        ...prev,
+        isRecording: true,
+        startTime: Date.now(),
+      }));
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      setLocalState((prev) => ({
+        ...prev,
+        errorMessage: "Failed to start recording. Please try again.",
+      }));
     }
   };
 
@@ -463,170 +680,91 @@ const Interview = () => {
     }
   };
 
-  // Modifier la gestion de la reconnaissance vocale
+  const timePercentage = (localState.callTime / maxDuration) * 100;
+
   useEffect(() => {
-    if (interviewStarted && !recognitionRef.current) {
-      recognitionRef.current = initializeSpeechRecognition();
-      if (recognitionRef.current) {
-        recognitionRef.current.onresult = (event) => {
-          const transcript = Array.from(event.results)
-            .map((result) => result[0].transcript)
-            .join("");
-
-          setLocalState((prev) => ({
-            ...prev,
-            currentTranscription: transcript,
-            isListening: true,
-          }));
-        };
-
-        recognitionRef.current.onend = () => {
-          if (localState.isListening && recognitionRef.current) {
-            try {
-              recognitionRef.current.start();
-            } catch (error) {
-              console.error("Error restarting speech recognition:", error);
-              setLocalState((prev) => ({
-                ...prev,
-                isListening: false,
-              }));
-            }
-          }
-        };
-
-        recognitionRef.current.onerror = (event) => {
-          console.error("Speech recognition error:", event.error);
-          if (event.error !== "aborted") {
-            setLocalState((prev) => ({
-              ...prev,
-              isListening: false,
-              errorMessage: `Erreur de reconnaissance vocale: ${event.error}`,
-            }));
-          }
-        };
-
-        // Démarrer la reconnaissance vocale
-        try {
-          recognitionRef.current.start();
-          setLocalState((prev) => ({ ...prev, isListening: true }));
-        } catch (error) {
-          console.error("Error starting speech recognition:", error);
-        }
-      }
+    if (localRef.current && localState.localStream) {
+      localRef.current.srcObject = localState.localStream;
     }
+  }, [localState.localStream]);
 
-    return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (error) {
-          console.error("Error stopping speech recognition:", error);
-        }
-        recognitionRef.current = null;
-      }
-    };
-  }, [interviewStarted]);
-
-  const speakQuestion = useCallback(() => {
-    if (!("speechSynthesis" in window) || !questions.length) {
-      console.warn("Text-to-speech is not supported by this browser");
-      return;
-    }
-
-    // Annuler toute synthèse vocale en cours
-    window.speechSynthesis.cancel();
-    dispatch(setSpeaking(false));
-
-    const currentQuestion = questions[currentQuestionIndex];
-    if (!currentQuestion) {
-      console.warn(
-        "No question available for current index:",
-        currentQuestionIndex
-      );
-      return;
-    }
-
-    const questionText = currentQuestion.question || "No question available";
-    const speech = new SpeechSynthesisUtterance(questionText);
-    speech.lang = "fr-FR";
-    speech.rate = 0.9;
-    speech.pitch = 1;
-
-    // Attendre que les voix soient chargées
-    const voices = window.speechSynthesis.getVoices();
-    const frenchVoices = voices.filter((voice) => voice.lang.includes("fr-"));
-    if (frenchVoices.length > 0) {
-      speech.voice = frenchVoices[0];
-    }
-
-    speech.onstart = () => {
-      console.log("Speech started for question:", currentQuestionIndex);
-      dispatch(setSpeaking(true));
-    };
-
-    speech.onend = () => {
-      console.log("Speech ended for question:", currentQuestionIndex);
-      dispatch(setSpeaking(false));
-    };
-
-    speech.onerror = (event) => {
-      console.error("Text-to-speech error:", event);
-      dispatch(setSpeaking(false));
-    };
-
-    // Attendre un court instant avant de démarrer la synthèse vocale
-    setTimeout(() => {
-      window.speechSynthesis.speak(speech);
-    }, 100);
-  }, [questions, currentQuestionIndex, dispatch]);
-
-  // Modifier handleNextQuestion pour inclure la logique de goToNextQuestion
   const handleNextQuestion = useCallback(async () => {
     if (!interviewStarted || isProcessing) return;
 
     try {
       dispatch(setProcessing(true));
+      console.log("Moving to next question...");
 
-      // Sauvegarder la transcription actuelle
+      // Sauvegarder la transcription actuelle avant de passer à la question suivante
       if (localState.currentTranscription) {
-        console.log("Saving transcription before next question...");
-        saveTranscription();
+        console.log("Saving current transcription...");
+        setLocalState((prev) => {
+          const newTranscriptions = [...prev.transcriptions];
+          const existingIndex = newTranscriptions.findIndex(
+            (t) => t.questionIndex === currentQuestionIndex
+          );
+
+          if (existingIndex !== -1) {
+            // Mettre à jour la transcription existante
+            newTranscriptions[existingIndex] = {
+              questionIndex: currentQuestionIndex,
+              question: questions[currentQuestionIndex]?.question || "",
+              answer: prev.currentTranscription,
+            };
+          } else {
+            // Ajouter une nouvelle transcription
+            newTranscriptions.push({
+              questionIndex: currentQuestionIndex,
+              question: questions[currentQuestionIndex]?.question || "",
+              answer: prev.currentTranscription,
+            });
+          }
+
+          return {
+            ...prev,
+            transcriptions: newTranscriptions,
+            currentTranscription: "", // Vider la transcription courante
+          };
+        });
       }
 
-      // Arrêter l'enregistrement en cours
-      if (localState.isRecording) {
-        await stopRecording();
+      // Arrêter la reconnaissance vocale actuelle
+      if (recognitionRef.current) {
+        try {
+          console.log("Stopping speech recognition...");
+          recognitionRef.current.stop();
+          recognitionRef.current = null;
+        } catch (error) {
+          console.error("Error stopping speech recognition:", error);
+        }
       }
 
-      // Annuler toute synthèse vocale en cours
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-        dispatch(setSpeaking(false));
-      }
+      // Attendre un court instant pour s'assurer que la reconnaissance vocale est bien arrêtée
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       if (currentQuestionIndex < questions.length - 1) {
-        // Mettre à jour l'index de la question directement dans le state
+        // Mettre à jour l'index de la question
         dispatch(
           setState({
             currentQuestionIndex: currentQuestionIndex + 1,
-            isSpeaking: false,
           })
         );
 
-        // Réinitialiser la transcription courante
+        // Réinitialiser uniquement la transcription pour la nouvelle question
         setLocalState((prev) => ({
           ...prev,
           currentTranscription: "",
+          isListening: false,
         }));
 
-        // Démarrer l'enregistrement
-        startRecording();
+        // Attendre un court instant avant de redémarrer la reconnaissance vocale
+        await new Promise((resolve) => setTimeout(resolve, 200));
 
-        // Démarrer la synthèse vocale après un court délai
-        setTimeout(() => {
-          speakQuestion();
-        }, 500);
+        // Redémarrer la reconnaissance vocale
+        console.log("Starting speech recognition for new question...");
+        startSpeechRecognition();
       } else {
+        console.log("Last question reached, completing interview...");
         await completeInterview();
       }
     } catch (error) {
@@ -643,52 +781,63 @@ const Interview = () => {
     interviewStarted,
     currentQuestionIndex,
     questions.length,
-    stopRecording,
-    startRecording,
-    speakQuestion,
     isProcessing,
-    localState.isRecording,
     localState.currentTranscription,
     completeInterview,
-    saveTranscription,
   ]);
 
-  // Navigate to previous question
   const handlePreviousQuestion = useCallback(async () => {
     if (!interviewStarted || currentQuestionIndex === 0 || isProcessing) return;
 
     try {
       dispatch(setProcessing(true));
 
-      // Sauvegarder la transcription actuelle
-      saveTranscription();
+      // Save current transcription
+      if (localState.currentTranscription) {
+          saveTranscription();
+      }
 
-      // Arrêter l'enregistrement en cours
+      // Stop recording
       if (localState.isRecording) {
         await stopRecording();
       }
 
-      // Annuler toute synthèse vocale en cours
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-        dispatch(setSpeaking(false));
-      }
+      // Wait for cleanup
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
+      // Update question index
       dispatch(goToPreviousQuestion());
 
-      // Réinitialiser la transcription courante
+      // Load previous transcription
       setLocalState((prev) => ({
         ...prev,
-        currentTranscription: "",
+        currentTranscription:
+          prev.transcriptions.find(
+            (t) => t.questionIndex === currentQuestionIndex - 1
+          )?.answer || "",
+        isListening: false,
       }));
 
-      // Démarrer l'enregistrement
-      startRecording();
+      // Stop speech recognition
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+          recognitionRef.current = null;
+        } catch (error) {
+          console.error("Error stopping speech recognition:", error);
+        }
+      }
 
-      // Démarrer la synthèse vocale après un court délai
-      setTimeout(() => {
-        speakQuestion();
-      }, 500);
+      // Start recording
+      if (localState.localStream) {
+        await startRecording();
+      } else {
+        console.error("Cannot start recording: No local stream");
+        setLocalState((prev) => ({
+          ...prev,
+          errorMessage: "No camera or microphone stream available.",
+        }));
+      }
     } catch (error) {
       console.error("Error in handlePreviousQuestion:", error);
       setLocalState((prev) => ({
@@ -704,77 +853,12 @@ const Interview = () => {
     currentQuestionIndex,
     stopRecording,
     startRecording,
-    speakQuestion,
     isProcessing,
     localState.isRecording,
+    localState.currentTranscription,
+    localState.localStream,
+    saveTranscription,
   ]);
-
-  // Go to specific question
-  const handleGoToQuestion = useCallback(
-    async (index) => {
-      if (
-        !interviewStarted ||
-        index === currentQuestionIndex ||
-        index < 0 ||
-        index >= questions.length ||
-        isProcessing
-      )
-        return;
-
-      try {
-        dispatch(setProcessing(true));
-
-        // Arrêter l'enregistrement en cours
-        if (localState.isRecording) {
-          await stopRecording();
-        }
-
-        // Annuler toute synthèse vocale en cours
-        if (window.speechSynthesis) {
-          window.speechSynthesis.cancel();
-          dispatch(setSpeaking(false));
-        }
-
-        // Attendre un court instant pour s'assurer que tout est arrêté
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        dispatch(setState({ currentQuestionIndex: index }));
-
-        // Attendre un court instant avant de démarrer l'enregistrement et la synthèse vocale
-        await new Promise((resolve) => setTimeout(resolve, 300));
-
-        startRecording();
-        speakQuestion();
-      } catch (error) {
-        console.error("Error in handleGoToQuestion:", error);
-        setLocalState((prev) => ({
-          ...prev,
-          errorMessage: "Error moving to question. Please try again.",
-        }));
-      } finally {
-        dispatch(setProcessing(false));
-      }
-    },
-    [
-      dispatch,
-      interviewStarted,
-      currentQuestionIndex,
-      questions.length,
-      stopRecording,
-      startRecording,
-      speakQuestion,
-      isProcessing,
-      localState.isRecording,
-    ]
-  );
-
-  const timePercentage = (localState.callTime / maxDuration) * 100;
-
-  useEffect(() => {
-    if (localRef.current && localState.localStream) {
-      localRef.current.srcObject = localState.localStream;
-    }
-  }, [localState.localStream]);
 
   return (
     <div className="flex flex-col items-center min-h-screen w-full bg-white">
@@ -880,37 +964,11 @@ const Interview = () => {
               <h3 className="text-xl font-bold text-white">
                 Question {currentQuestionIndex + 1}
               </h3>
-              {isSpeaking && (
-                <div className="flex items-center text-white text-sm">
-                  <span className="mr-2">Speaking</span>
-                  <div className="flex space-x-1">
-                    <span className="w-2 h-2 bg-white rounded-full animate-bounce"></span>
-                    <span
-                      className="w-2 h-2 bg-white rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    ></span>
-                    <span
-                      className="w-2 h-2 bg-white rounded-full animate-bounce"
-                      style={{ animationDelay: "0.4s" }}
-                    ></span>
-                  </div>
-                </div>
-              )}
             </div>
             <p className="text-white text-lg">
               {questions[currentQuestionIndex]?.question ||
                 "Loading question..."}
             </p>
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={speakQuestion}
-                className="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 flex items-center"
-                disabled={!interviewStarted}
-              >
-                <Volume2 size={18} className="mr-2" />
-                {isSpeaking ? "Stop Speaking" : "Speak Question"}
-              </button>
-            </div>
             <div className="mt-6 bg-white rounded-lg p-4 max-h-48 overflow-y-auto text-black">
               <h4 className="font-semibold mb-2">
                 Transcription de la réponse :
@@ -966,25 +1024,6 @@ const Interview = () => {
         >
           Précédent
         </button>
-
-        <div className="flex">
-          {questions.map((_, index) => (
-            <button
-              key={index}
-              className={`w-8 h-8 rounded-full mx-1 ${
-                !interviewStarted
-                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  : index === currentQuestionIndex
-                  ? "bg-blue-500 text-white"
-                  : "bg-blue-100 text-blue-700"
-              }`}
-              onClick={() => handleGoToQuestion(index)}
-              disabled={!interviewStarted || isProcessing}
-            >
-              {index + 1}
-            </button>
-          ))}
-        </div>
 
         <button
           onClick={handleNextQuestion}

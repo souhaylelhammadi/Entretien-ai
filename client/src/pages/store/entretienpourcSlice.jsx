@@ -211,6 +211,7 @@ const initialState = {
   isProcessing: false,
   videoUrl: null,
   transcription: null,
+  transcriptions: [],
 };
 
 const interviewSlice = createSlice({
@@ -235,6 +236,7 @@ const interviewSlice = createSlice({
         interviewStarted: true,
         currentQuestionIndex: 0,
         transcript: {},
+        transcriptions: [],
         error: null,
         showModal: false,
         isSpeaking: false,
@@ -247,6 +249,7 @@ const interviewSlice = createSlice({
         interviewStarted: false,
         currentQuestionIndex: 0,
         transcript: {},
+        transcriptions: [],
         error: null,
         isSpeaking: false,
         isProcessing: false,
@@ -277,7 +280,33 @@ const interviewSlice = createSlice({
       state.videoUrl = action.payload;
     },
     setTranscription: (state, action) => {
-      state.transcription = action.payload;
+      const { questionIndex, text } = action.payload;
+      state.transcriptions = state.transcriptions.map((t) =>
+        t.questionIndex === questionIndex ? { ...t, answer: text } : t
+      );
+    },
+    addTranscription: (state, action) => {
+      const { questionIndex, question, answer } = action.payload;
+      const existingIndex = state.transcriptions.findIndex(
+        (t) => t.questionIndex === questionIndex
+      );
+
+      if (existingIndex !== -1) {
+        state.transcriptions[existingIndex] = {
+          questionIndex,
+          question,
+          answer,
+        };
+      } else {
+        state.transcriptions.push({
+          questionIndex,
+          question,
+          answer,
+        });
+      }
+    },
+    clearTranscriptions: (state) => {
+      state.transcriptions = [];
     },
   },
   extraReducers: (builder) => {
@@ -301,6 +330,7 @@ const interviewSlice = createSlice({
         state.isProcessing = false;
         state.videoUrl = action.payload.video?.url || null;
         state.transcription = action.payload.video?.transcription || null;
+        state.transcriptions = action.payload.video?.transcriptions || [];
       })
       .addCase(fetchInterviewDetails.rejected, (state, action) => {
         console.error("Erreur lors de la récupération:", action.payload);
@@ -343,6 +373,15 @@ const interviewSlice = createSlice({
               action.payload.data.transcription_completed,
             last_updated_by: action.payload.data.last_updated_by,
           };
+          if (action.payload.data.recordings) {
+            state.transcriptions = action.payload.data.recordings.map(
+              (rec) => ({
+                questionIndex: rec.questionIndex,
+                question: rec.question,
+                answer: rec.transcript,
+              })
+            );
+          }
         }
       })
       .addCase(saveInterviewToDatabase.rejected, (state, action) => {
@@ -364,6 +403,8 @@ export const {
   setProcessing,
   setVideoUrl,
   setTranscription,
+  addTranscription,
+  clearTranscriptions,
 } = interviewSlice.actions;
 
 export default interviewSlice.reducer;
