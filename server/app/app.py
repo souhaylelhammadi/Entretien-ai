@@ -9,7 +9,6 @@ from routes.recruteurv1.dashboard_recruteur import Dashboard_recruteur_bp
 from routes.recruteurv1 import recruteurv1_bp
 from routes.postuler import candidatures_bp
 from routes.entretiens import entretiens_bp
-#from routes.interviews_pour_candidates import interviews_bp
 from routes.recruteurv1.entre1 import entretiensection_bp
 from pymongo import MongoClient
 import logging
@@ -38,15 +37,7 @@ def create_app():
         "supports_credentials": True
     }})
     
-    # Middleware to log all requests
-    @app.before_request
-    def log_request():
-        logger.info(f"Requête reçue: {request.method} {request.url}")
-        logger.info(f"Headers: {request.headers}")
-        logger.info(f"Données brutes: {request.data}")
-        if request.method == "OPTIONS":
-            logger.info("Requête OPTIONS reçue pour CORS")
-            return '', 204
+    
     
     # Configuration de la base de données
     try:
@@ -60,12 +51,7 @@ def create_app():
         collections = app.mongo.list_collection_names()
         logger.info(f"Collections disponibles: {collections}")
         
-        # Ensure required collections exist
-        required_collections = ['utilisateurs', 'recruteurs', 'candidats', 'offres_emploi', 'cvs', 'candidatures']
-        for collection in required_collections:
-            if collection not in collections:
-                app.mongo.create_collection(collection)
-                logger.info(f"Collection créée: {collection}")
+       
         
     except Exception as e:
         logger.error(f"Erreur de connexion MongoDB: {str(e)}")
@@ -83,26 +69,7 @@ def create_app():
             app.extensions = {}
         app.extensions['jwt_manager'] = jwt_manager
         logger.info("JWT Manager initialized and registered as an extension")
-    
-    # Route principale pour rediriger selon le rôle
-    @app.route("/", methods=["GET"])
-    @role_redirect({
-        "recruteur": "recruteur_dashboard",
-        "candidat": "candidat_profile"
-    })
-    def index():
-        return redirect("/login")
-    
-    # Page de dashboard recruteur
-    @app.route("/dashboard-recruteur", methods=["GET"])
-    def recruteur_dashboard():
-        return redirect("/api/recruteur/dashboard")
-        
-    # Page de profil candidat
-    @app.route("/dashboard-candidat", methods=["GET"])
-    def candidat_profile():
-        return redirect("/api/candidat/profile")
-    
+
     # Register the blueprints
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(offres_emploi_bp, url_prefix='/api')

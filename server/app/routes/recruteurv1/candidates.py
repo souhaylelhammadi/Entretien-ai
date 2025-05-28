@@ -341,8 +341,6 @@ def update_candidate_status(candidate_id, auth_payload):
                 "questions_id": stored_questions["_id"],
                 "date_prevue": None,  # À définir plus tard
                 "statut": "planifie",
-                "transcription_ids": [],
-                "rapport_id": None,
                 "date_creation": datetime.now(timezone.utc),
                 "date_maj": datetime.now(timezone.utc)
             }

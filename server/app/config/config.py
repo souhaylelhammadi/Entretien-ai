@@ -1,7 +1,7 @@
 import os
 
 # MongoDB configuration
-MONGO_URI = "mongodb://localhost:27017/Entretien_ai"
+MONGO_URI = "mongodb+srv://user1:souhayl2005@cluster0.e1muy.mongodb.net/Entretien_ai"
 
 # JWT configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key")

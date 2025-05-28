@@ -7,12 +7,20 @@ from jwt_manager import jwt_manager
 import PyPDF2
 import io
 import base64
+from flask_cors import CORS
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-accepted_offers_bp = Blueprint('accepted_offers', __name__)
+# Blueprint avec préfixe
+accepted_offers_bp = Blueprint('accepted_offers', __name__, url_prefix='/api/accepted-offers')
+
+# Configure CORS
+CORS(accepted_offers_bp, 
+     resources={r"/*": {"origins": "http://localhost:3000"}},
+     supports_credentials=True,
+     max_age=3600)
 
 def auth_required(f):
     """Decorator to ensure user is authenticated and is a candidate"""
@@ -393,5 +401,84 @@ def get_entretien(entretien_id):
         return jsonify({
             "success": False,
             "error": "Erreur serveur",
+            "details": str(e)
+        }), 500
+
+@accepted_offers_bp.route("/entretiens/<string:entretien_id>/messages", methods=["GET", "OPTIONS"])
+@auth_required
+def get_entretien_messages(entretien_id):
+    if request.method == "OPTIONS":
+        response = jsonify({})
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+        
+    try:
+        if not ObjectId.is_valid(entretien_id):
+            logger.error(f"ID de l'entretien invalide: {entretien_id}")
+            return jsonify({"error": "ID de l'entretien invalide"}), 400
+
+        user_id = ObjectId(request.user["id"])
+        
+        # Vérifier que l'entretien appartient bien au candidat
+        entretien = current_app.mongo.db.entretiens.find_one({
+            "_id": ObjectId(entretien_id),
+            "candidat_id": user_id
+        })
+
+        if not entretien:
+            logger.error(f"Entretien {entretien_id} non trouvé ou non autorisé pour candidat {user_id}")
+            return jsonify({"error": "Entretien non trouvé ou non autorisé"}), 404
+
+        # Récupérer les messages
+        messages = list(current_app.mongo.db.messages.find({
+            "entretien_id": ObjectId(entretien_id)
+        }).sort("date_creation", -1))
+
+        # Marquer les messages comme lus
+        if messages:
+            current_app.mongo.db.messages.update_many(
+                {
+                    "entretien_id": ObjectId(entretien_id),
+                    "candidat_id": user_id,
+                    "lu": False
+                },
+                {"$set": {"lu": True}}
+            )
+
+        # Sérialiser les messages
+        serialized_messages = []
+        for message in messages:
+            recruteur = current_app.mongo.db.utilisateurs.find_one({
+                "_id": ObjectId(message["recruteur_id"])
+            })
+            
+            serialized_messages.append({
+                "id": str(message["_id"]),
+                "message": message["message"],
+                "date_creation": message["date_creation"].isoformat() + "Z",
+                "lu": message["lu"],
+                "recruteur": {
+                    "id": str(recruteur["_id"]),
+                    "nom": recruteur.get("nom", "N/A"),
+                    "email": recruteur.get("email", "N/A")
+                } if recruteur else None
+            })
+
+        response = jsonify({
+            "success": True,
+            "messages": serialized_messages
+        })
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 200
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des messages: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": "Erreur lors de la récupération des messages",
             "details": str(e)
         }), 500

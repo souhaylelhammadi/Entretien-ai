@@ -2,7 +2,7 @@ from pymongo import MongoClient
 from bson.binary import Binary
 
 def migrate_binary_fields_to_strings():
-    client = MongoClient('mongodb://localhost:27017')
+    client = MongoClient('mongodb+srv://user1:souhayl2005@cluster0.e1muy.mongodb.net/')
     db = client['Entretien_ai']  
     collection = db['utilisateurs']
 

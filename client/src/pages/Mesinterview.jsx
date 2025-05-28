@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Building,
   MapPin,
@@ -6,6 +6,7 @@ import {
   PlayCircle,
   Clock,
   Loader2,
+  MessageSquare,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -15,6 +16,14 @@ import {
   clearError,
 } from "./store/acceptedOffersSlice";
 import { toast } from "react-toastify";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Typography,
+  Button,
+} from "@mui/material";
 
 const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
@@ -38,6 +47,10 @@ const MesInterview = () => {
     (state) => state.acceptedOffers
   );
   const { isAuthenticated, token } = useSelector((state) => state.auth);
+  const [messages, setMessages] = useState({});
+  const [loadingMessages, setLoadingMessages] = useState({});
+  const [openMessageDialog, setOpenMessageDialog] = useState(false);
+  const [selectedInterview, setSelectedInterview] = useState(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -53,6 +66,36 @@ const MesInterview = () => {
       dispatch(clearError());
     }
   }, [error, dispatch]);
+
+  const fetchMessages = async (entretienId) => {
+    if (!entretienId) return;
+
+    setLoadingMessages((prev) => ({ ...prev, [entretienId]: true }));
+    try {
+      const response = await fetch(
+        `${BASE_URL}/api/accepted-offers/entretiens/${entretienId}/messages`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Erreur lors de la récupération des messages");
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setMessages((prev) => ({ ...prev, [entretienId]: data.messages }));
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des messages:", error);
+      toast.error("Erreur lors de la récupération des messages");
+    } finally {
+      setLoadingMessages((prev) => ({ ...prev, [entretienId]: false }));
+    }
+  };
 
   if (loading) {
     return (
@@ -159,30 +202,50 @@ const MesInterview = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => {
-                            if (candidature.entretien?.id) {
-                              navigate(
-                                `/entretienpourc/${candidature.entretien.id}`
-                              );
-                            } else {
-                              toast.error(
-                                "Aucun entretien disponible pour cette candidature"
-                              );
+                        <div className="flex justify-end space-x-2">
+                          {candidature.entretien?.id && (
+                            <button
+                              onClick={() => {
+                                setSelectedInterview(candidature.entretien);
+                                setOpenMessageDialog(true);
+                                fetchMessages(candidature.entretien.id);
+                              }}
+                              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                            >
+                              <MessageSquare className="h-4 w-4 mr-2" />
+                              Messages
+                              {messages[candidature.entretien.id]?.some(
+                                (m) => !m.lu
+                              ) && (
+                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Nouveau
+                                </span>
+                              )}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              if (candidature.entretien?.id) {
+                                navigate(
+                                  `/entretienpourc/${candidature.entretien.id}`
+                                );
+                              } else {
+                                toast.error(
+                                  "Aucun entretien disponible pour cette candidature"
+                                );
+                              }
+                            }}
+                            disabled={
+                              !candidature.entretien?.id ||
+                              candidature.statut !== "Accepté"
                             }
-                          }}
-                          disabled={
-                            !candidature.entretien?.id ||
-                            candidature.statut !== "Accepté"
-                          }
-                          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-                            candidature.entretien?.statut === "Accepté" &&
-                            candidature.entretien?.id
-                              ? "bg-blue-600 hover:bg-blue-700"
-                              : "bg-gray-400 cursor-not-allowed"
-                          }`}
-                        >
-                          <>
+                            className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                              candidature.entretien?.statut === "Accepté" &&
+                              candidature.entretien?.id
+                                ? "bg-blue-600 hover:bg-blue-700"
+                                : "bg-gray-400 cursor-not-allowed"
+                            }`}
+                          >
                             <PlayCircle className="h-4 w-4 mr-2" />
                             {candidature.entretien?.statut === "Accepté" &&
                             candidature.entretien?.id
@@ -190,8 +253,8 @@ const MesInterview = () => {
                               : candidature.statut === "terminé"
                               ? ""
                               : "Entretien terminé"}
-                          </>
-                        </button>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -201,6 +264,68 @@ const MesInterview = () => {
           )}
         </div>
       </div>
+
+      {/* Dialog pour afficher les messages */}
+      <Dialog
+        open={openMessageDialog}
+        onClose={() => {
+          setOpenMessageDialog(false);
+          setSelectedInterview(null);
+        }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Messages pour l'entretien
+          {selectedInterview && (
+            <Typography variant="subtitle2" color="textSecondary">
+              {selectedInterview.offre?.titre}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          {loadingMessages[selectedInterview?.id] ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+            </div>
+          ) : messages[selectedInterview?.id]?.length > 0 ? (
+            <div className="space-y-4 py-4">
+              {messages[selectedInterview?.id].map((message) => (
+                <div
+                  key={message.id}
+                  className={`p-4 rounded-lg ${
+                    message.lu ? "bg-gray-50" : "bg-blue-50"
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <Typography variant="subtitle2" className="font-medium">
+                      {message.recruteur?.nom || "Recruteur"}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      {new Date(message.date_creation).toLocaleString()}
+                    </Typography>
+                  </div>
+                  <Typography variant="body1">{message.message}</Typography>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Typography className="text-center py-8 text-gray-500">
+              Aucun message pour cet entretien
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setOpenMessageDialog(false);
+              setSelectedInterview(null);
+            }}
+          >
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

@@ -580,3 +580,53 @@ def get_interview_report(interview_id, auth_payload):
     except Exception as e:
         logger.error(f"Erreur lors de la récupération du rapport: {str(e)}")
         return jsonify({"error": str(e), "code": "SERVER_ERROR"}), 500
+
+@entretiensection_bp.route("/<string:interview_id>/message", methods=["POST"])
+@require_auth("recruteur")
+def send_interview_message(interview_id, auth_payload):
+    """Envoyer un message concernant un entretien."""
+    try:
+        db = current_app.mongo
+        recruteur_id = auth_payload.get('recruteur_id')
+        data = request.get_json()
+        
+        if not data or 'message' not in data:
+            return jsonify({"error": "Message manquant", "code": "MISSING_MESSAGE"}), 400
+            
+        # Vérifier que l'entretien existe et appartient au recruteur
+        interview = db[ENTRETIENS_COLLECTION].find_one({
+            "_id": ObjectId(interview_id),
+            "recruteur_id": ObjectId(recruteur_id)
+        })
+
+
+        
+        if not interview:
+            return jsonify({"error": "Entretien non trouvé", "code": "INTERVIEW_NOT_FOUND"}), 404
+            
+        # Créer le message
+        message = {
+            "entretien_id": ObjectId(interview_id),
+            "recruteur_id": ObjectId(recruteur_id),
+            "candidat_id":ObjectId(interview.get('candidat_id')),
+            "message": data['message'],
+            "date_creation": datetime.now(timezone.utc),
+            "lu": False
+        }
+        
+        # Insérer le message dans la collection messages
+        result = db.messages.insert_one(message)
+        
+        return jsonify({
+            "success": True,
+            "message": "Message envoyé avec succès",
+            "data": {
+                "id": str(result.inserted_id),
+                "message": data['message'],
+                "date_creation": message['date_creation'].isoformat()
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erreur lors de l'envoi du message: {str(e)}")
+        return jsonify({"error": str(e), "code": "SERVER_ERROR"}), 500

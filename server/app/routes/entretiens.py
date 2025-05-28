@@ -143,9 +143,7 @@ def get_entretien(entretien_id):
     """Retrieve a specific interview by ID."""
     try:
         auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({"error": "Authentification requise", "code": "NO_TOKEN"}), 401
-            
+       
         user = get_user_from_token(auth_header)
         if not user:
             return jsonify({"error": "Token invalide ou expiré", "code": "INVALID_TOKEN"}), 401
@@ -349,17 +347,8 @@ def save_entretien(entretien_id):
         relative_video_path = os.path.relpath(video_path, current_app.root_path).replace('\\', '/')
         logger.info(f"Chemin relatif de la vidéo: {relative_video_path}")
 
-        # Générer la transcription avec Whisper
-        transcription = None
-        try:
-            model = whisper.load_model("base")
-            result = model.transcribe(video_path)
-            transcription = result["text"]
-            logger.info(f"Transcription générée avec succès pour l'entretien {entretien_id}")
-        except Exception as e:
-            logger.error(f"Erreur lors de la transcription: {str(e)}")
-            transcription = None
-
+        
+       
         # Récupérer les questions de l'entretien
         questions_id = entretien.get('questions_id')
         questions_doc = db[QUESTIONS_COLLECTION].find_one({"_id": ObjectId(questions_id)})
@@ -398,7 +387,7 @@ def save_entretien(entretien_id):
         rapport = None
         rapport_id = None
         try:
-            rapport = generate_rapport(updated_entretien, transcription, questions_list)
+            rapport = generate_rapport(updated_entretien, questions_list)
             if rapport:
                 rapport_id = rapport.get('_id')
                 logger.info(f"Rapport généré avec l'ID: {rapport_id}")
@@ -422,8 +411,7 @@ def save_entretien(entretien_id):
             update_data = {
                 "video_url": video_url,
                 "video_path": relative_video_path,
-                "transcription": transcription,
-                "transcription_completed": bool(transcription),
+               
                 "rapport_id": rapport_id,
                 "statut": "termine" if rapport_id else "en_cours",
                 "completed_at": datetime.now(timezone.utc) if rapport_id else None,
@@ -473,7 +461,7 @@ def save_entretien(entretien_id):
             "data": {
                 "videoUrl": video_url,
                 "videoPath": relative_video_path,
-                "transcription": transcription,
+               
                 "entretien": serialized_entretien,
                 "rapport": serialized_rapport,
                 "recordings": processed_recordings

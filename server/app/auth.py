@@ -4,7 +4,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 import datetime
 import logging
 from bson.objectid import ObjectId
-from functools import wraps
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

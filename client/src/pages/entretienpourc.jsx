@@ -334,12 +334,12 @@ const Interview = () => {
         startTime: Date.now(),
       }));
 
-      if (localRef.current) {
-        localRef.current.srcObject = stream;
-        await localRef.current
-          .play()
-          .catch((e) => console.error("Error playing video:", e));
-      }
+        if (localRef.current) {
+          localRef.current.srcObject = stream;
+          await localRef.current
+            .play()
+            .catch((e) => console.error("Error playing video:", e));
+        }
 
       setLocalState((prev) => ({
         ...prev,
@@ -794,7 +794,7 @@ const Interview = () => {
 
       // Save current transcription
       if (localState.currentTranscription) {
-          saveTranscription();
+      saveTranscription();
       }
 
       // Stop recording

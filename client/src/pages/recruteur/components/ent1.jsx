@@ -37,6 +37,8 @@ import {
   List,
   ListItem,
   ListItemText,
+  TextField,
+  Snackbar,
 } from "@mui/material";
 import {
   PlayArrow,
@@ -46,6 +48,7 @@ import {
   Schedule,
   Description,
   X,
+  Message,
 } from "@mui/icons-material";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -61,6 +64,16 @@ const InterviewSection = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [rapport, setRapport] = useState(null);
   const [loadingRapport, setLoadingRapport] = useState(false);
+  const [openMessageDialog, setOpenMessageDialog] = useState(false);
+  const [message, setMessage] = useState("");
+  const [selectedInterviewForMessage, setSelectedInterviewForMessage] =
+    useState(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [notification, setNotification] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -157,6 +170,52 @@ const InterviewSection = () => {
     }
   };
 
+  const handleSendMessage = async () => {
+    if (!message.trim() || !selectedInterviewForMessage) return;
+
+    setSendingMessage(true);
+    try {
+      const response = await fetch(
+        `${
+          process.env.REACT_APP_API_URL || "http://localhost:5000"
+        }/api/recruteur/entretiens/${selectedInterviewForMessage.id}/message`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({ message: message.trim() }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Erreur lors de l'envoi du message");
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setMessage("");
+        setOpenMessageDialog(false);
+        setSelectedInterviewForMessage(null);
+        setNotification({
+          open: true,
+          message: "Message envoyé avec succès",
+          severity: "success",
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors de l'envoi du message:", error);
+      setNotification({
+        open: true,
+        message: "Erreur lors de l'envoi du message",
+        severity: "error",
+      });
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
   if (loading && !interviews.length) {
     return (
       <Box
@@ -243,6 +302,16 @@ const InterviewSection = () => {
                           size="small"
                         >
                           <Visibility />
+                        </IconButton>
+                        <IconButton
+                          color="secondary"
+                          onClick={() => {
+                            setSelectedInterviewForMessage(interview);
+                            setOpenMessageDialog(true);
+                          }}
+                          size="small"
+                        >
+                          <Message />
                         </IconButton>
                       </TableCell>
                     </TableRow>
@@ -664,8 +733,79 @@ const InterviewSection = () => {
               </div>
             </div>
           )}
+
+          {/* Dialog pour envoyer un message */}
+          <Dialog
+            open={openMessageDialog}
+            onClose={() => {
+              setOpenMessageDialog(false);
+              setMessage("");
+              setSelectedInterviewForMessage(null);
+            }}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>
+              Envoyer un message pour l'entretien
+              {selectedInterviewForMessage && (
+                <Typography variant="subtitle2" color="textSecondary">
+                  {selectedInterviewForMessage.candidat_id?.nom}
+                </Typography>
+              )}
+            </DialogTitle>
+            <DialogContent>
+              <Box sx={{ mt: 2 }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={4}
+                  variant="outlined"
+                  label="Votre message"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  disabled={sendingMessage}
+                />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => {
+                  setOpenMessageDialog(false);
+                  setMessage("");
+                  setSelectedInterviewForMessage(null);
+                }}
+                disabled={sendingMessage}
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={handleSendMessage}
+                variant="contained"
+                color="primary"
+                disabled={!message.trim() || sendingMessage}
+              >
+                {sendingMessage ? "Envoi..." : "Envoyer"}
+              </Button>
+            </DialogActions>
+          </Dialog>
         </Container>
       </Box>
+
+      {/* Notification */}
+      <Snackbar
+        open={notification.open}
+        autoHideDuration={6000}
+        onClose={() => setNotification({ ...notification, open: false })}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setNotification({ ...notification, open: false })}
+          severity={notification.severity}
+          sx={{ width: "100%" }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
