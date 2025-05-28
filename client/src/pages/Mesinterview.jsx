@@ -72,20 +72,48 @@ const MesInterview = () => {
 
     setLoadingMessages((prev) => ({ ...prev, [entretienId]: true }));
     try {
+      console.log("Fetching messages for interview:", entretienId);
+      console.log("Using token:", token);
+
+      // Extraire le token correctement
+      let tokenValue;
+      if (typeof token === "object" && token !== null) {
+        tokenValue = token.value || token;
+      } else {
+        tokenValue = token;
+      }
+
+      // Supprimer le préfixe "Bearer " s'il existe
+      if (tokenValue && tokenValue.startsWith("Bearer ")) {
+        tokenValue = tokenValue.substring(7);
+      }
+
+      console.log("Token value after processing:", tokenValue);
+
       const response = await fetch(
         `${BASE_URL}/api/accepted-offers/entretiens/${entretienId}/messages`,
         {
+          method: "GET",
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${tokenValue}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
+          mode: "cors",
+          credentials: "include",
         }
       );
 
+      console.log("Response status:", response.status);
+      const data = await response.json();
+      console.log("Response data:", data);
+
       if (!response.ok) {
-        throw new Error("Erreur lors de la récupération des messages");
+        throw new Error(
+          data.error || "Erreur lors de la récupération des messages"
+        );
       }
 
-      const data = await response.json();
       if (data.success) {
         setMessages((prev) => ({ ...prev, [entretienId]: data.messages }));
       }

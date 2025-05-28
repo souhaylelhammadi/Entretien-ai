@@ -143,7 +143,7 @@ def get_entretien(entretien_id):
     """Retrieve a specific interview by ID."""
     try:
         auth_header = request.headers.get('Authorization')
-       
+            
         user = get_user_from_token(auth_header)
         if not user:
             return jsonify({"error": "Token invalide ou expiré", "code": "INVALID_TOKEN"}), 401
@@ -348,7 +348,7 @@ def save_entretien(entretien_id):
         logger.info(f"Chemin relatif de la vidéo: {relative_video_path}")
 
         
-       
+
         # Récupérer les questions de l'entretien
         questions_id = entretien.get('questions_id')
         questions_doc = db[QUESTIONS_COLLECTION].find_one({"_id": ObjectId(questions_id)})
@@ -475,7 +475,7 @@ def save_entretien(entretien_id):
         logger.error(f"Erreur serveur: {str(e)}")
         return jsonify({"error": "Erreur serveur", "code": "SERVER_ERROR"}), 500
 
-def generate_rapport(entretien, transcription, questions_list):
+def generate_rapport(entretien, questions_list):
     """Génère un rapport d'entretien basé sur les réponses du candidat et les questions."""
     try:
         # Récupérer les enregistrements des réponses

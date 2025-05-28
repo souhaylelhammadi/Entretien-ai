@@ -8,22 +8,37 @@ import PyPDF2
 import io
 import base64
 from flask_cors import CORS
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Blueprint avec préfixe
-accepted_offers_bp = Blueprint('accepted_offers', __name__, url_prefix='/api/accepted-offers')
+# Blueprint avec préfixe corrigé
+accepted_offers_bp = Blueprint('accepted_offers', __name__, url_prefix='/accepted-offers')
 
-# Configure CORS
+# Configuration CORS pour le blueprint
 CORS(accepted_offers_bp, 
-     resources={r"/*": {"origins": "http://localhost:3000"}},
-     supports_credentials=True,
-     max_age=3600)
+     resources={r"/*": {
+         "origins": ["http://localhost:3000"],
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         "allow_headers": ["Content-Type", "Authorization"],
+         "supports_credentials": True,
+         "max_age": 3600
+     }},
+     supports_credentials=True)
+
+@accepted_offers_bp.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
 def auth_required(f):
     """Decorator to ensure user is authenticated and is a candidate"""
+    @wraps(f)
     def wrapper(*args, **kwargs):
         token = request.headers.get("Authorization")
         if not token:
@@ -59,7 +74,6 @@ def auth_required(f):
             logger.error(f"Erreur d'authentification: {str(e)}")
             return jsonify({"error": "Erreur d'authentification"}), 401
 
-    wrapper.__name__ = f.__name__
     return wrapper
 
 def serialize_doc(doc):
@@ -96,22 +110,6 @@ def serialize_doc(doc):
                 if field in doc["entretiens"] and isinstance(doc["entretiens"][field], datetime):
                     doc["entretiens"][field] = doc["entretiens"][field].isoformat() + "Z"
     
-    return doc
-
-def serialize_mongo_doc(doc):
-    """Convertit tous les ObjectId en chaînes de caractères dans un document MongoDB."""
-    if doc is None:
-        return None
-        
-    if isinstance(doc, ObjectId):
-        return str(doc)
-        
-    if isinstance(doc, dict):
-        return {k: serialize_mongo_doc(v) for k, v in doc.items()}
-        
-    if isinstance(doc, list):
-        return [serialize_mongo_doc(item) for item in doc]
-        
     return doc
 
 @accepted_offers_bp.route('/accepted-offers', methods=['GET'])
@@ -405,22 +403,42 @@ def get_entretien(entretien_id):
         }), 500
 
 @accepted_offers_bp.route("/entretiens/<string:entretien_id>/messages", methods=["GET", "OPTIONS"])
-@auth_required
 def get_entretien_messages(entretien_id):
+    logger.info(f"Requête reçue pour les messages de l'entretien {entretien_id}")
+    logger.info(f"Méthode de la requête: {request.method}")
+    logger.info(f"Headers: {request.headers}")
+    logger.info(f"URL: {request.url}")
+    logger.info(f"Base URL: {request.base_url}")
+    logger.info(f"Path: {request.path}")
+
     if request.method == "OPTIONS":
-        response = jsonify({})
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response
-        
+        return jsonify({}), 200
+
     try:
+        # Vérifier l'authentification pour les requêtes GET
+        token = request.headers.get("Authorization")
+        if not token:
+            logger.error("Pas de token dans les headers")
+            return jsonify({"error": "Authentification requise"}), 401
+
+        # Extraire le token de l'en-tête Authorization
+        if token.startswith("Bearer "):
+            token = token[7:]
+            
+        try:
+            user_id = jwt_manager.verify_token(token)
+            if not user_id:
+                logger.error("Token invalide ou expiré")
+                return jsonify({"error": "Token invalide ou expiré"}), 401
+        except Exception as e:
+            logger.error(f"Erreur de vérification du token: {str(e)}")
+            return jsonify({"error": "Token invalide"}), 401
+
         if not ObjectId.is_valid(entretien_id):
             logger.error(f"ID de l'entretien invalide: {entretien_id}")
             return jsonify({"error": "ID de l'entretien invalide"}), 400
 
-        user_id = ObjectId(request.user["id"])
+        user_id = ObjectId(user_id)
         
         # Vérifier que l'entretien appartient bien au candidat
         entretien = current_app.mongo.db.entretiens.find_one({
@@ -432,14 +450,16 @@ def get_entretien_messages(entretien_id):
             logger.error(f"Entretien {entretien_id} non trouvé ou non autorisé pour candidat {user_id}")
             return jsonify({"error": "Entretien non trouvé ou non autorisé"}), 404
 
-        # Récupérer les messages
+        # Récupérer les messages avec la structure correcte
         messages = list(current_app.mongo.db.messages.find({
             "entretien_id": ObjectId(entretien_id)
         }).sort("date_creation", -1))
 
+        logger.info(f"Messages trouvés pour l'entretien {entretien_id}: {len(messages)}")
+
         # Marquer les messages comme lus
         if messages:
-            current_app.mongo.db.messages.update_many(
+            update_result = current_app.mongo.db.messages.update_many(
                 {
                     "entretien_id": ObjectId(entretien_id),
                     "candidat_id": user_id,
@@ -447,6 +467,7 @@ def get_entretien_messages(entretien_id):
                 },
                 {"$set": {"lu": True}}
             )
+            logger.info(f"Messages marqués comme lus: {update_result.modified_count}")
 
         # Sérialiser les messages
         serialized_messages = []
@@ -455,7 +476,7 @@ def get_entretien_messages(entretien_id):
                 "_id": ObjectId(message["recruteur_id"])
             })
             
-            serialized_messages.append({
+            serialized_message = {
                 "id": str(message["_id"]),
                 "message": message["message"],
                 "date_creation": message["date_creation"].isoformat() + "Z",
@@ -465,15 +486,14 @@ def get_entretien_messages(entretien_id):
                     "nom": recruteur.get("nom", "N/A"),
                     "email": recruteur.get("email", "N/A")
                 } if recruteur else None
-            })
+            }
+            serialized_messages.append(serialized_message)
+            logger.info(f"Message sérialisé: {serialized_message}")
 
-        response = jsonify({
+        return jsonify({
             "success": True,
             "messages": serialized_messages
-        })
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response, 200
+        }), 200
 
     except Exception as e:
         logger.error(f"Erreur lors de la récupération des messages: {str(e)}")

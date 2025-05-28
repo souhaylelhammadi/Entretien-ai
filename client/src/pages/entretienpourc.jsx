@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import { Mic, MicOff, PhoneOff, Volume2, Loader2 } from "lucide-react";
+import { Mic, MicOff, PhoneOff, Volume2, Loader2, VolumeX } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -51,6 +51,8 @@ const Interview = () => {
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const recognitionRef = useRef(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const speechSynthesisRef = useRef(null);
 
   const [localState, setLocalState] = useState({
     webcamActive: false,
@@ -69,6 +71,7 @@ const Interview = () => {
     isListening: false,
     transcriptions: [],
     currentTranscription: "",
+    isSaving: false,
   });
 
   const maxDuration = 1800; // 30 minutes
@@ -151,8 +154,21 @@ const Interview = () => {
 
   const completeInterview = async () => {
     try {
+      setLocalState((prev) => ({ ...prev, isSaving: true }));
       dispatch(setProcessing(true));
       console.log("Starting interview completion process...");
+
+      // Arrêter la reconnaissance vocale
+      if (recognitionRef.current) {
+        try {
+          console.log("Stopping speech recognition...");
+          recognitionRef.current.stop();
+          recognitionRef.current = null;
+          setLocalState((prev) => ({ ...prev, isListening: false }));
+        } catch (error) {
+          console.error("Error stopping speech recognition:", error);
+        }
+      }
 
       // Save final transcription if there is one
       if (localState.currentTranscription) {
@@ -205,12 +221,32 @@ const Interview = () => {
         questionCount: questions.length,
         completedQuestions: currentQuestionIndex + 1,
         transcriptions: localState.transcriptions,
+        questions: questions.map((q, index) => ({
+          id: q._id || `q_${index}`,
+          question: q.question,
+          type: q.type || "text",
+          order: index,
+          answer:
+            localState.transcriptions.find((t) => t.questionIndex === index)
+              ?.answer || "",
+        })),
       };
 
       console.log("Preparing to save interview with metadata:", metadata);
 
       const formData = new FormData();
       formData.append("metadata", JSON.stringify(metadata));
+      formData.append(
+        "questions_list",
+        JSON.stringify(
+          questions.map((q, index) => ({
+            id: q._id || `q_${index}`,
+            question: q.question,
+            type: q.type || "text",
+            order: index,
+          }))
+        )
+      );
 
       // Ajouter la vidéo avec un nom de fichier unique
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -316,7 +352,36 @@ const Interview = () => {
       }));
     } finally {
       dispatch(setProcessing(false));
+      setLocalState((prev) => ({ ...prev, isSaving: false }));
     }
+  };
+
+  // Fonction pour lire le texte
+  const speakText = (text) => {
+    if (!text) return;
+
+    // Arrêter toute lecture en cours
+    if (speechSynthesisRef.current) {
+      window.speechSynthesis.cancel();
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "fr-FR";
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      // Démarrer la reconnaissance vocale après la lecture
+      startSpeechRecognition();
+    };
+
+    speechSynthesisRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
   };
 
   const setupSources = async () => {
@@ -334,12 +399,12 @@ const Interview = () => {
         startTime: Date.now(),
       }));
 
-        if (localRef.current) {
-          localRef.current.srcObject = stream;
-          await localRef.current
-            .play()
-            .catch((e) => console.error("Error playing video:", e));
-        }
+      if (localRef.current) {
+        localRef.current.srcObject = stream;
+        await localRef.current
+          .play()
+          .catch((e) => console.error("Error playing video:", e));
+      }
 
       setLocalState((prev) => ({
         ...prev,
@@ -348,6 +413,11 @@ const Interview = () => {
       }));
 
       dispatch(startInterview());
+
+      // Lire la première question
+      if (questions.length > 0) {
+        speakText(questions[0].question);
+      }
 
       // Attendre que le stream soit complètement initialisé
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -695,37 +765,10 @@ const Interview = () => {
       dispatch(setProcessing(true));
       console.log("Moving to next question...");
 
-      // Sauvegarder la transcription actuelle avant de passer à la question suivante
+      // Sauvegarder la transcription actuelle
       if (localState.currentTranscription) {
-        console.log("Saving current transcription...");
-        setLocalState((prev) => {
-          const newTranscriptions = [...prev.transcriptions];
-          const existingIndex = newTranscriptions.findIndex(
-            (t) => t.questionIndex === currentQuestionIndex
-          );
-
-          if (existingIndex !== -1) {
-            // Mettre à jour la transcription existante
-            newTranscriptions[existingIndex] = {
-              questionIndex: currentQuestionIndex,
-              question: questions[currentQuestionIndex]?.question || "",
-              answer: prev.currentTranscription,
-            };
-          } else {
-            // Ajouter une nouvelle transcription
-            newTranscriptions.push({
-              questionIndex: currentQuestionIndex,
-              question: questions[currentQuestionIndex]?.question || "",
-              answer: prev.currentTranscription,
-            });
-          }
-
-          return {
-            ...prev,
-            transcriptions: newTranscriptions,
-            currentTranscription: "", // Vider la transcription courante
-          };
-        });
+        console.log("Saving current transcription before moving...");
+        saveTranscription();
       }
 
       // Arrêter la reconnaissance vocale actuelle
@@ -739,7 +782,7 @@ const Interview = () => {
         }
       }
 
-      // Attendre un court instant pour s'assurer que la reconnaissance vocale est bien arrêtée
+      // Attendre un court instant
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       if (currentQuestionIndex < questions.length - 1) {
@@ -750,21 +793,25 @@ const Interview = () => {
           })
         );
 
-        // Réinitialiser uniquement la transcription pour la nouvelle question
+        // Réinitialiser la transcription
         setLocalState((prev) => ({
           ...prev,
           currentTranscription: "",
           isListening: false,
         }));
 
-        // Attendre un court instant avant de redémarrer la reconnaissance vocale
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        // Redémarrer la reconnaissance vocale
-        console.log("Starting speech recognition for new question...");
-        startSpeechRecognition();
+        // Lire la nouvelle question
+        const nextQuestion = questions[currentQuestionIndex + 1].question;
+        speakText(nextQuestion);
       } else {
-        console.log("Last question reached, completing interview...");
+        console.log("Last question reached, saving final transcription...");
+        // S'assurer que la dernière transcription est sauvegardée
+        if (localState.currentTranscription) {
+          saveTranscription();
+          // Attendre que la transcription soit sauvegardée
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        console.log("Completing interview...");
         await completeInterview();
       }
     } catch (error) {
@@ -780,7 +827,7 @@ const Interview = () => {
     dispatch,
     interviewStarted,
     currentQuestionIndex,
-    questions.length,
+    questions,
     isProcessing,
     localState.currentTranscription,
     completeInterview,
@@ -792,33 +839,12 @@ const Interview = () => {
     try {
       dispatch(setProcessing(true));
 
-      // Save current transcription
+      // Sauvegarder la transcription actuelle
       if (localState.currentTranscription) {
-      saveTranscription();
+        saveTranscription();
       }
 
-      // Stop recording
-      if (localState.isRecording) {
-        await stopRecording();
-      }
-
-      // Wait for cleanup
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
-      // Update question index
-      dispatch(goToPreviousQuestion());
-
-      // Load previous transcription
-      setLocalState((prev) => ({
-        ...prev,
-        currentTranscription:
-          prev.transcriptions.find(
-            (t) => t.questionIndex === currentQuestionIndex - 1
-          )?.answer || "",
-        isListening: false,
-      }));
-
-      // Stop speech recognition
+      // Arrêter la reconnaissance vocale
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -828,16 +854,25 @@ const Interview = () => {
         }
       }
 
-      // Start recording
-      if (localState.localStream) {
-        await startRecording();
-      } else {
-        console.error("Cannot start recording: No local stream");
-        setLocalState((prev) => ({
-          ...prev,
-          errorMessage: "No camera or microphone stream available.",
-        }));
-      }
+      // Attendre un court instant
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Mettre à jour l'index de la question
+      dispatch(goToPreviousQuestion());
+
+      // Charger la transcription précédente
+      setLocalState((prev) => ({
+        ...prev,
+        currentTranscription:
+          prev.transcriptions.find(
+            (t) => t.questionIndex === currentQuestionIndex - 1
+          )?.answer || "",
+        isListening: false,
+      }));
+
+      // Lire la question précédente
+      const previousQuestion = questions[currentQuestionIndex - 1].question;
+      speakText(previousQuestion);
     } catch (error) {
       console.error("Error in handlePreviousQuestion:", error);
       setLocalState((prev) => ({
@@ -851,14 +886,20 @@ const Interview = () => {
     dispatch,
     interviewStarted,
     currentQuestionIndex,
-    stopRecording,
-    startRecording,
+    questions,
     isProcessing,
-    localState.isRecording,
     localState.currentTranscription,
-    localState.localStream,
-    saveTranscription,
   ]);
+
+  // Ajouter un bouton pour contrôler la lecture vocale
+  const toggleSpeech = () => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    } else {
+      speakText(questions[currentQuestionIndex].question);
+    }
+  };
 
   return (
     <div className="flex flex-col items-center min-h-screen w-full bg-white">
@@ -964,6 +1005,14 @@ const Interview = () => {
               <h3 className="text-xl font-bold text-white">
                 Question {currentQuestionIndex + 1}
               </h3>
+              <button
+                onClick={toggleSpeech}
+                className={`p-2 rounded-full transition-all ${
+                  isSpeaking ? "bg-red-500" : "bg-blue-600"
+                } text-white hover:bg-opacity-80`}
+              >
+                {isSpeaking ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              </button>
             </div>
             <p className="text-white text-lg">
               {questions[currentQuestionIndex]?.question ||
@@ -1068,6 +1117,21 @@ const Interview = () => {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {localState.isSaving && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-lg shadow-lg flex flex-col items-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mb-4"></div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+              Sauvegarde en cours
+            </h3>
+            <p className="text-gray-600">
+              Veuillez patienter pendant que nous sauvegardons votre
+              entretien...
+            </p>
           </div>
         </div>
       )}
