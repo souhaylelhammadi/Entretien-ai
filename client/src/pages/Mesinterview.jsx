@@ -171,9 +171,7 @@ const MesInterview = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Localisation
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
+
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Statut
                     </th>
@@ -195,31 +193,25 @@ const MesInterview = () => {
                           <Building className="h-5 w-5 text-gray-400 mr-2" />
                           <div>
                             <div className="font-medium text-gray-900">
-                              {candidature.jobDetails?.title || "N/A"}
+                              {candidature.jobDetails?.title}
                             </div>
                             <div className="text-sm text-gray-500">
-                              {candidature.jobDetails?.department || "N/A"}
+                              {candidature.jobDetails?.department}
                             </div>
                           </div>
                         </div>
                       </td>
 
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {candidature.jobDetails?.company || "N/A"}
+                        {candidature.jobDetails?.company}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <MapPin className="h-5 w-5 text-gray-400 mr-2" />
-                          <span>
-                            {candidature.jobDetails?.location || "N/A"}
-                          </span>
+                          <span>{candidature.jobDetails?.location}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="max-w-xs truncate">
-                          {candidature.jobDetails?.description || "N/A"}
-                        </div>
-                      </td>
+
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           {statusIcons[candidature.entretien.statut]}
@@ -263,24 +255,20 @@ const MesInterview = () => {
                                 );
                               }
                             }}
-                            disabled={
-                              !candidature.entretien?.id ||
-                              candidature.statut !== "Accepté"
-                            }
+                            disabled={candidature.statut !== "Accepté"}
                             className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-                              candidature.entretien?.statut === "Accepté" &&
+                              candidature.entretien?.statut === "planifie" &&
                               candidature.entretien?.id
                                 ? "bg-blue-600 hover:bg-blue-700"
                                 : "bg-gray-400 cursor-not-allowed"
                             }`}
                           >
                             <PlayCircle className="h-4 w-4 mr-2" />
-                            {candidature.entretien?.statut === "Accepté" &&
-                            candidature.entretien?.id
+                            {candidature.entretien?.statut === "planifie"
                               ? "Passer l'entretien"
-                              : candidature.statut === "terminé"
-                              ? ""
-                              : "Entretien terminé"}
+                              : candidature.statut === "Accepté"
+                              ? "terminer "
+                              : ""}
                           </button>
                         </div>
                       </td>

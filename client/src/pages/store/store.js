@@ -5,7 +5,7 @@ import offresEmploiReducer from "./offresEmploiSlice";
 import interviewReducer from "./entretienpourcSlice";
 import acceptedOffersReducer from "./acceptedOffersSlice";
 import dashboardReducer from "./recruteur/dashboardSlice";
-import candidatesReducer from "./candidatesSlice";
+import candidatesReducer from "./recruteur/candidatesSlice";
 import profileReducer from "./recruteur/profileSlice";
 import addjobsReducer from "./recruteur/addjobsSlice";
 import jobsReducer from "./recruteur/jobsSlice";

@@ -215,23 +215,7 @@ const RecruiterDashboard = () => {
     toast.error("Session expirée ou non autorisée");
   }, [dispatch, navigate]);
 
-  // Handle period change for graphs
-  const handlePeriodChange = useCallback(
-    async (event) => {
-      const newPeriod = event.target.value;
-      if (periodFetchInProgress.current) return;
-      try {
-        periodFetchInProgress.current = true;
-        setSelectedPeriod(newPeriod);
-        await dispatch(fetchGraphData({ period: newPeriod })).unwrap();
-      } catch (error) {
-        toast.error("Erreur lors du chargement des données");
-      } finally {
-        periodFetchInProgress.current = false;
-      }
-    },
-    [dispatch]
-  );
+  
 
   // Load initial data
   const loadInitialData = useCallback(async () => {
@@ -319,13 +303,7 @@ const RecruiterDashboard = () => {
     ]
   );
 
-  // Load graph data when period changes
-  useEffect(() => {
-    if (dataFetched.current && activeTab === "overview") {
-      dispatch(fetchGraphData({ period: selectedPeriod }));
-    }
-  }, [selectedPeriod, dispatch, activeTab]);
-
+ 
   const {
     profile,
     loading: profileLoading,
@@ -343,19 +321,19 @@ const RecruiterDashboard = () => {
       tab: "jobs",
       label: "Mes Offres",
       icon: <Briefcase className="w-5 h-5" />,
-      badge: 12,
+      badge: null,
     },
     {
       tab: "candidates",
       label: "Candidats",
       icon: <Users className="w-5 h-5" />,
-      badge: 25,
+      badge: null,
     },
     {
       tab: "interviews",
       label: "Entretiens",
       icon: <Calendar className="w-5 h-5" />,
-      badge: 3,
+      badge: null,
     },
     {
       tab: "profile",
@@ -662,7 +640,9 @@ const RecruiterDashboard = () => {
             bgcolor: "background.default",
             marginLeft: isSidebarOpen ? "280px" : 0,
             transition: "margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-            width: "100%",
+            width: `calc(100% - ${isSidebarOpen ? "280px" : "0px"})`,
+            minHeight: "100vh",
+            position: "relative",
           }}
         >
           {/* Content Area */}
@@ -672,6 +652,8 @@ const RecruiterDashboard = () => {
               p: 4,
               bgcolor: "background.default",
               overflow: "auto",
+              height: "100vh",
+              paddingTop: "80px",
             }}
           >
             {!isSidebarOpen && (
@@ -723,24 +705,11 @@ const RecruiterDashboard = () => {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        mb: 3,
+                        mb: 1,
                       }}
                     >
-                      <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                        Vue d'ensemble
-                      </Typography>
-                      <FormControl sx={{ minWidth: 120 }}>
-                        <InputLabel>Période</InputLabel>
-                        <Select
-                          value={selectedPeriod || "week"}
-                          onChange={handlePeriodChange}
-                          label="Période"
-                        >
-                          <MenuItem value="week">7 derniers jours</MenuItem>
-                          <MenuItem value="month">30 derniers jours</MenuItem>
-                          <MenuItem value="year">12 derniers mois</MenuItem>
-                        </Select>
-                      </FormControl>
+                     
+                      
                     </Box>
                     <DashboardGraphs
                       data={data}

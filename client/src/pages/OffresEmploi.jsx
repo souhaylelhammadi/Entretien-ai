@@ -19,7 +19,6 @@ import {
   setSecteurFilter,
   toggleFilterOpen,
 } from "./store/offresEmploiSlice";
-import { toast } from "react-toastify";
 
 function OffresEmploi() {
   const dispatch = useDispatch();
@@ -38,13 +37,12 @@ function OffresEmploi() {
   useEffect(() => {
     dispatch(fetchOffresEmploi());
     if (location.state?.message) {
-      toast.success(location.state.message);
+     
       window.history.replaceState({}, document.title);
     }
   }, [dispatch, location.state]);
 
   useEffect(() => {
-    console.log("filteredOffres:", filteredOffres);
     filteredOffres.forEach((offre, index) => {
       console.log(`Offre ${index}:`, {
         id: offre.id,
@@ -54,6 +52,7 @@ function OffresEmploi() {
       });
     });
   }, [filteredOffres]);
+
 
   const formatDate = (dateString) => {
     if (!dateString) {

@@ -51,10 +51,10 @@ function Router() {
     <>
       <ToastContainer />
       <Routes>
-        {/*<Route index element={<Index />} /> */}
+        {/* */}
 
         <Route path="/" element={<Layout />}>
-          {" "}
+          {" "}<Route index element={<Index />} />
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
           <Route path="offres" element={<OffresEmploi />} />

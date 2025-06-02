@@ -77,11 +77,9 @@ def format_offre(offre):
         "recruteur_id": str(offre.get("recruteur_id", "")),
         "date_creation": offre.get("date_creation", datetime.datetime.utcnow()).isoformat() + "Z",
         "date_maj": offre.get("date_maj", datetime.datetime.utcnow()).isoformat() + "Z",
-        "statut": str(offre.get("statut", "ouverte")),
-        "competences_requises": offre.get("competences_requises", []),
-        "questions_ids": [str(qid) for qid in offre.get("questions_ids", [])],
+        "questions_ids": offre.get("competences_requises", []),
         "candidature_ids": [str(cid) for cid in offre.get("candidature_ids", [])],
-        "valide": offre.get("statut", "ouverte") == "ouverte",
+        
     }
 
 # Route to fetch all job offers
@@ -130,7 +128,7 @@ def get_offres_emploi(auth_payload):
 def get_offre_by_id(auth_payload, id):
     try:
         user_id = auth_payload["user_id"]
-        logger.info(f"User ID: {user_id}")
+       
         
         if not ObjectId.is_valid(id):
             logger.warning(f"ID invalide fourni: {id}")
@@ -210,9 +208,7 @@ def submit_candidature():
         if not offre:
             logger.info(f"Offre non trouvée pour ID: {offre_id}")
             return jsonify({"error": "Offre non trouvée"}), 404
-        if offre.get("statut", "ouverte") != "ouverte":
-            logger.info(f"Offre fermée pour ID: {offre_id}")
-            return jsonify({"error": "Cette offre est fermée"}), 400
+      
 
         if not db[USERS_COLLECTION].find_one({"_id": ObjectId(offre["recruteur_id"]), "role": "recruteur"}):
             logger.warning(f"Recruteur non trouvé pour ID: {offre['recruteur_id']}")
@@ -299,9 +295,8 @@ def create_offre(auth_payload):
             "entreprise": auth_payload.get("entreprise", entreprise),
             "date_creation": datetime.datetime.utcnow(),
             "date_maj": datetime.datetime.utcnow(),
-            "statut": "ouverte",
-            "competences_requises": data.get("competences_requises", []),
-            "questions_ids": [],
+            "questions_ids": data.get("competences_requises", []),
+            
             "candidature_ids": []
         }
         
@@ -371,7 +366,7 @@ def update_offre(auth_payload, id):
             
         update_data = {}
         allowed_fields = ["titre", "description", "localisation", "departement", 
-                         "statut", "competences_requises"]
+                         "questions_ids"]
                          
         for field in allowed_fields:
             if field in data:

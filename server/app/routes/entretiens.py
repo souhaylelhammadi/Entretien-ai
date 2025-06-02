@@ -410,8 +410,7 @@ def save_entretien(entretien_id):
         try:
             update_data = {
                 "video_url": video_url,
-                "video_path": relative_video_path,
-               
+                "video_path": relative_video_path, 
                 "rapport_id": rapport_id,
                 "statut": "termine" if rapport_id else "en_cours",
                 "completed_at": datetime.now(timezone.utc) if rapport_id else None,

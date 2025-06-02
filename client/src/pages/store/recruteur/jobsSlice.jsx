@@ -146,7 +146,7 @@ const initialState = {
     description: "",
     localisation: "",
     departement: "",
-    statut: "ouverte",
+    
     competences_requises: [],
   },
   sortField: "date_creation",

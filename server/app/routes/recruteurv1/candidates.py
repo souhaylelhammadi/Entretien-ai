@@ -189,13 +189,11 @@ def get_offres_with_candidates(auth_payload):
         recruteur_id = recruteur["_id"]
         logger.info(f"Recruteur ID: {recruteur_id}")
 
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 10))
-        skip = (page - 1) * per_page
+        
 
         offres_query = {"recruteur_id": ObjectId(recruteur_id)}
         total_offres = db[OFFRES_COLLECTION].count_documents(offres_query)
-        offres = db[OFFRES_COLLECTION].find(offres_query).skip(skip).limit(per_page)
+        offres = db[OFFRES_COLLECTION].find(offres_query)
 
         result = []
         for offre in offres:
@@ -207,6 +205,8 @@ def get_offres_with_candidates(auth_payload):
 
                 for candidature in candidatures:
                     try:
+                        user_id = candidature.get("user_id")
+                        u=db[UTILISATEURS_COLLECTION].find_one({"_id": ObjectId(user_id)})
                         user_email = candidature.get("user_email")
                         if not user_email:
                             logger.warning(f"user_email manquant dans la candidature: {str(candidature['_id'])}")
@@ -222,11 +222,11 @@ def get_offres_with_candidates(auth_payload):
                             logger.warning(f"Candidat non trouvé pour l'utilisateur: {user_email}")
                             continue
 
+
                         cv_url = f"/api/candidates/cv/{str(candidature['_id'])}"
                         candidature_data = {
                             "id": str(candidature["_id"]),
-                            "nom": candidat.get("nom", "Inconnu"),
-                            "prenom": candidat.get("prenom", ""),
+                            "nom":u['nom'],
                             "email": user_email,
                             "status": candidature.get("statut", "En attente"),
                             "date_candidature": candidature.get("created_at", datetime.now(timezone.utc)).isoformat(),
@@ -250,10 +250,7 @@ def get_offres_with_candidates(auth_payload):
                 continue
 
         pagination = {
-            "page": page,
-            "per_page": per_page,
             "total": total_offres,
-            "pages": (total_offres + per_page - 1) // per_page
         }
 
         logger.info(f"Retour de {len(result)} offres avec candidatures pour le recruteur {recruteur_id}")
@@ -339,7 +336,6 @@ def update_candidate_status(candidate_id, auth_payload):
                 "candidat_id": candidature.get("user_id"),
                 "recruteur_id": ObjectId(recruteur_id),
                 "questions_id": stored_questions["_id"],
-                "date_prevue": None,  # À définir plus tard
                 "statut": "planifie",
                 "date_creation": datetime.now(timezone.utc),
                 "date_maj": datetime.now(timezone.utc)
@@ -528,6 +524,7 @@ def get_lettre_motivation(candidature_id, auth_payload):
                 "error": "Informations candidat incomplètes",
                 "code": "INCOMPLETE_CANDIDATE_INFO"
             }), 400
+        
 
         utilisateur = db[UTILISATEURS_COLLECTION].find_one({"email": user_email})
         if not utilisateur:
@@ -536,7 +533,7 @@ def get_lettre_motivation(candidature_id, auth_payload):
                 "error": "Utilisateur non trouvé",
                 "code": "USER_NOT_FOUND"
             }), 404
-
+        logger.info(f"Utilisateur nom: {utilisateur['nom']}")
         candidat = db[CANDIDATS_COLLECTION].find_one({"utilisateur_id": utilisateur["_id"]})
         if not candidat:
             logger.warning(f"Candidat non trouvé pour l'utilisateur: {user_email}")
@@ -549,8 +546,8 @@ def get_lettre_motivation(candidature_id, auth_payload):
         return jsonify({
             "lettre_motivation": lettre_motivation,
             "candidat": {
-                "nom": candidat.get("nom", "Inconnu"),
-                "prenom": candidat.get("prenom", ""),
+                "nom": utilisateur['nom'],
+              
                 "email": user_email
             }
         }), 200

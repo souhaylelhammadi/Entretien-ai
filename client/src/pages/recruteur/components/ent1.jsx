@@ -269,7 +269,14 @@ const InterviewSection = () => {
                     >
                       <TableCell>{interview.offre?.titre || "N/A"}</TableCell>
                       <TableCell>
-                        {interview.candidat_id?.nom || "N/A"}
+                        <strong> Nom : {""}</strong>
+                        {interview.candidat_id?.nom || "N/A"} <br />
+                        <strong> Email :{""} </strong>
+                        {interview.candidat_id?.email || "N/A"}
+                        <br />
+                        <strong> Telephone :{""} </strong>
+                        {interview.candidat_id?.telephone || "N/A"}
+                        <br />
                       </TableCell>
                       <TableCell>
                         {interview.rapport?.score_global ? (
@@ -430,21 +437,7 @@ const InterviewSection = () => {
                                 className="ml-2"
                               />
                             </Typography>
-                            <Typography
-                              variant="body2"
-                              className="text-gray-700"
-                            >
-                              <strong className="text-gray-900">
-                                Date prévue:
-                              </strong>{" "}
-                              {selectedInterview.date_prevue
-                                ? format(
-                                    new Date(selectedInterview.date_prevue),
-                                    "dd MMMM yyyy",
-                                    { locale: fr }
-                                  )
-                                : "Non définie"}
-                            </Typography>
+
                             <Typography
                               variant="body2"
                               className="text-gray-700"
@@ -474,59 +467,6 @@ const InterviewSection = () => {
                                     { locale: fr }
                                   )
                                 : "Non définie"}
-                            </Typography>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-
-                    {/* Informations candidat */}
-                    <Grid item xs={12} md={4}>
-                      <Card
-                        sx={{ height: "100%" }}
-                        className="shadow-lg hover:shadow-xl transition-shadow"
-                      >
-                        <CardContent className="p-4">
-                          <Typography
-                            variant="h6"
-                            gutterBottom
-                            className="font-semibold text-gray-800 flex items-center"
-                          >
-                            <Person sx={{ mr: 1, color: "#4B5563" }} /> Candidat
-                          </Typography>
-                          <Divider sx={{ my: 2 }} />
-                          <Box
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 2,
-                            }}
-                          >
-                            <Typography
-                              variant="body2"
-                              className="text-gray-700"
-                            >
-                              <strong className="text-gray-900">Nom:</strong>{" "}
-                              {selectedInterview.candidat_id?.nom ||
-                                "Non défini"}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              className="text-gray-700"
-                            >
-                              <strong className="text-gray-900">Email:</strong>{" "}
-                              {selectedInterview.candidat_id?.email ||
-                                "Non défini"}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              className="text-gray-700"
-                            >
-                              <strong className="text-gray-900">
-                                Téléphone:
-                              </strong>{" "}
-                              {selectedInterview.candidat_id?.telephone ||
-                                "Non défini"}
                             </Typography>
                           </Box>
                         </CardContent>
@@ -749,7 +689,7 @@ const InterviewSection = () => {
               Envoyer un message pour l'entretien
               {selectedInterviewForMessage && (
                 <Typography variant="subtitle2" color="textSecondary">
-                  {selectedInterviewForMessage.candidat_id?.nom}
+                  {selectedInterviewForMessage.candidat_id.nom}
                 </Typography>
               )}
             </DialogTitle>

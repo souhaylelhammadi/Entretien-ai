@@ -13,8 +13,8 @@ import "react-toastify/dist/ReactToastify.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60000, // 1 minute
-      cacheTime: 3000000, // 5 minutes
+      staleTime: 60000, 
+      cacheTime: 3000000,
       retry: 1,
       refetchOnWindowFocus: false,
     },
@@ -28,7 +28,9 @@ root.render(
       <Provider store={store}>
         <QueryClientProvider client={queryClient}>
           <App />
-          <ToastContainer position="top-right" autoClose={3000} />
+          <ToastContainer  position="top-right"
+  autoClose={2000}
+  style={{ top: '50px', right: '10px' }}/>
         </QueryClientProvider>
       </Provider>
     </BrowserRouter>

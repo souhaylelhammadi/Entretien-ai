@@ -13,7 +13,6 @@ from routes.recruteurv1.entre1 import entretiensection_bp
 from pymongo import MongoClient
 import logging
 from datetime import datetime, timezone
-from middleware import role_redirect
 from config.config import MONGO_URI
 import os
 

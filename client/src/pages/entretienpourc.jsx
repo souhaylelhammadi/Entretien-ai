@@ -1015,8 +1015,10 @@ const Interview = () => {
               </button>
             </div>
             <p className="text-white text-lg">
-              {questions[currentQuestionIndex]?.question ||
-                "Loading question..."}
+              {localState.webcamActive
+                ? questions[currentQuestionIndex]?.question
+                : "demmarer l'entretien pour voir la question"}
+              
             </p>
             <div className="mt-6 bg-white rounded-lg p-4 max-h-48 overflow-y-auto text-black">
               <h4 className="font-semibold mb-2">
@@ -1029,29 +1031,6 @@ const Interview = () => {
               ) : (
                 <p className="italic text-gray-600">
                   En attente de votre réponse...
-                </p>
-              )}
-            </div>
-
-            <div className="mt-4 bg-white rounded-lg p-4 max-h-48 overflow-y-auto text-black">
-              <h4 className="font-semibold mb-2">Historique des réponses :</h4>
-              {localState.transcriptions.length > 0 ? (
-                <div className="space-y-4">
-                  {localState.transcriptions.map((transcription, index) => (
-                    <div key={index} className="border-b pb-2">
-                      <p className="font-medium text-blue-600">
-                        Question {transcription.questionIndex + 1}:
-                      </p>
-                      <p className="text-gray-700 mb-1">
-                        {transcription.question}
-                      </p>
-                      <p className="text-gray-900">{transcription.answer}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="italic text-gray-600">
-                  Aucune réponse enregistrée pour le moment.
                 </p>
               )}
             </div>

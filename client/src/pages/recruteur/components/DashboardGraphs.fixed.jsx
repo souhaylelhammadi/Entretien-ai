@@ -134,17 +134,8 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
   const graphData = data?.graphData || {};
   const daysToShow = period === "week" ? 7 : period === "month" ? 30 : 12;
 
-  // Vérifier si nous avons des données
-  const hasData = useMemo(() => {
-    // Vérifier si nous avons au moins une donnée dans l'un des graphiques
-    const hasAnyData =
-      data?.totalCandidates > 0 ||
-      data?.activeJobs > 0 ||
-      data?.upcomingInterviews > 0 ||
-      data?.conversionRate > 0;
-
-    return hasAnyData;
-  }, [data]);
+  
+  
 
   // Utiliser useMemo pour éviter de recalculer les données à chaque rendu
   const activityData = useMemo(() => {
@@ -250,10 +241,7 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
   const interviewStatusData = useMemo(() => {
     // Données par défaut pour la démonstration
     const defaultDistribution = {
-      "En attente": Math.floor(Math.random() * 5) + 2,
-      Planifié: Math.floor(Math.random() * 3) + 1,
-      Terminé: Math.floor(Math.random() * 4) + 1,
-      Annulé: Math.floor(Math.random() * 2) + 1,
+      
     };
 
     // Utiliser les données réelles ou les données par défaut (faire une copie)
@@ -300,13 +288,8 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
 
   // Données pour le graphique d'offres par département
   const jobsByDepartment = useMemo(() => {
-    // Créer des données basées sur les offres actives
-    const defaultDepartments = {
-      Informatique: Math.floor(data?.activeJobs * 0.4) || 2,
-      Marketing: Math.floor(data?.activeJobs * 0.3) || 1,
-      "Ressources Humaines": Math.floor(data?.activeJobs * 0.2) || 1,
-      Finance: Math.floor(data?.activeJobs * 0.1) || 1,
-    };
+  
+   
 
     let departmentData = {};
 
@@ -327,7 +310,7 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
     }
     // Si aucune donnée n'est disponible, utiliser les données par défaut
     else {
-      departmentData = {...defaultDepartments};
+      departmentData = {};
     }
 
     // Ajuster la somme pour qu'elle corresponde au nombre d'offres actives
@@ -589,34 +572,8 @@ const DashboardGraphs = ({ data = {}, period = "week" }) => {
         </div>
       </div>
 
-      {/* Message si aucun graphique n'est disponible */}
-      {!hasData && (
-        <div className="bg-white p-8 rounded-lg shadow text-center">
-          <div className="text-gray-500 mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-16 w-16 mx-auto text-gray-300"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
-          </div>
-          <h3 className="text-xl font-semibold text-gray-700 mb-2">
-            Aucune donnée disponible
-          </h3>
-          <p className="text-gray-500">
-            Les statistiques s'afficheront ici dès que des candidatures et
-            entretiens seront enregistrés.
-          </p>
-        </div>
-      )}
+    
+      
     </div>
   );
 };

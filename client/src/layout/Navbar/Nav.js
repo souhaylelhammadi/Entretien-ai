@@ -134,7 +134,7 @@ const Navbar = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center group">
             <span className="text-2xl font-extrabold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent transition-all duration-300 group-hover:scale-105">
-              Interview AI
+              Entretien AI
             </span>
           </Link>
 

@@ -14,9 +14,16 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
+      padding: "1rem",
       screens: {
-        "2xl": "1400px",
+        "2xl": "100px",
+      },
+      fontSize: {
+        sm: "0.875rem",
+        base: "1rem",
+        lg: "1.125rem",
+        xl: "1.25rem",
+        "2xl": "1.5rem",
       },
     },
     extend: {
@@ -150,6 +157,7 @@ export default {
         3000: "3000ms",
         4000: "4000ms",
       },
+
     },
   },
   plugins: [require("tailwindcss-animate")],

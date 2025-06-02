@@ -30,10 +30,9 @@ def format_offre(offre):
                 'recruteur_id': str(offre.get('recruteur_id', '')),
                 'date_creation': offre.get('date_creation', datetime.datetime.utcnow()).isoformat(),
                 'date_maj': offre.get('date_maj', datetime.datetime.utcnow()).isoformat(),
-                'statut': str(offre.get('statut', 'ouverte')),
-                'competences_requises': offre.get('competences_requises', []),
+
+                'questions_ids': offre.get('competences_requises', []),
                 'candidature_ids': [str(cid) for cid in offre.get('candidature_ids', [])],
-                'valide': offre.get('statut', 'ouverte') == 'ouverte'
     }
 
 # Route to fetch all job offers
@@ -45,14 +44,13 @@ def get_offres_emploi():
         
         # Get query parameters
         recruteur_id = request.args.get('recruteur_id')
-        statut = request.args.get('statut')
+       
         
         # Build query
         query = {}
         if recruteur_id and ObjectId.is_valid(recruteur_id):
             query['recruteur_id'] = ObjectId(recruteur_id)
-        if statut:
-            query['statut'] = statut
+        
         
         # Fetch job offers
         offres = list(offres_collection.find(query))
@@ -235,10 +233,7 @@ def submit_candidature():
             logger.error(f"Erreur lors de la recherche de l'offre: {str(e)}")
             return jsonify({"error": "Format d'ID offre invalide", "code": "INVALID_OFFER_ID"}), 400
 
-        # Vérifier si l'offre est toujours ouverte
-        if offre.get("statut") != "ouverte":
-            logger.warning(f"Tentative de postulation à une offre fermée: {offre_id}")
-            return jsonify({"error": "Cette offre n'est plus disponible", "code": "OFFRE_CLOSED"}), 400
+     
 
         # Vérifier si le candidat a déjà postulé
         existing_candidature = db[CANDIDATURES_COLLECTION].find_one({

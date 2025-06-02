@@ -300,7 +300,7 @@ def get_interview_details(interview_id, auth_payload):
         # Récupérer les informations du candidat
         candidat = None
         if interview.get('candidat_id'):
-            candidat = db[CANDIDATS_COLLECTION].find_one({"_id": ObjectId(interview['candidat_id'])})
+            candidat = db[UTILISATEURS_COLLECTION].find_one({"_id": ObjectId(interview['candidat_id'])})
         
         # Récupérer les informations de l'offre
         offre = None
@@ -556,7 +556,7 @@ def get_interview_report(interview_id, auth_payload):
         # Récupérer les informations du candidat
         candidat = None
         if rapport.get('candidat_id'):
-            candidat = db[CANDIDATS_COLLECTION].find_one({"_id": ObjectId(rapport['candidat_id'])})
+            candidat = db[UTILISATEURS_COLLECTION].find_one({"_id": ObjectId(rapport['candidat_id'])})
             
         # Préparer la réponse
         response_data = {

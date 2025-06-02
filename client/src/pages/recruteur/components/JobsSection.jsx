@@ -80,7 +80,7 @@ const JobsSection = () => {
     competences_requises: newJob.competences_requises
       .filter((req) => req && req.trim())
       .map((req) => req.trim()),
-    statut: newJob.statut,
+   
     date_creation: new Date().toISOString(),
     date_maj: new Date().toISOString(),
   });
@@ -95,7 +95,7 @@ const JobsSection = () => {
       !newJob.competences_requises?.length ||
       newJob.competences_requises.every((req) => !req?.trim())
     )
-      errors.push("Compétences requises");
+          errors.push("Questions");
 
     if (errors.length > 0) {
       dispatch(
@@ -199,7 +199,7 @@ const JobsSection = () => {
           localisation: job.localisation,
           departement: job.departement,
           competences_requises: job.competences_requises,
-          statut: job.statut,
+        
         },
       })
     );
@@ -271,14 +271,14 @@ const JobsSection = () => {
 
       {/* Main Content */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {(isAddingJob || isEditingJob) ? (
+        {isAddingJob || isEditingJob ? (
           <div className="flex flex-col h-full">
             {/* Menu */}
             <div className="flex border-b border-gray-100 p-4 bg-gray-50">
               {[
                 { id: "main", label: "Informations Principales" },
                 { id: "description", label: "Description de l'Offre" },
-                { id: "requirements", label: "Compétences Requises" },
+                { id: "requirements", label: "Questions" },
               ].map((section) => (
                 <button
                   key={section.id}
@@ -338,21 +338,6 @@ const JobsSection = () => {
                       placeholder="Ex: Paris"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">
-                      Statut *
-                    </label>
-                    <select
-                      value={newJob.statut}
-                      onChange={(e) =>
-                        dispatch(setNewJob({ statut: e.target.value }))
-                      }
-                      className="w-full px-4 py-3 border border-gray-100 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-teal-600 bg-white transition-all duration-300"
-                    >
-                      <option value="ouverte">Ouverte</option>
-                      <option value="fermée">Fermée</option>
-                    </select>
-                  </div>
                 </div>
               )}
               {activeSection === "description" && (
@@ -382,14 +367,14 @@ const JobsSection = () => {
                   <div className="flex justify-between items-center">
                     <h4 className="text-lg font-semibold text-gray-800 flex items-center">
                       <CheckCircle2 className="w-5 h-5 mr-2 text-teal-600" />
-                      Compétences Requises
+                      Questions
                     </h4>
                     <button
                       onClick={() => dispatch(addRequirement())}
                       className="flex items-center px-3 py-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 hover:text-teal-700 transition-all duration-300 border border-teal-100"
                     >
                       <Plus className="w-4 h-4 mr-2" />
-                      Ajouter une Compétence
+                      Ajouter une Question
                     </button>
                   </div>
                   <div className="space-y-3">
@@ -397,7 +382,7 @@ const JobsSection = () => {
                       <div className="bg-white p-4 rounded-lg border border-dashed border-gray-200 text-center">
                         <MapPin className="w-6 h-6 text-gray-400 mx-auto mb-2" />
                         <p className="text-gray-500 text-sm">
-                          Ajoutez au moins une compétence requise pour ce poste
+                          Ajoutez au moins une question pour ce poste
                         </p>
                       </div>
                     )}
@@ -418,7 +403,7 @@ const JobsSection = () => {
                             )
                           }
                           className="flex-1 px-4 py-2 border border-gray-100 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-teal-600 bg-white transition-all duration-300"
-                          placeholder="Ex: React.js, Python, Gestion..."
+                          placeholder="Ex: Questions à poser pendant l’entretien"
                         />
                         <button
                           onClick={() => dispatch(removeRequirement(index))}
@@ -468,118 +453,108 @@ const JobsSection = () => {
               </button>
             </div>
           </div>
+        ) : /* Jobs Table */
+        jobs.length === 0 ? (
+          <div className="p-8 text-center">
+            <Building className="h-12 w-12 mx-auto text-gray-300 mb-3" />
+            <p className="text-gray-500 text-lg">
+              Aucune offre d'emploi disponible
+            </p>
+            <p className="text-gray-400 mt-1">
+              Cliquez sur "Nouvelle Offre" pour créer votre première offre
+            </p>
+          </div>
         ) : (
-          /* Jobs Table */
-          jobs.length === 0 ? (
-            <div className="p-8 text-center">
-              <Building className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-              <p className="text-gray-500 text-lg">
-                Aucune offre d'emploi disponible
-              </p>
-              <p className="text-gray-400 mt-1">
-                Cliquez sur "Nouvelle Offre" pour créer votre première offre
-              </p>
-            </div>
-          ) : (
-            <table className="min-w-full divide-y divide-gray-100">
-              <thead className="bg-gray-50">
-                <tr>
-                  {[
-                    { id: "titre", label: "Titre" },
-                    { id: "departement", label: "Département" },
-                    { id: "localisation", label: "Localisation" },
-                    { id: "date_creation", label: "Date de Création" },
-                    { id: "statut", label: "Statut" },
-                  ].map((field) => (
-                    <th
-                      key={field.id}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-teal-50 transition-all duration-300"
-                      onClick={() => handleSort(field.id)}
-                    >
-                      <div className="flex items-center">
-                        {field.label}
-                        {sortField === field.id && (
-                          <span className="ml-1">
-                            {sortDirection === "asc" ? (
-                              <ChevronUp className="h-4 w-4 text-teal-600" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-teal-600" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
-                    Actions
+          <table className="min-w-full divide-y divide-gray-100">
+            <thead className="bg-gray-50">
+              <tr>
+                {[
+                  { id: "titre", label: "Titre" },
+                  { id: "departement", label: "Département" },
+                  { id: "localisation", label: "Localisation" },
+                  { id: "date_creation", label: "Date de Création" },
+                ].map((field) => (
+                  <th
+                    key={field.id}
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-teal-50 transition-all duration-300"
+                    onClick={() => handleSort(field.id)}
+                  >
+                    <div className="flex items-center">
+                      {field.label}
+                      {sortField === field.id && (
+                        <span className="ml-1">
+                          {sortDirection === "asc" ? (
+                            <ChevronUp className="h-4 w-4 text-teal-600" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-teal-600" />
+                          )}
+                        </span>
+                      )}
+                    </div>
                   </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {sortedJobs.map((job) => (
-                  <tr key={job.id} className="hover:bg-teal-50 transition-all duration-300">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Building className="h-5 w-5 text-teal-600 mr-2" />
-                        <span className="text-sm font-medium text-gray-900">
-                          {job.titre}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-600">
-                        {job.departement}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <MapPin className="h-5 w-5 text-teal-600 mr-2" />
-                        <span className="text-sm text-gray-600">
-                          {job.localisation}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-600">
-                        {new Date(job.date_creation).toLocaleDateString()}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          job.statut === "ouverte"
-                            ? "bg-teal-100 text-teal-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {job.statut === "ouverte" ? "Ouverte" : "Fermée"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-3">
-                        <button
-                          onClick={() => handleEditClick(job)}
-                          className="text-teal-600 hover:text-teal-700 bg-teal-50 p-2 rounded-lg transition-all duration-300 disabled:opacity-50"
-                          disabled={loading}
-                          title="Modifier cette offre"
-                        >
-                          <Edit className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteJob(String(job.id))}
-                          className="text-red-600 hover:text-red-700 bg-red-50 p-2 rounded-lg transition-all duration-300 disabled:opacity-50"
-                          disabled={loading}
-                          title="Supprimer cette offre"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
                 ))}
-              </tbody>
-            </table>
-          )
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {sortedJobs.map((job) => (
+                <tr
+                  key={job.id}
+                  className="hover:bg-teal-50 transition-all duration-300"
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <Building className="h-5 w-5 text-teal-600 mr-2" />
+                      <span className="text-sm font-medium text-gray-900">
+                        {job.titre}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-600">
+                      {job.departement}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <MapPin className="h-5 w-5 text-teal-600 mr-2" />
+                      <span className="text-sm text-gray-600">
+                        {job.localisation}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-600">
+                      {new Date(job.date_creation).toLocaleDateString()}
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        onClick={() => handleEditClick(job)}
+                        className="text-teal-600 hover:text-teal-700 bg-teal-50 p-2 rounded-lg transition-all duration-300 disabled:opacity-50"
+                        disabled={loading}
+                        title="Modifier cette offre"
+                      >
+                        <Edit className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteJob(String(job.id))}
+                        className="text-red-600 hover:text-red-700 bg-red-50 p-2 rounded-lg transition-all duration-300 disabled:opacity-50"
+                        disabled={loading}
+                        title="Supprimer cette offre"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>

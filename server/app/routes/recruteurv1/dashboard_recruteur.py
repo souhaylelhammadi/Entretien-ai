@@ -3,7 +3,7 @@ from bson import ObjectId
 import logging
 from datetime import datetime, timedelta, timezone
 from jwt_manager import jwt_manager
-from config.config import OFFRES_COLLECTION, CANDIDATURES_COLLECTION, ENTRETIENS_COLLECTION, CANDIDATS_COLLECTION, ACTIVITIES_COLLECTION
+
 from pymongo.errors import PyMongoError
 import os
 from collections import defaultdict

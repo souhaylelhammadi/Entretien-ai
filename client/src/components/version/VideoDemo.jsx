@@ -22,7 +22,7 @@ const VideoDemo = () => {
           </div>
 
           <h2 className="text-5xl md:text-6xl font-extrabold text-gray-900 mb-6 leading-tight">
-            Découvrez Interview AI
+            Découvrez Entretien AI
             <span className="block bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               en Action
             </span>

@@ -81,7 +81,7 @@ function DetailsOffreEmploi() {
       candidatureError,
     });
     if (candidatureStatus === "success") {
-      toast.success("Candidature envoyée avec succès !");
+      
       setSubmissionSuccess(true);
       const timer = setTimeout(() => {
         navigate("/offres", {
@@ -161,7 +161,7 @@ function DetailsOffreEmploi() {
         );
       }
 
-      toast.success("Candidature envoyée avec succès !");
+     
       setSubmissionSuccess(true);
       setTimeout(() => {
         navigate("/offres", {
@@ -386,10 +386,7 @@ function DetailsOffreEmploi() {
                     </span>
                   </div>
                   <div className="flex flex-col items-center text-center gap-1">
-                    <Briefcase className="h-6 w-6 text-indigo-500" />
-                    <span className="text-sm font-medium">
-                      {offre.valide ? "Ouverte" : "Fermée"}
-                    </span>
+                   
                   </div>
                   <div className="flex flex-col items-center text-center gap-1">
                     <Clock className="h-6 w-6 text-indigo-500" />

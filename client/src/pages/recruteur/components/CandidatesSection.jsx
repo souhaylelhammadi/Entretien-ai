@@ -9,8 +9,6 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   Building,
   Mail,
-  Download,
-  ChevronRight,
   ChevronDown,
   AlertCircle,
   AlertTriangle,
@@ -38,8 +36,7 @@ import {
   clearLettreMotivation,
   setStatusUpdateState,
   clearSelectedCV,
-} from "../../store/candidatesSlice";
-import { BASE_URL } from "../../../config";
+} from "../../store/recruteur/candidatesSlice";
 const CandidatesSection = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -67,13 +64,12 @@ const CandidatesSection = () => {
   const candidatesState = useSelector((state) => state.candidates);
 
   // Get offers state through useSelector and memoize
-  const { offres, loading, error, expandedOffers, downloadProgress } = useMemo(
+  const { offres, loading, error, expandedOffers } = useMemo(
     () => ({
       offres: candidatesState.offres || [],
       loading: candidatesState.loading,
       error: candidatesState.error,
       expandedOffers: candidatesState.expandedOffers || {},
-      downloadProgress: candidatesState.downloadProgress || 0,
     }),
     [candidatesState]
   );
@@ -479,120 +475,120 @@ const CandidatesSection = () => {
                     <tbody className="bg-white divide-y divide-gray-100">
                       {Array.isArray(offre.candidats) &&
                         getFilteredCandidates(offre.candidats).map(
-                        (candidat) => (
-                          <tr key={candidat.id} className="hover:bg-blue-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
-                                  {candidat.nom?.charAt(0)?.toUpperCase() ||
-                                    "?"}
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {candidat.prenom} {candidat.nom}
+                          (candidat) => (
+                            <tr key={candidat.id} className="hover:bg-blue-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
+                                    {candidat.nom?.charAt(0)?.toUpperCase() ||
+                                      "?"}
                                   </div>
-                                  <div className="text-sm text-gray-500">
-                                    Postulé le{" "}
-                                    {new Date(
-                                      candidat.date_candidature
-                                    ).toLocaleDateString("fr-FR")}
+                                  <div className="ml-4">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {candidat.nom}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      Postulé le{" "}
+                                      {new Date(
+                                        candidat.date_candidature
+                                      ).toLocaleDateString("fr-FR")}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <Mail className="h-4 w-4 text-gray-400 mr-2" />
-                                <span className="text-sm text-gray-600">
-                                  {candidat.email}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex space-x-3">
-                                <button
-                                  onClick={() => handleViewCV(candidat.id)}
-                                  className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
-                                >
-                                  <Eye className="h-4 w-4 mr-1" /> CV
-                                </button>
-                                <button
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <Mail className="h-4 w-4 text-gray-400 mr-2" />
+                                  <span className="text-sm text-gray-600">
+                                    {candidat.email}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex space-x-3">
+                                  <button
+                                    onClick={() => handleViewCV(candidat.id)}
+                                    className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                  >
+                                    <Eye className="h-4 w-4 mr-1" /> CV
+                                  </button>
+                                  <button
                                     onClick={() =>
                                       handleViewLettre(candidat.id)
                                     }
-                                  className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-green-50 text-green-700 hover:bg-green-100"
+                                    className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-green-50 text-green-700 hover:bg-green-100"
+                                  >
+                                    <FileText className="h-4 w-4 mr-1" /> Lettre
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <span
+                                  className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
+                                    candidat.status
+                                  )}`}
                                 >
-                                  <FileText className="h-4 w-4 mr-1" /> Lettre
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <span
-                                className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                                  candidat.status
-                                )}`}
-                              >
-                                {candidat.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <div className="flex justify-center space-x-2">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
+                                  {candidat.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <div className="flex justify-center space-x-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       handleStatusChange(
                                         candidat.id,
                                         "Accepté"
                                       );
-                                  }}
-                                  className={`px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 ${
-                                    statusUpdateStates[candidat.id]
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : ""
-                                  }`}
-                                  disabled={
-                                    candidat.status === "Accepté" ||
-                                    statusUpdateStates[candidat.id]
-                                  }
-                                >
-                                  {statusUpdateStates[candidat.id] ? (
-                                    <div className="flex items-center">
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                      Mise à jour...
-                                    </div>
-                                  ) : (
-                                    "Accepter"
-                                  )}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleStatusChange(candidat.id, "Refusé");
-                                  }}
-                                  className={`px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 ${
-                                    statusUpdateStates[candidat.id]
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : ""
-                                  }`}
-                                  disabled={
-                                    candidat.status === "Refusé" ||
-                                    statusUpdateStates[candidat.id]
-                                  }
-                                >
-                                  {statusUpdateStates[candidat.id] ? (
-                                    <div className="flex items-center">
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                      Mise à jour...
-                                    </div>
-                                  ) : (
-                                    "Refuser"
-                                  )}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      )}
+                                    }}
+                                    className={`px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 ${
+                                      statusUpdateStates[candidat.id]
+                                        ? "opacity-50 cursor-not-allowed"
+                                        : ""
+                                    }`}
+                                    disabled={
+                                      candidat.status === "Accepté" ||
+                                      statusUpdateStates[candidat.id]
+                                    }
+                                  >
+                                    {statusUpdateStates[candidat.id] ? (
+                                      <div className="flex items-center">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Mise à jour...
+                                      </div>
+                                    ) : (
+                                      "Accepter"
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStatusChange(candidat.id, "Refusé");
+                                    }}
+                                    className={`px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 ${
+                                      statusUpdateStates[candidat.id]
+                                        ? "opacity-50 cursor-not-allowed"
+                                        : ""
+                                    }`}
+                                    disabled={
+                                      candidat.status === "Refusé" ||
+                                      statusUpdateStates[candidat.id]
+                                    }
+                                  >
+                                    {statusUpdateStates[candidat.id] ? (
+                                      <div className="flex items-center">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                        Mise à jour...
+                                      </div>
+                                    ) : (
+                                      "Refuser"
+                                    )}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        )}
                     </tbody>
                   </table>
                 </div>
@@ -673,7 +669,7 @@ const CandidatesSection = () => {
 
       {/* Modal pour le CV */}
       {showCVModal && selectedCV && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 mt-0 z-[9999]">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-4xl h-[90vh] flex flex-col">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">
@@ -719,20 +715,20 @@ const CandidatesSection = () => {
 
       {/* Modal pour la lettre de motivation */}
       {showLettreModal && selectedLettreMotivation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  Lettre de motivation
-                </h3>
-                <button
-                  onClick={handleCloseLettreModal}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-4xl h-[90vh] flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Lettre de motivation
+              </h3>
+              <button
+                onClick={handleCloseLettreModal}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-6">
               {localError ? (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                   <div className="flex">
@@ -750,12 +746,10 @@ const CandidatesSection = () => {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                    <div className="mt-2 p-4 bg-gray-50 rounded-lg">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-700">
-                      {selectedLettreMotivation.lettre_motivation}
-                      </pre>
-                    </div>
+                <div className="prose max-w-none">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-6 rounded-lg">
+                    {selectedLettreMotivation.lettre_motivation}
+                  </pre>
                 </div>
               )}
             </div>
