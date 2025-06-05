@@ -4,7 +4,7 @@ from flask import Blueprint
 recruteurv1_bp = Blueprint('recruteurv1_bp', __name__)
 
 # Import les sous-blueprints après
-from .offres_recruteur import offres_recruteur_bp
+from .offresSection import offres_recruteur_bp
 from .dashboard_recruteur import Dashboard_recruteur_bp
 
 # Enregistrer les sous-blueprints

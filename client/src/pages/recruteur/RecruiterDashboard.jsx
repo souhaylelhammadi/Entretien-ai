@@ -649,11 +649,11 @@ const RecruiterDashboard = () => {
           <Box
             sx={{
               flex: 1,
-              p: 4,
+              p: 2,
               bgcolor: "background.default",
               overflow: "auto",
               height: "100vh",
-              paddingTop: "80px",
+              paddingTop: "30px",
             }}
           >
             {!isSidebarOpen && (

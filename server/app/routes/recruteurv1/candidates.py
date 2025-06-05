@@ -300,6 +300,7 @@ def update_candidate_status(candidate_id, auth_payload):
             return jsonify({"error": "Offre non trouvée pour cette candidature", "code": "MISSING_OFFER"}), 404
 
         offre = db[OFFRES_COLLECTION].find_one({"_id": ObjectId(offre_id)})
+        questions_ids = offre.get("questions_ids", [])
         if not offre:
             logger.error(f"Offre non trouvée pour l'ID: {offre_id}")
             return jsonify({"error": "Offre non trouvée", "code": "OFFER_NOT_FOUND"}), 404

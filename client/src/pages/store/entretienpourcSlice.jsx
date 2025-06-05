@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
-import { BASE_URL } from "../../config"; // e.g., "http://localhost:5000"
+import { BASE_URL } from "../config"; // e.g., "http://localhost:5000"
 
 // Helper to validate and log token
 const getValidToken = () => {

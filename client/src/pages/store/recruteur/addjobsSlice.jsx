@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../../../services/api";
+import api from "../../services/api";
 
 // Thunk pour récupérer les offres d'emploi
 export const fetchJobs = createAsyncThunk(

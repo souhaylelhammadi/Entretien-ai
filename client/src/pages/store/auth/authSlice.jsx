@@ -4,7 +4,7 @@ import {
   cleanToken,
   getCleanToken,
   removeToken,
-} from "../../../utils/tokenUtils";
+} from "../../utils/tokenUtils";
 
 const API_URL = "http://localhost:5000/api/auth";
 

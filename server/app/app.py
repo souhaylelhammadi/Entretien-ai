@@ -2,14 +2,14 @@ from flask import Flask, request, redirect, url_for
 from flask_cors import CORS
 from auth import auth_bp
 from routes.offres import offres_emploi_bp
-from routes.accepted_offers import accepted_offers_bp
-from routes.recruteurv1.candidates import candidates_bp
-from routes.recruteurv1.profile import profile_bp
-from routes.recruteurv1.dashboard_recruteur import Dashboard_recruteur_bp
-from routes.recruteurv1 import recruteurv1_bp
+from server.app.routes.acceptee_offers import accepted_offers_bp
+from server.app.routes.recruteurSection.candidatesSection import candidates_bp
+from routes.recruteurSection.profile import profile_bp
+from routes.recruteurSection.dashboard_recruteur import Dashboard_recruteur_bp
+from routes.recruteurSection import recruteurv1_bp
 from routes.postuler import candidatures_bp
 from routes.entretiens import entretiens_bp
-from routes.recruteurv1.entre1 import entretiensection_bp
+from server.app.routes.recruteurSection.entretiensSection import entretiensection_bp
 from pymongo import MongoClient
 import logging
 from datetime import datetime, timezone

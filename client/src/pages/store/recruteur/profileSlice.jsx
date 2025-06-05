@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../../../services/api";
+import api from "../../services/api";
 
 // Thunk pour mettre à jour le profil
 export const updateProfileAsync = createAsyncThunk(

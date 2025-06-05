@@ -243,7 +243,7 @@ const InterviewSection = () => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <Box component="main" sx={{ flexGrow: 1, pt: "64px" }}>
+      <Box component="main" sx={{ flexGrow: 1, pt: "10px" }}>
         {" "}
         {/* 64px est la hauteur standard d'une Toolbar */}
         <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -310,16 +310,7 @@ const InterviewSection = () => {
                         >
                           <Visibility />
                         </IconButton>
-                        <IconButton
-                          color="secondary"
-                          onClick={() => {
-                            setSelectedInterviewForMessage(interview);
-                            setOpenMessageDialog(true);
-                          }}
-                          size="small"
-                        >
-                          <Message />
-                        </IconButton>
+                        
                       </TableCell>
                     </TableRow>
                   ))}
@@ -330,7 +321,7 @@ const InterviewSection = () => {
 
           {/* Modal pour les détails de l'entretien */}
           {selectedInterview && (
-            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[9999]">
+            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-2 z-[9999]">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col">
                 <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                   <Typography

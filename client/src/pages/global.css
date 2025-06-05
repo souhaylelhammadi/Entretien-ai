@@ -62,5 +62,5 @@
 
 html {
   scroll-behavior: smooth;
- /* Réduit la taille de base de 16px à 14px */
+  font-size: 15px; /* Réduit la taille de base de 16px à 14px */
 }

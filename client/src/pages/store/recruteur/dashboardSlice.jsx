@@ -3,8 +3,8 @@ import {
   createAsyncThunk,
   createSelector,
 } from "@reduxjs/toolkit";
-import api from "../../../services/api";
-import { getCleanToken } from "../../../utils/tokenUtils";
+import api from "../../services/api";
+import { getCleanToken } from "../../utils/tokenUtils";
 
 // Fonction utilitaire pour obtenir le token
 const getToken = () => {

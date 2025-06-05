@@ -100,7 +100,7 @@ def make_groq_request(prompt):
                 {"role": "system", "content": "Tu es un expert en recrutement qui crée des questions d'entretien pertinentes et ciblées."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.7,
+            "temperature": 0.9,
             "max_tokens": 1500
         }
 
@@ -213,6 +213,7 @@ Génère 10 questions qui:
 4. Évaluent la motivation et l'adaptation
 5. Incluent une question sur un défi technique
 6. Questions basées sur le CV du candidat
+
 
 Format de réponse souhaité (en JSON):
 [

@@ -467,7 +467,8 @@ function DetailsOffreEmploi() {
                     <div className="text-center">
                       <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-4" />
                       <p className="text-gray-700 mb-4">
-                        Seuls les étudiants peuvent postuler à cette offre.
+                        Vous devez être connecté en tant que candidat pour
+                        postuler à cette offre.
                       </p>
                       <button
                         onClick={() => navigate("/")}
