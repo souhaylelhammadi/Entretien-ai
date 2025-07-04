@@ -1,4 +1,4 @@
-# Interview AI - Plateforme d'Entretiens Vidéo Automatisés
+# Entretien AI - Plateforme d'Entretiens Vidéo Automatisés
 
 ## Description du Projet
 Interview AI est une plateforme innovante qui révolutionne le processus de recrutement en automatisant les entretiens d'embauche grâce à l'intelligence artificielle. Cette solution permet aux candidats de passer des entretiens vidéo asynchrones tout en offrant aux recruteurs des outils d'évaluation avancés basés sur l'IA.
